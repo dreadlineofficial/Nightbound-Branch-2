@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.4';
+export const VERSION = '2.19.5';
 export const INBOX = [
+  {
+    id: 'v2.19.5', version: '2.19.5', date: 'Nov 2026', title: 'Ted: New Line', tag: 'Update',
+    body: ['Ted has a new line for when the killer is chasing you: "I\'m a f***ing teddy bear!"'],
+  },
   {
     id: 'v2.19.4', version: '2.19.4', date: 'Nov 2026', title: 'Ted Speaks', tag: 'Update',
     body: ['Ted now talks, with subtitles. He has something to say when you run from the killer, when he kicks back with his bong, when someone blows a skill check, gets downed twice in a minute or (if you\'re the killer) whiffs a swing, and every now and then for no reason at all.', 'He also lets out an "Arfh!" when he sees you die.', 'Subtitles can be turned off in Settings.'],

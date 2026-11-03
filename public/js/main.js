@@ -127,7 +127,7 @@ function startBG() {
 loadForeman();
 loadChucky();
 loadTed();
-for (const n of ['bringit', 'email', 'weak', 'cock', 'shit', 'idle', 'arfh']) loadClip('ted/' + n);
+for (const n of ['bringit', 'email', 'weak', 'cock', 'shit', 'idle', 'arfh', 'teddy']) loadClip('ted/' + n);
 loadStatic('axe').then(m => { if (m) forgetArt('bateman'); });
 loadStatic('ghosttrap');
 loadStatic('slimer').then(m => { if (!m) return; forgetArt('slimer'); if (menu && menu.killerChar === 'slimer') menu.setKiller('slimer', menu.killerSkin); });

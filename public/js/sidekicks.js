@@ -257,6 +257,7 @@ export const TED_LINES = {
   shit: 'Shit.',
   idle: 'Thank you for creeping up my night, and Jesus be with you.',
   arfh: 'Arfh!',
+  teddy: "I'm a fucking teddy bear!",
 };
 
 // ---------------- the sidekick ----------------
@@ -298,7 +299,7 @@ export class Sidekick {
     if (owner) this.prevSt = owner.st;
     if (owner && this.kind === 'ted' && env.visible !== false && owner.st !== 'out' && owner.st !== 'ghost') {
       // running from the monster
-      if (owner.role === 'survivor' && owner.st === 'ok' && owner.mv === 2 && env.killerD != null && env.killerD < 14 && Math.random() < dt * 0.25) this.say(Math.random() < 0.5 ? 'bringit' : 'email', 45);
+      if (owner.role === 'survivor' && owner.st === 'ok' && owner.mv === 2 && env.killerD != null && env.killerD < 14 && Math.random() < dt * 0.25) this.say(['bringit', 'email', 'teddy'][Math.floor(Math.random() * 3)], 45);
       // every so often, for no reason at all
       if (this.t > this.idleNext) { this.idleNext = this.t + 70 + Math.random() * 60; if (!(this.c && this.c.ph === 'seated')) this.say('idle', 60); }
     }
