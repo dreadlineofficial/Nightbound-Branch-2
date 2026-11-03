@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.1';
+export const VERSION = '2.19.2';
 export const INBOX = [
+  {
+    id: 'v2.19.2', version: '2.19.2', date: 'Nov 2026', title: 'Scratch Marks', tag: 'Update',
+    body: ['Running survivors now leave glowing orange scratch marks behind them, scattered along their trail. Only the killer can see them, and they fade after about ten seconds.', 'Survivors: walk or crouch to stop leaving a trail.'],
+  },
   {
     id: 'v2.19.1', version: '2.19.1', date: 'Nov 2026', title: 'Emotes', tag: 'Update',
     body: ['Survivors can now emote: press B, then 1 to 4 (or click) for Dance, Wave, Cheer or Bow. Moving or doing anything stops it, and everyone in the match sees it.', 'Got a sidekick? Ted and Rosy join in: they dance with you, wave, cheer and even take a bow.'],

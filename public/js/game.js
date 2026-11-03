@@ -154,6 +154,47 @@ class BloodDrops extends Particles {
   }
 }
 
+// ---------- scratch marks: running survivors leave glowing claw-like streaks only the killer sees ----------
+class ScratchMarks {
+  constructor(scene, max = 360) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.strokeStyle = '#fff'; g.lineCap = 'round'; g.shadowColor = '#fff'; g.shadowBlur = 6;
+    for (let i = 0; i < 3; i++) { // three jagged streaks, like something dragged its nails
+      g.lineWidth = 5 - i; g.beginPath();
+      let x = 22 + i * 30 + Math.random() * 8, y = 12 + Math.random() * 10; g.moveTo(x, y);
+      for (let k = 0; k < 6; k++) { x += (Math.random() - 0.5) * 12; y += 16 + Math.random() * 4; g.lineTo(x, y); }
+      g.stroke();
+    }
+    const map = new THREE.CanvasTexture(c); map.colorSpace = THREE.SRGBColorSpace;
+    this.mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.55, 0.55).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map, color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2 }), max);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
+    this.mesh.frustumCulled = false; this.mesh.count = 0; this.mesh.renderOrder = 3;
+    scene.add(this.mesh);
+    this.max = max; this.marks = []; this.m4 = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(); this.col = new THREE.Color(0xff4a1c);
+  }
+  add(x, z, yaw) {
+    if (this.marks.length >= this.max) this.marks.shift();
+    this.marks.push({ x, z, yaw, t: 0, life: 9 + Math.random() * 2, s: 0.7 + Math.random() * 0.5 });
+  }
+  update(dt, visible) {
+    this.mesh.visible = visible;
+    let k = 0;
+    for (let i = this.marks.length - 1; i >= 0; i--) { const m = this.marks[i]; m.t += dt; if (m.t >= m.life) this.marks.splice(i, 1); }
+    if (!visible) return;
+    for (const m of this.marks) {
+      const f = m.t / m.life, a = Math.min(1, m.t * 6) * (1 - f * f) * 0.95; // bright, then fading out
+      this.q.setFromEuler(this.e.set(0, m.yaw, 0));
+      this.m4.compose(new THREE.Vector3(m.x, 0.03, m.z), this.q, new THREE.Vector3(m.s, 1, m.s * 1.2));
+      this.mesh.setMatrixAt(k, this.m4);
+      this.mesh.instanceColor.setXYZ(k, this.col.r * a, this.col.g * a * (1 - f * 0.6), this.col.b * a * (1 - f));
+      k++;
+    }
+    this.mesh.count = k;
+    this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor.needsUpdate = true;
+  }
+}
+
 // ---------- blood decals: wet pools, splatters, sprays and drag smears that dry over time ----------
 class BloodDecals {
   constructor(scene, max, lite) {
@@ -259,6 +300,7 @@ export class Game {
     }
     this.blood = new BloodDrops(this.scene, 900, this.settings.quality === 'potato' || this.settings.quality === 'low');
     const lite = this.settings.quality === 'potato' || this.settings.quality === 'low';
+    this.scratches = new ScratchMarks(this.scene);
     this.decals = new BloodDecals(this.scene, { potato: 40, low: 80, medium: 160, high: 240 }[this.settings.quality] || 120, lite);
     this.blood.onLand = (x, z) => { if (this.decals.landBudget >= 1 && Math.random() < 0.35) { this.decals.landBudget--; this.decals.add(x, z, 0.12 + Math.random() * 0.2, 0); } };
     this.smoke = new Particles(this.scene, THREE.NormalBlending, 1.4, 300);
@@ -529,6 +571,7 @@ export class Game {
     this.updateAudio(dt, S, me);
     this.updateHUD(dt, S, me);
     this.sparks.update(dt); this.blood.update(dt); this.smoke.update(dt); this.decals.update(dt); this.updateBleeding(dt, S);
+    { const m = this.mine(); this.scratches.update(dt, !!m && m.role === 'killer'); }
     if (this.composer) { this.post.uniforms.time.value = this.t; this.composer.render(dt); }
     else this.renderer.render(this.scene, this.camera);
     this.perf(dt);
@@ -673,6 +716,15 @@ export class Game {
       const spd = jump > 4 ? c.spd : Math.min(9, Math.hypot(c.x - ox, c.z - oz) / Math.max(dt, 1e-3));
       c.spd += (spd - c.spd) * Math.min(1, dt * 8);
       c.yaw += angDiff(c.yaw, tyaw) * (local ? 1 : 1 - Math.exp(-dt * (interp ? 30 : 12)));
+      // scratch marks: a running survivor leaves a trail every half metre or so, scattered either side
+      if (p.role === 'survivor' && p.st === 'ok' && !p.disguise && !p.vault && (p.mv === 2 || c.spd > 3.2) && jump <= 4) {
+        c.scratchD = (c.scratchD || 0) + Math.hypot(c.x - ox, c.z - oz);
+        if (c.scratchD > 0.55) {
+          c.scratchD = 0;
+          const side = (Math.random() - 0.5) * 1.3, back = 0.3 + Math.random() * 0.4, mv = Math.atan2(c.x - ox, c.z - oz);
+          this.scratches.add(c.x - Math.sin(mv) * back + Math.cos(mv) * side, c.z - Math.cos(mv) * back - Math.sin(mv) * side, mv + (Math.random() - 0.5) * 1.2);
+        }
+      } else c.scratchD = 0;
       // the Foreman flung up to a high hook point, then dropping back down
       c.lift = (c.lift || 0) + (pullLift(p) + leapLift(p) - (c.lift || 0)) * Math.min(1, dt * 20);
       if (hidden) continue;
