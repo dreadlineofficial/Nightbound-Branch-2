@@ -105,7 +105,7 @@ export const KILLERS = {
     id: 'chucky', name: 'Chucky', speed: 4.6, terror: 20, weapon: 'Kitchen Knife', crossover: "Child's Play (fan-made)", tpv: true,
     lore: 'A Good Guy doll with the soul of a strangler inside. He is two and a half feet tall and he does not stop laughing.',
     exec: { name: 'Friends Till the End', desc: 'Leaps onto the survivor\'s chest and stabs, and stabs, and stabs.' },
-    ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (slowed), release to leap up to 10m: the longer you coil, the farther you fly. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
+    ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (slowed), release to leap up to 10m: the longer you coil, the farther you fly. He sails over fences, pallets and other low obstacles. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
     ability2: { name: "Chucky's Laugh", key: 'R', cooldown: 35, radius: 28, reveal: 5, desc: 'Laugh. Every survivor within 28m hears it and is revealed to you for 5s.' },
     feature: { name: 'Tiny Terror', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump: he hops straight over windows, dropped pallets and rocks. You play him in third person.' },
     color: 0xd83a22,
@@ -270,8 +270,14 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.13.1';
+export const VERSION = '2.13.2';
 export const INBOX = [
+  {
+    id: 'v2.13.2', version: '2.13.2', date: 'Nov 2026', title: 'Chucky Pounces Higher', tag: 'Balance',
+    body: [
+      'Chucky\'s Pounce now sails over fences, dropped pallets, crates, log piles and rocks (anything under 1.6m). Walls still stop him, and Ghost Traps still catch him mid-leap.',
+    ],
+  },
   {
     id: 'v2.13.1', version: '2.13.1', date: 'Nov 2026', title: 'Chucky Can Jump', tag: 'Balance',
     body: [

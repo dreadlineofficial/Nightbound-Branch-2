@@ -200,7 +200,7 @@ export class Sim {
         const D = KILLERS.chucky.ability, yaw = num(m.yaw, p.yaw), f = fwd(yaw);
         const dist = D.min + (D.max - D.min) * Math.min(1, Math.max(0, p.abT - 0.1) / D.coil);
         p.yaw = yaw; p.aim = false; p.abT = 0;
-        p.leap = { t: 0, d: +(0.35 + dist * 0.035).toFixed(3), x0: p.x, z0: p.z, x1: p.x + f.x * dist, z1: p.z + f.z * dist, h: +(0.4 + dist * 0.07).toFixed(2) };
+        p.leap = { t: 0, d: +(0.35 + dist * 0.035).toFixed(3), x0: p.x, z0: p.z, x1: p.x + f.x * dist, z1: p.z + f.z * dist, h: +(0.7 + dist * 0.06).toFixed(2) };
         this.ev({ k: 'pounce', id: p.id, x: p.x, z: p.z });
         break;
       }
@@ -996,7 +996,9 @@ export class Sim {
     const f = Math.min(1, L.t / L.d);
     const tx = L.x0 + (L.x1 - L.x0) * f, tz = L.z0 + (L.z1 - L.z0) * f;
     const want = Math.hypot(tx - K.x, tz - K.z);
-    const r = moveCircle(M, S, K.x, K.z, tx - K.x, tz - K.z, 0.3);
+    // airborne: sails over fences, pallets, crates and rocks (anything under 1.6m); walls still stop him,
+    // and Ghost Traps still catch him (they are checked against his position every tick)
+    const r = moveCircle(M, S, K.x, K.z, tx - K.x, tz - K.z, 0.3, 1.6);
     const blocked = want > 0.05 && Math.hypot(r.x - K.x, r.z - K.z) < want * 0.4;
     K.x = r.x; K.z = r.z;
     for (const s of S.players) {
