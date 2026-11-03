@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
+import { makeRealism } from './realism.js';
 import { applySkinFx } from './skinfx.js';
 
 // ---------- aura material ----------
@@ -255,6 +256,8 @@ export function makeSurvivor(def, sk = {}) {
   };
   if (def.big) R.root.scale.set(1.13, 1.05, 1.16);
   applySkinFx(R, sk);
+  // realistic outfits: a rigged model posed from this (hidden) procedural rig
+  if (sk.glb) { const X = makeRealism(sk.glb, R); if (X) return X; }
   return R;
 }
 
@@ -522,6 +525,7 @@ const lerp = (a, b, k) => a + (b - a) * k;
 // s: { anim, speed, crouch, injured, t, atk, vaultF, ... }
 export function animate(R, s, dt) {
   if (R.fxTick) R.fxTick(dt, (R.t || 0) + dt);
+  if (R.retarget) { animate(R.proc, s, dt); R.copy(); return; }
   if (R.chucky) return animateChucky(R, s, dt);
   if (R.glb) return animateGlb(R, s, dt);
   R.t += dt;

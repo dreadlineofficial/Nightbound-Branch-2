@@ -113,7 +113,7 @@ There are three difficulties (Easy, Normal, Hard).
 
 Tab shows the scoreboard. Esc pauses. Settings has graphics presets (Very Low → High, auto-detected on first launch), dynamic resolution, an FPS counter, sensitivity, FOV, invert-Y and audio.
 
-Ted (sidekick) is "Ted" by diegolitooliva36 (sketchfab.com/diegooliva), CC BY 4.0. Chucky's model is "Real-Time Chucky" by Leopoldo Rojas (sketchfab.com/HushDamacy), used under the Sketchfab Standard licence. Chucky, Patrick Bateman and the Ghostbusters characters are fan-made crossovers, not affiliated with or endorsed by their rights holders.
+Raghuvir's Realism outfit is "Ghostbusters - Dr. Ray Stantz" by spinningblade (sketchfab.com/jakeacc), CC BY 4.0. Ted (sidekick) is "Ted" by diegolitooliva36 (sketchfab.com/diegooliva), CC BY 4.0. Chucky's model is "Real-Time Chucky" by Leopoldo Rojas (sketchfab.com/HushDamacy), used under the Sketchfab Standard licence. Chucky, Patrick Bateman and the Ghostbusters characters are fan-made crossovers, not affiliated with or endorsed by their rights holders.
 
 ## Development
 
