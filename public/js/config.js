@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.18.3';
+export const VERSION = '2.18.4';
 export const INBOX = [
+  {
+    id: 'v2.18.4', version: '2.18.4', date: 'Nov 2026', title: 'Ted Gets Comfy', tag: 'Update',
+    body: ['Ted now walks over, pulls out his folding chair, sets it down and snaps it open, then hops up into it. When it\'s time to go he climbs down, folds it back up and tucks it away.', 'He raises his beer all the way to his mouth and tips his head back for a proper swig.', 'His bong sits on his lap; for a hit he tips it up to his mouth, then breathes out a small puff of smoke.'],
+  },
   {
     id: 'v2.18.3', version: '2.18.3', date: 'Nov 2026', title: 'Sharper Steel, Wetter Gore', tag: 'Update',
     body: ['Patrick Bateman now swings a real fire axe, in first and third person.', 'Blood is no longer flat dots: droplets are glossy, stretch as they fly and bead up where they land (Low and Potato graphics keep the cheap version).'],

@@ -41,7 +41,7 @@ export function loadTed() {
     const fit = { s: TED_H / h, y: -box.min.y * TED_H / h, x: -(box.min.x + box.max.x) / 2 * TED_H / h, z: -(box.min.z + box.max.z) / 2 * TED_H / h };
     // props: normalise each to a height
     const norm = (grp, height) => { if (!grp) return null; const b = new THREE.Box3().setFromObject(grp), c = b.getCenter(new THREE.Vector3()); const k = height / (b.max.y - b.min.y); const o = new THREE.Group(); grp.position.sub(new THREE.Vector3(c.x, b.min.y, c.z)); o.add(grp); o.scale.setScalar(k); return o; };
-    ted = { scene, fit, bottle: norm(bottle, 0.16), bong: norm(bong, 0.3) };
+    ted = { scene, fit, bottle: norm(bottle, 0.15), bong: norm(bong, 0.17) };
     return ted;
   }).catch(e => { console.warn('Ted model unavailable:', e); return null; });
   return tedLoading;
@@ -59,6 +59,24 @@ const qa = (x, y, z, a) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vec
 // ---------------- Ted ----------------
 // (raw model faces +X, right hand toward +Z; a holder turns him to face +Z like everyone else)
 const TED_BONES = { pelvis: 'Bone_55', spine: 'Bone001_54', chest: 'Bone002_53', neck: 'Bone004_39', head: 'Bone005_30', armL: 'Bone013_45', foreL: 'Bone015_43', armR: 'Bone008_51', foreR: 'Bone010_49', thighR: 'Bone019_58', shinR: 'Bone020_57', thighL: 'Bone022_62', shinL: 'Bone023_61' };
+// two-bone arm chains (shoulder -> wrist -> paw) for reaching: [upper, lower, end]
+const TED_ARMS = { R: ['Bone008_51', 'Bone010_49', 'Bone011_48'], L: ['Bone013_45', 'Bone015_43', 'Bone016_42'] };
+const TED_MOUTH = 'Bone036_31';
+// a bone that can be pointed at a world direction: q_world = Q * q_worldRest, whatever its parent does
+function boneAimer(bone, child) {
+  const rest = bone.quaternion.clone(), wr = bone.getWorldQuaternion(new THREE.Quaternion()), wri = wr.clone().invert();
+  const pri = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const restDir = child.getWorldPosition(new THREE.Vector3()).sub(bone.getWorldPosition(new THREE.Vector3()));
+  const len = restDir.length(); restDir.normalize();
+  const Q = new THREE.Quaternion(), D = new THREE.Quaternion(), v = new THREE.Vector3();
+  return { bone, len, aim(dirWorld, W0i) {
+    v.copy(dirWorld).applyQuaternion(W0i).normalize();
+    Q.setFromUnitVectors(restDir, v);
+    D.copy(W0i).multiply(bone.parent.getWorldQuaternion(new THREE.Quaternion())).multiply(pri).invert(); // undo the parent's move
+    D.multiply(Q);
+    bone.quaternion.copy(rest).multiply(wri).multiply(D).multiply(wr);
+  } };
+}
 function makeTedRig() {
   const root = new THREE.Group(), holder = new THREE.Group(); root.add(holder);
   const model = cloneSkinned(ted.scene);
@@ -69,32 +87,136 @@ function makeTedRig() {
   const bones = {}; model.traverse(o => { if (o.isBone) bones[o.name] = o; });
   // bone frames are captured in the model's own orientation (facing +X), then he is turned around
   const drv = {}; for (const [k, n] of Object.entries(TED_BONES)) if (bones[n]) drv[k] = boneDriver(bones[n]);
+  const arms = {};
+  for (const [side, [a, b, c]] of Object.entries(TED_ARMS)) if (bones[a] && bones[b] && bones[c]) {
+    const up = boneAimer(bones[a], bones[b]), lo = boneAimer(bones[b], bones[c]);
+    arms[side] = { up, lo, sh: bones[a] };
+  }
   holder.rotation.y = -Math.PI / 2;
-  const bottle = ted.bottle.clone(), hand = bones[TED_BONES.foreR];
-  return { kind: 'ted', root, holder, model, drv, bottle, hand, bong: ted.bong.clone() };
+  // props live in his own space (not on a bone) so they sit exactly where they are put
+  const bottle = ted.bottle.clone(), bong = ted.bong.clone();
+  bottle.visible = bong.visible = false; root.add(bottle, bong);
+  return { kind: 'ted', root, holder, model, drv, arms, mouth: bones[TED_MOUTH], bottle, bong, bottleK: bottle.scale.x, bongK: bong.scale.x };
 }
-// pose: { walk (0..1 phase speed), t, sit, drink, cheer, panic, dance }
+// reach a paw to a world point (two-bone IK; the elbow points toward `pole`)
+const _v = [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector3()), _q = new THREE.Quaternion();
+function tedReach(R, side, target, pole) {
+  const A = R.arms[side]; if (!A) return;
+  const W0i = R.holder.getWorldQuaternion(_q).invert();
+  const S = A.sh.getWorldPosition(_v[0]), L1 = A.up.len * A.sh.getWorldScale(_v[5]).x, L2 = A.lo.len * A.lo.bone.getWorldScale(_v[5]).x;
+  const to = _v[1].copy(target).sub(S); let d = to.length(); to.normalize();
+  d = Math.min(Math.max(d, Math.abs(L1 - L2) + 1e-4), (L1 + L2) * 0.999);
+  const a = (L1 * L1 + d * d - L2 * L2) / (2 * d), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  const p = _v[2].copy(pole).addScaledVector(to, -pole.dot(to)).normalize();
+  const E = _v[3].copy(S).addScaledVector(to, a).addScaledVector(p, h);
+  A.up.aim(_v[4].copy(E).sub(S), W0i);
+  A.sh.updateMatrixWorld(true);
+  const W = _v[4].copy(S).addScaledVector(to, d);
+  A.lo.aim(W.sub(A.lo.bone.getWorldPosition(_v[2])), W0i);
+  A.sh.updateMatrixWorld(true);
+}
+// pose: { walk (0..1 phase speed), t, sit (0..1), bend, nod (+ down / - back), cheer, panic, dance, look, hop }
 function poseTed(R, s) {
-  const d = R.drv, t = s.t;
+  const d = R.drv, t = s.t, sit = s.sit === true ? 1 : (s.sit || 0), stand = 1 - sit;
   const sw = s.walk ? Math.sin(t * 11) * 0.55 * s.walk : 0, bob = s.walk ? Math.abs(Math.sin(t * 11)) * 0.02 * s.walk : Math.sin(t * 2) * 0.004;
   let armR = qa(1, 0, 0, 1.25), armL = qa(1, 0, 0, -1.25); // arms down from the T-pose
   if (s.cheer) { const w = Math.sin(t * 14) * 0.25; armR = qa(1, 0, 0, -0.6 + w); armL = qa(1, 0, 0, 0.6 - w); }
   else if (s.panic) { armR = qa(1, 0, 0, -0.2 + Math.sin(t * 20) * 0.5); armL = qa(1, 0, 0, 0.2 - Math.sin(t * 20 + 1) * 0.5); }
   else if (s.dance) { const k = Math.sin(t * 6); armR = qa(0, 0, 1, 1.0 * k).multiply(qa(1, 0, 0, 0.4)); armL = qa(0, 0, 1, -1.0 * k).multiply(qa(1, 0, 0, -0.4)); }
-  else if (s.drink != null) { const lift = Math.max(0, Math.sin(s.drink * Math.PI)); armR = qa(0, 0, 1, 1.3 * lift + 0.6).multiply(qa(1, 0, 0, 1.25 - 0.7 * lift)); armL = qa(1, 0, 0, -1.1); }
+  else if (sit > 0.5) { armR = qa(0, 0, 1, 0.5).multiply(qa(1, 0, 0, 1.0)); armL = qa(0, 0, 1, 0.5).multiply(qa(1, 0, 0, -1.0)); } // paws on the armrests
   else { armR = qa(0, 0, 1, -sw * 0.8).multiply(armR); armL = qa(0, 0, 1, sw * 0.8).multiply(armL); }
   d.armR && d.armR(armR); d.armL && d.armL(armL);
-  if (s.sit) {
-    d.thighR && d.thighR(qa(0, 0, 1, 1.45)); d.thighL && d.thighL(qa(0, 0, 1, 1.45));
-    d.shinR && d.shinR(qa(0, 0, 1, -1.35)); d.shinL && d.shinL(qa(0, 0, 1, -1.35));
-    d.chest && d.chest(qa(0, 0, 1, -0.12));
-  } else {
-    d.thighR && d.thighR(qa(0, 0, 1, sw)); d.thighL && d.thighL(qa(0, 0, 1, -sw));
-    d.shinR && d.shinR(qa(0, 0, 1, -Math.max(0, -sw) * 0.9)); d.shinL && d.shinL(qa(0, 0, 1, -Math.max(0, sw) * 0.9));
-    d.chest && d.chest(qa(0, 0, 1, s.walk ? 0.12 * s.walk : 0).multiply(qa(1, 0, 0, s.dance ? Math.sin(t * 6) * 0.15 : 0)));
+  for (const f of ['foreR', 'foreL']) d[f] && d[f](new THREE.Quaternion());
+  d.thighR && d.thighR(qa(0, 0, 1, 1.45 * sit + sw * stand)); d.thighL && d.thighL(qa(0, 0, 1, 1.45 * sit - sw * stand));
+  d.shinR && d.shinR(qa(0, 0, 1, -1.35 * sit - Math.max(0, -sw) * 0.9 * stand)); d.shinL && d.shinL(qa(0, 0, 1, -1.35 * sit - Math.max(0, sw) * 0.9 * stand));
+  d.chest && d.chest(qa(0, 0, 1, -0.12 * sit + (s.walk ? 0.12 * s.walk * stand : 0) + 0.45 * (s.bend || 0) + (s.breathe || 0)).multiply(qa(1, 0, 0, s.dance ? Math.sin(t * 6) * 0.15 : 0)));
+  d.neck && d.neck(qa(0, 0, 1, s.nod != null ? -s.nod : Math.sin(t * 1.3) * 0.06).multiply(qa(0, 1, 0, s.look || 0)));
+  R.holder.position.y = bob * stand + 0.09 * sit + (s.hop || 0);
+}
+
+// ---------------- Ted's camp (chair, beer, bong) ----------------
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+const seg = (t, a, b) => ease((t - a) / (b - a));
+const UP = new THREE.Vector3(0, 1, 0);
+// a seated drink / smoke cycle (seconds): idle, beer, idle, bong, idle
+const CYCLE = 11.5, DRINK = [1.2, 4.6], SMOKE = [6.2, 10.6];
+// where the bottle and bong are, in Ted's own space, and where his paws go
+function tedProps(R, c, puff) {
+  const root = R.root, mouth = R.mouth ? root.worldToLocal(R.mouth.getWorldPosition(new THREE.Vector3())) : new THREE.Vector3(0, 0.47, 0.15);
+  mouth.z += 0.03;
+  const B = R.bottle, G = R.bong, show = c.props;
+  B.visible = G.visible = show > 0.01;
+  B.scale.setScalar(R.bottleK * show); G.scale.setScalar(R.bongK * show);
+  if (!B.visible) return null;
+  // beer: resting upright on his right thigh, or raised, bottom up, neck at his mouth
+  const u = c.drink || 0;
+  const restBase = new THREE.Vector3(-0.12, 0.33, 0.09);
+  const axis = new THREE.Vector3(-0.55, 0.42 + 0.25 * (c.sip || 0), 0.55).normalize(); // neck -> bottom while drinking
+  const drinkBase = mouth.clone().addScaledVector(axis, 0.16);
+  B.position.lerpVectors(restBase, drinkBase, u);
+  B.quaternion.slerpQuaternions(new THREE.Quaternion(), new THREE.Quaternion().setFromUnitVectors(UP, axis.clone().negate()), u);
+  // bong: standing on his lap between his knees; for a hit he tips it toward him, mouthpiece to his lips
+  const k = c.smoke || 0;
+  const lap = new THREE.Vector3(0.02, 0.31, 0.12), tip = new THREE.Vector3(1, 0, 0);
+  const hitQ = new THREE.Quaternion().setFromAxisAngle(tip, -0.35), hitAxis = UP.clone().applyQuaternion(hitQ);
+  const hitBase = mouth.clone().addScaledVector(hitAxis, -0.165);
+  G.position.lerpVectors(lap, hitBase, k);
+  G.quaternion.slerpQuaternions(new THREE.Quaternion(), hitQ, k);
+  root.updateMatrixWorld(true);
+  const gripR = B.localToWorld(new THREE.Vector3(0, 0.07 / R.bottleK, 0)).add(root.localToWorld(new THREE.Vector3(-0.03, 0, 0)).sub(root.getWorldPosition(new THREE.Vector3())));
+  const gripL = G.localToWorld(new THREE.Vector3(0, 0.06 / R.bongK, 0)).add(root.localToWorld(new THREE.Vector3(0.035, 0, 0)).sub(root.getWorldPosition(new THREE.Vector3())));
+  return { gripR, gripL, mouth: root.localToWorld(mouth.clone()) };
+}
+function makeChair() {
+  const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
+  const frame = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.4 }), cloth = new THREE.MeshStandardMaterial({ color: 0x2f5a3a, roughness: 0.9, side: THREE.DoubleSide });
+  const leg = new THREE.CylinderGeometry(0.008, 0.008, 0.36, 6), rail = new THREE.CylinderGeometry(0.007, 0.007, 0.26, 6);
+  for (const [x, z, rx] of [[-0.14, 0.12, 0.35], [0.14, 0.12, 0.35], [-0.14, -0.12, -0.35], [0.14, -0.12, -0.35]]) { const m = new THREE.Mesh(leg, frame); m.position.set(x, 0.16, z); m.rotation.x = rx; inner.add(m); }
+  for (const x of [-0.15, 0.15]) { const m = new THREE.Mesh(rail, frame); m.position.set(x, 0.4, 0); m.rotation.x = Math.PI / 2; inner.add(m); } // armrests
+  const seat = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.26), cloth); seat.rotation.x = -Math.PI / 2 + 0.08; seat.position.y = 0.3; inner.add(seat);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3), cloth); back.position.set(0, 0.46, -0.14); back.rotation.x = -0.2; inner.add(back);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  g.inner = inner;
+  return g;
+}
+// open 0 = folded flat (a narrow bundle), 1 = set up
+function foldChair(ch, open) {
+  ch.inner.scale.set(0.16 + 0.84 * open, 1, 0.22 + 0.78 * open);
+}
+// small, short-lived smoke puffs (soft sprites)
+let puffTex = null;
+function puffTexture() {
+  if (puffTex) return puffTex;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  puffTex = new THREE.CanvasTexture(cv); puffTex.colorSpace = THREE.SRGBColorSpace;
+  return puffTex;
+}
+class Puffs {
+  constructor(scene) { this.scene = scene; this.list = []; }
+  add(p, dir) {
+    for (let i = 0; i < 7; i++) {
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTexture(), color: 0xdfe3d8, transparent: true, opacity: 0, depthWrite: false }));
+      m.position.copy(p); m.scale.setScalar(0.01);
+      m.userData = { v: dir.clone().multiplyScalar(0.1 + Math.random() * 0.06).add(new THREE.Vector3((Math.random() - 0.5) * 0.05, 0.04 + Math.random() * 0.04, (Math.random() - 0.5) * 0.05)), t: -i * 0.07, life: 1.4 + Math.random() * 0.6, r: 0.05 + Math.random() * 0.04 };
+      this.scene.add(m); this.list.push(m);
+    }
   }
-  d.head && d.head(qa(0, 0, 1, s.drink != null ? -0.35 * Math.max(0, Math.sin(s.drink * Math.PI)) : Math.sin(t * 1.3) * 0.06).multiply(qa(0, 1, 0, s.look || 0)));
-  R.holder.position.y = bob + (s.sit ? 0.09 : 0) + (s.hop || 0);
+  update(dt) {
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const m = this.list[i], u = m.userData; u.t += dt;
+      if (u.t < 0) { m.visible = false; continue; }
+      m.visible = true;
+      const f = u.t / u.life;
+      if (f >= 1) { this.scene.remove(m); m.material.dispose(); this.list.splice(i, 1); continue; }
+      m.position.addScaledVector(u.v, dt); u.v.multiplyScalar(1 - dt * 1.2); u.v.y += dt * 0.03;
+      m.scale.setScalar(0.02 + u.r * Math.sqrt(f));
+      m.material.opacity = 0.42 * Math.min(1, f * 6) * (1 - f);
+    }
+  }
+  clear() { for (const m of this.list) { this.scene.remove(m); m.material.dispose(); } this.list.length = 0; }
 }
 
 // ---------------- Rosy (a little dog) ----------------
@@ -124,18 +246,6 @@ function poseRosy(R, s) {
   R.head.rotation.y = s.look || 0;
 }
 
-// ---------------- props ----------------
-function makeChair() {
-  const g = new THREE.Group();
-  const frame = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.4 }), cloth = new THREE.MeshStandardMaterial({ color: 0x2f5a3a, roughness: 0.9, side: THREE.DoubleSide });
-  const leg = new THREE.CylinderGeometry(0.008, 0.008, 0.36, 6);
-  for (const [x, z, rx] of [[-0.14, 0.12, 0.35], [0.14, 0.12, 0.35], [-0.14, -0.12, -0.35], [0.14, -0.12, -0.35]]) { const m = new THREE.Mesh(leg, frame); m.position.set(x, 0.16, z); m.rotation.x = rx; g.add(m); }
-  const seat = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.26), cloth); seat.rotation.x = -Math.PI / 2 + 0.08; seat.position.y = 0.3; g.add(seat);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3), cloth); back.position.set(0, 0.46, -0.14); back.rotation.x = -0.2; g.add(back);
-  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  return g;
-}
-
 // ---------------- the sidekick ----------------
 export class Sidekick {
   constructor(scene, M, kind, ownerId) {
@@ -143,14 +253,24 @@ export class Sidekick {
     this.rig = kind === 'ted' && ted ? makeTedRig() : makeRosy();
     this.real = this.rig.kind === kind;
     this.x = 0; this.z = 0; this.yaw = 0; this.t = Math.random() * 10; this.placed = false;
-    this.mood = null; this.moodT = 0; this.drinkT = 0; this.stuck = 0; this.side = Math.random() < 0.5 ? -1 : 1;
+    this.mood = null; this.moodT = 0; this.stuck = 0; this.side = Math.random() < 0.5 ? -1 : 1;
+    this.c = null; // Ted's camp: { ph, t, D (chair spot), S (where he stands to set it up), ... }
+    this.puffs = new Puffs(scene);
     scene.add(this.rig.root);
   }
-  dispose() { this.scene.remove(this.rig.root); if (this.camp) this.scene.remove(this.camp); }
+  dispose() { this.scene.remove(this.rig.root); if (this.camp) this.scene.remove(this.camp); this.camp = null; this.c = null; this.puffs.clear(); }
   react(mood, time = 1.6) { this.mood = mood; this.moodT = time; }
-  // owner: the player (or null); env.smoke(x, y, z) for Ted's puffs
+  // where to camp for this owner state: a spot facing them
+  campSpot(owner, mode) {
+    const off = mode === 'cage' ? 1.4 : 1.1, a = (owner.yaw || 0) + (mode === 'repair' ? Math.PI * 0.75 : 0);
+    const x = owner.x + Math.cos(a) * off, z = owner.z - Math.sin(a) * off, yaw = Math.atan2(owner.x - x, owner.z - z);
+    // he stands just to the chair's right to unfold it
+    return { x, z, yaw, sx: x - Math.cos(yaw) * 0.36 + Math.sin(yaw) * 0.08, sz: z + Math.sin(yaw) * 0.36 + Math.cos(yaw) * 0.08 };
+  }
+  // owner: the player (or null); env.visible
   update(dt, owner, env) {
     this.t += dt;
+    this.puffs.update(dt);
     if (this.kind === 'ted' && !this.real && ted) { this.dispose(); this.rig = makeTedRig(); this.real = true; this.scene.add(this.rig.root); }
     const R = this.rig;
     if (!owner) { R.root.visible = false; return; }
@@ -159,47 +279,30 @@ export class Sidekick {
     // Ted sets up camp (chair, beer, bong) by a dead owner, and also while they repair a generator
     // or sit in a cage; Rosy lies down beside them
     const campMode = dead ? 'dead' : owner.st === 'caged' ? 'cage' : (owner.act && owner.act.k === 'repair') ? 'repair' : null;
-    if (this.campMode !== campMode) { this.campMode = campMode; this.deadAt = null; }
     R.root.visible = !gone && env.visible !== false;
     if (!this.placed) { this.x = owner.x + 1; this.z = owner.z - 0.6; this.placed = true; }
-    const pose = { t: this.t };
-    if (campMode) {
-      // sit by the owner: Ted with a chair, a beer and his bong, Rosy lying down
-      if (!this.deadAt) {
-        const off = campMode === 'cage' ? 1.4 : 1.1, a = (owner.yaw || 0) + (campMode === 'repair' ? Math.PI * 0.75 : 0);
-        const x = owner.x + Math.cos(a) * off, z = owner.z - Math.sin(a) * off;
-        this.deadAt = { x, z, yaw: Math.atan2(owner.x - x, owner.z - z) };
-      }
+    if (R.kind === 'ted') { if (this.tedCamp(dt, owner, campMode)) return; }
+    else if (campMode) {
+      if (!this.deadAt || this.campMode !== campMode) this.deadAt = this.campSpot(owner, campMode);
       const D = this.deadAt;
-      this.x += (D.x - this.x) * Math.min(1, dt * 3); this.z += (D.z - this.z) * Math.min(1, dt * 3); this.yaw = D.yaw;
-      if (R.kind === 'ted') {
-        if (!this.camp) {
-          this.camp = new THREE.Group(); const chair = makeChair(); this.camp.add(chair);
-          R.bong.position.set(0.24, 0, 0.12); this.camp.add(R.bong);
-          this.scene.add(this.camp);
-          R.hand.add(R.bottle); R.bottle.position.set(0, 0, 0); R.bottle.scale.setScalar(R.bottle.scale.x / (R.hand.getWorldScale(new THREE.Vector3()).x || 1));
-        }
-        this.camp.position.set(D.x, 0, D.z); this.camp.rotation.y = D.yaw;
-        pose.sit = true;
-        this.drinkT += dt;
-        const cyc = this.drinkT % 7;
-        if (cyc < 1.4) pose.drink = cyc / 1.4;
-        if (cyc > 4 && cyc < 4 + dt * 1.01) env.smoke && env.smoke(D.x + Math.sin(D.yaw) * 0.1, 0.62, D.z + Math.cos(D.yaw) * 0.1);
-        R.root.position.set(this.x, 0.13, this.z);
-      } else { pose.lie = true; R.root.position.set(this.x, 0, this.z); }
-      R.root.rotation.y = this.yaw;
-      R.kind === 'ted' ? poseTed(R, pose) : poseRosy(R, pose);
+      if (Math.hypot(D.x - this.x, D.z - this.z) > 0.08) this.stepTo(D.x, D.z, 3, dt);
+      else { this.yaw += Math.atan2(Math.sin(D.yaw - this.yaw), Math.cos(D.yaw - this.yaw)) * Math.min(1, dt * 5); }
+      const there = Math.hypot(D.x - this.x, D.z - this.z) <= 0.08;
+      R.root.position.set(this.x, 0, this.z); R.root.rotation.y = this.yaw;
+      poseRosy(R, { t: this.t, lie: there, walk: there ? 0 : 0.8 });
+      this.campMode = campMode;
       return;
     }
-    if (this.camp) { this.scene.remove(this.camp); this.camp = null; R.hand && R.hand.remove(R.bottle); this.deadAt = null; }
-    this.deadAt = null;
+    this.campMode = campMode; this.deadAt = null;
+    this.follow(dt, owner);
+  }
+  follow(dt, owner) {
+    const R = this.rig, pose = { t: this.t };
     // follow: a spot just behind and beside the owner; run to keep up, teleport if lost
     const ox = owner.x, oz = owner.z, oy = owner.yaw || 0;
     const tx = ox - Math.sin(oy) * 1.1 + Math.cos(oy) * 0.7 * this.side, tz = oz - Math.cos(oy) * 1.1 - Math.sin(oy) * 0.7 * this.side;
     const dx = tx - this.x, dz = tz - this.z, dist = Math.hypot(dx, dz);
-    if (dist > 14 || owner.st === 'carried' || owner.st === 'caged') {
-      if (dist > 14) { this.x = tx; this.z = tz; }
-    }
+    if (dist > 14) { this.x = tx; this.z = tz; }
     let speed = 0;
     if (this.mood === 'panic') { // run circles around the owner
       const a = this.t * 4; const px = ox + Math.cos(a) * 1.3, pz = oz + Math.sin(a) * 1.3;
@@ -214,6 +317,143 @@ export class Sidekick {
     if (owner.emote && owner.emote !== 1) pose.cheer = true;
     R.root.position.set(this.x, 0, this.z); R.root.rotation.y = this.yaw;
     R.kind === 'ted' ? poseTed(R, pose) : poseRosy(R, pose);
+  }
+  turnTo(yaw, dt, k = 8) { this.yaw += Math.atan2(Math.sin(yaw - this.yaw), Math.cos(yaw - this.yaw)) * Math.min(1, dt * k); }
+  // Ted's camp, step by step: walk over, pull out the folded chair, set it down and open it,
+  // climb in, beer and bong, then reverse it all when it's time to go.
+  // Returns true while the camp is driving him (false: just follow the owner).
+  tedCamp(dt, owner, mode) {
+    const R = this.rig;
+    let c = this.c;
+    if (mode) {
+      const spot = this.campSpot(owner, mode);
+      if (!c) c = this.c = { ph: 'walk', t: 0, D: spot, props: 0, cyc: 0 };
+      else if (c.ph !== 'getup' && c.ph !== 'fold' && (c.mode !== mode && Math.hypot(spot.x - c.D.x, spot.z - c.D.z) > 0.6)) {
+        if (c.ph === 'walk') c.D = spot; else { c.ph = c.ph === 'seated' || c.ph === 'climb' ? 'getup' : 'fold'; c.t = 0; c.next = spot; }
+      }
+      c.mode = mode;
+    } else if (c && c.ph !== 'getup' && c.ph !== 'fold') {
+      if (c.ph === 'walk') { this.c = null; return false; }
+      c.ph = c.ph === 'seated' || c.ph === 'climb' ? 'getup' : 'fold'; c.t = 0; c.next = null;
+    }
+    if (!c) return false;
+    c.t += dt;
+    const D = c.D, pose = { t: this.t }, fwd = new THREE.Vector3(Math.sin(D.yaw), 0, Math.cos(D.yaw));
+    const needChair = () => {
+      if (this.camp) return;
+      this.camp = new THREE.Group(); this.chair = makeChair(); this.camp.add(this.chair); this.scene.add(this.camp);
+    };
+    let reach = null; // where his paws go while handling the chair (world points)
+    let y = 0;
+    switch (c.ph) {
+      case 'walk': {
+        const d = Math.hypot(D.sx - this.x, D.sz - this.z);
+        if (d > 14) { this.x = D.sx; this.z = D.sz; }
+        if (d > 0.05) { this.stepTo(D.sx, D.sz, Math.min(3.2, 1 + d * 2), dt); pose.walk = Math.min(1, 0.4 + d); }
+        else { c.ph = 'unfold'; c.t = 0; }
+        break;
+      }
+      case 'unfold': {
+        // face the chair spot; pull the folded chair from behind his back, set it down, snap it open
+        needChair();
+        this.turnTo(Math.atan2(D.x - this.x, D.z - this.z), dt, 10);
+        const t = c.t, grow = seg(t, 0, 0.35), lower = seg(t, 0.45, 0.9), open = seg(t, 0.95, 1.45);
+        const me = new THREE.Vector3(this.x, 0, this.z), dir = new THREE.Vector3(D.x - this.x, 0, D.z - this.z).normalize();
+        const held = me.clone().addScaledVector(dir, 0.16).setY(0.16), set = new THREE.Vector3(D.x, 0, D.z);
+        this.camp.position.lerpVectors(held, set, lower);
+        this.camp.rotation.y = Math.atan2(dir.x, dir.z) + (D.yaw - Math.atan2(dir.x, dir.z)) * lower;
+        this.camp.scale.setScalar(Math.max(0.001, grow));
+        foldChair(this.chair, open);
+        pose.bend = Math.max(seg(t, 0.35, 0.8) * (1 - seg(t, 1.3, 1.7)), 0.25 * grow * (1 - lower));
+        // both paws on the chair's back rail
+        const top = this.camp.position.clone().add(new THREE.Vector3(0, 0.42 * this.camp.scale.y, 0));
+        const side = new THREE.Vector3(Math.cos(this.camp.rotation.y), 0, -Math.sin(this.camp.rotation.y)).multiplyScalar(0.06);
+        if (t > 0.15 && t < 1.5) reach = [top.clone().sub(side), top.clone().add(side)];
+        if (t > 1.7) { c.ph = 'climb'; c.t = 0; c.from = { x: this.x, z: this.z, yaw: this.yaw }; }
+        break;
+      }
+      case 'climb': {
+        // turn his back to the chair, step back and hop up into the seat
+        const t = c.t, turn = seg(t, 0, 0.45), slide = seg(t, 0.3, 1.0), sit = seg(t, 0.45, 1.05);
+        let dy = D.yaw - c.from.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        this.yaw = c.from.yaw + dy * turn;
+        this.x = c.from.x + (D.x - c.from.x) * slide; this.z = c.from.z + (D.z - c.from.z) * slide;
+        pose.sit = sit; pose.walk = t < 0.45 ? 0.5 : 0;
+        y = 0.13 * sit + Math.sin(Math.min(1, Math.max(0, (t - 0.4) / 0.55)) * Math.PI) * 0.09;
+        if (t > 1.1) { c.ph = 'seated'; c.t = 0; c.cyc = 0; }
+        break;
+      }
+      case 'seated': {
+        this.x = D.x; this.z = D.z; this.yaw = D.yaw;
+        pose.sit = 1; y = 0.13;
+        c.props = Math.min(1, c.props + dt * 3); // he gets his beer and bong out
+        c.cyc = (c.cyc + dt) % CYCLE;
+        const k = c.cyc;
+        // beer: raise (0.8s), long swig with his head back, lower (0.8s)
+        const [d0, d1] = DRINK;
+        c.drink = seg(k, d0, d0 + 0.8) * (1 - seg(k, d1 - 0.8, d1));
+        c.sip = seg(k, d0 + 0.8, d1 - 0.8);
+        // bong: lean in and lift it (0.7s), hit (bubbling), sit back, then breathe out a small puff
+        const [s0, s1] = SMOKE;
+        c.smoke = seg(k, s0, s0 + 0.7) * (1 - seg(k, s1 - 1.8, s1 - 1.2));
+        pose.nod = -0.55 * c.drink - 0.15 * c.sip + 0.18 * c.smoke + (k > s1 - 1.2 && k < s1 ? -0.25 * Math.sin((k - (s1 - 1.2)) / 1.2 * Math.PI) : 0);
+        pose.breathe = c.smoke * 0.12 + Math.sin(this.t * 1.6) * 0.015;
+        if (c.smoke > 0.9) pose.bubble = Math.sin(this.t * 40) * 0.003;
+        const ex = s1 - 1.05;
+        if (k >= ex && k - dt < ex) c.exhale = true;
+        break;
+      }
+      case 'getup': {
+        // beer and bong away, hop down out of the chair, step aside
+        const t = c.t; c.props = Math.max(0, c.props - dt * 3); c.drink = c.smoke = c.sip = 0;
+        const off = seg(t, 0.25, 0.85), sit = 1 - seg(t, 0.25, 0.8);
+        pose.sit = sit; y = 0.13 * sit + Math.sin(off * Math.PI) * 0.07;
+        this.x = D.x + (D.sx - D.x) * off; this.z = D.z + (D.sz - D.z) * off; this.yaw = D.yaw;
+        if (t > 0.9) { c.ph = 'fold'; c.t = 0; }
+        break;
+      }
+      case 'fold': {
+        // fold the chair up and tuck it away
+        if (!this.camp) { c.ph = 'done'; break; }
+        this.turnTo(Math.atan2(D.x - this.x, D.z - this.z), dt, 10);
+        const t = c.t; c.props = Math.max(0, c.props - dt * 3);
+        foldChair(this.chair, 1 - seg(t, 0.1, 0.5));
+        const me = new THREE.Vector3(this.x, 0, this.z), lift = seg(t, 0.5, 0.85);
+        const held = me.clone().add(new THREE.Vector3(D.x - this.x, 0, D.z - this.z).normalize().multiplyScalar(0.16)).setY(0.16);
+        this.camp.position.lerpVectors(new THREE.Vector3(D.x, 0, D.z), held, lift);
+        this.camp.scale.setScalar(Math.max(0.001, 1 - seg(t, 0.85, 1.15)));
+        pose.bend = seg(t, 0, 0.3) * (1 - seg(t, 0.8, 1.1));
+        const top = this.camp.position.clone().add(new THREE.Vector3(0, 0.42 * this.camp.scale.y, 0));
+        const side = new THREE.Vector3(Math.cos(this.camp.rotation.y), 0, -Math.sin(this.camp.rotation.y)).multiplyScalar(0.06);
+        if (t < 1.05) reach = [top.clone().sub(side), top.clone().add(side)];
+        if (t > 1.2) c.ph = 'done';
+        break;
+      }
+    }
+    if (c.ph === 'done') {
+      if (this.camp) this.scene.remove(this.camp);
+      this.camp = null; this.chair = null; c.props = 0;
+      R.bottle.visible = R.bong.visible = false;
+      if (c.next) { this.c = { ph: 'walk', t: 0, D: c.next, props: 0, cyc: 0, mode: c.mode }; }
+      else { this.c = null; return false; }
+      return true;
+    }
+    R.root.position.set(this.x, y, this.z); R.root.rotation.y = this.yaw;
+    poseTed(R, pose);
+    R.root.updateMatrixWorld(true);
+    const P = tedProps(R, c);
+    const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw)), down = new THREE.Vector3(0, -1, 0);
+    if (reach) {
+      tedReach(R, 'R', reach[0], right.clone().add(down)); tedReach(R, 'L', reach[1], right.clone().negate().add(down));
+    } else if (P) {
+      const k = c.props;
+      if (k > 0.3) {
+        tedReach(R, 'R', P.gripR, right.clone().multiplyScalar(1.2).add(down));
+        tedReach(R, 'L', P.gripL, right.clone().negate().multiplyScalar(1.2).add(down));
+      }
+      if (c.exhale) { c.exhale = false; this.puffs.add(P.mouth, fwd); }
+    }
+    return true;
   }
   stepTo(x, z, speed, dt) {
     const dx = x - this.x, dz = z - this.z, d = Math.hypot(dx, dz) || 1, step = Math.min(d, speed * dt);
@@ -234,4 +474,4 @@ export function makeSidekickModel(kind) {
   return R;
 }
 // (exposed for the pose-test page)
-export const __poseTed = poseTed, __poseRosy = poseRosy;
+export const __poseTed = poseTed, __poseRosy = poseRosy, __tedReach = tedReach;
