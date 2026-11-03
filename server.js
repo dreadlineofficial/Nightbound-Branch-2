@@ -73,6 +73,8 @@ class Sock {
     head[0] = 0x80 | op;
     try { this.s.write(Buffer.concat([head, payload])); } catch { this.closed(); }
   }
+  // high-frequency state (f:1) is dropped while this socket is backed up, so it never queues latency
+  backed() { return this.s.writableLength > 64 * 1024; }
   send(obj) { this.frame(1, Buffer.from(typeof obj === 'string' ? obj : JSON.stringify(obj), 'utf8')); }
   close() { if (this.open) { this.frame(8, Buffer.alloc(0)); try { this.s.end(); } catch {} } this.closed(); }
   closed() { if (!this.open) return; this.open = false; try { this.s.destroy(); } catch {} this.onclose && this.onclose(); }
@@ -108,9 +110,10 @@ server.on('upgrade', (req, socket) => {
     } else if (m.op === 'data' && room) {
       if (isHost) {
         const payload = JSON.stringify({ op: 'data', d: m.d });
-        if (m.to === '*') for (const p of room.peers.values()) p.send(payload);
-        else { const p = room.peers.get(m.to); p && p.send(payload); }
-      } else room.host.send({ op: 'data', from: ws.id, d: m.d });
+        const out = p => { if (p && !(m.f && p.backed())) p.send(payload); };
+        if (m.to === '*') for (const p of room.peers.values()) out(p);
+        else out(room.peers.get(m.to));
+      } else if (!(m.f && room.host.backed())) room.host.send({ op: 'data', from: ws.id, d: m.d });
     } else if (m.op === 'ping') ws.send({ op: 'pong', t: m.t });
   };
   ws.onclose = () => {

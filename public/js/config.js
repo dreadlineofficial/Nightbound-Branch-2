@@ -2,7 +2,9 @@
 
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
-export const SNAP_RATE = 20;            // snapshots per second sent to clients
+// bump when host and clients can no longer understand each other's network messages
+export const NET_PROTOCOL = 3;
+export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
   walk: 2.3, run: 4.0, crouch: 1.15, crawl: 0.75,
@@ -226,8 +228,19 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.9.1';
+export const VERSION = '2.9.2';
 export const INBOX = [
+  {
+    id: 'v2.9.2', version: '2.9.2', date: 'Nov 2026', title: 'Smoother Online Matches', tag: 'Update',
+    body: [
+      'Online matches should feel much smoother. Game state now travels over a fast WebRTC channel that never waits for lost packets, so a single dropped packet no longer freezes everyone for a moment and then makes them jump.',
+      'Snapshots are about a third smaller and sent 30 times a second (was 20). Your own position is sent 30 times a second too.',
+      'The host now draws other players smoothly instead of in steps, and the host\'s hits are lag-compensated like everyone else\'s.',
+      'If the host switches to another tab or window, the match keeps running at full speed for everyone.',
+      'Slow connections drop stale updates instead of letting a queue of old ones build up.',
+      'Everyone in a lobby needs this version. Players on an older copy are told to refresh.',
+    ],
+  },
   {
     id: 'v2.9.1', version: '2.9.1', date: 'Nov 2026', title: 'Slimer Gets Hungrier', tag: 'Balance',
     body: [

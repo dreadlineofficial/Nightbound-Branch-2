@@ -477,8 +477,9 @@ export class Game {
       this.me = { x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, vault: me.vault, mv: me.mv, cr: me.cr };
       this.posTimer -= dt;
       if (this.posTimer <= 0) {
-        this.posTimer = 1 / 20;
-        this.send({ t: 'pos', x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), mv: me.mv, cr: me.cr, v: me.vault ? 1 : 0, tp: this.myTp });
+        // 30/s on a steady cadence; ct (my clock) lets the host order and smooth the updates
+        this.posTimer = Math.max(0, this.posTimer + 1 / 30);
+        this.send({ t: 'pos', x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), mv: me.mv, cr: me.cr, v: me.vault ? 1 : 0, tp: this.myTp, ct: +(performance.now() / 1000).toFixed(3) });
       }
     }
     // skill checks
@@ -550,14 +551,19 @@ export class Game {
       const execing = p.role === 'killer' && p.act && p.act.k === 'execute';
       const hidden = p.st === 'dead' || p.st === 'out' || (local && p.role === 'killer' && !execing);
       R.root.visible = !hidden;
-      // smoothing
-      const jump = Math.hypot(p.x - c.x, p.z - c.z), ox = c.x, oz = c.z;
-      if (local || jump > 4) { c.x = p.x; c.z = p.z; }
-      else { const k = 1 - Math.exp(-dt * 16); c.x += (p.x - c.x) * k; c.z += (p.z - c.z) * k; }
+      // smoothing. Other players are already interpolated between network updates (clients:
+      // snapshots; host: the remote player's own position stream), so only a light filter is
+      // added there; heavy smoothing would draw them behind where hits are actually checked.
+      const view = !local && this.isHost && this.session.viewPos ? this.session.viewPos(p) : null;
+      const tx = view ? view.x : p.x, tz = view ? view.z : p.z, tyaw = view ? view.yaw : p.yaw;
+      const interp = !local && (this.isHost ? !!view : true);
+      const jump = Math.hypot(tx - c.x, tz - c.z), ox = c.x, oz = c.z;
+      if (local || jump > 4) { c.x = tx; c.z = tz; }
+      else { const k = 1 - Math.exp(-dt * (interp ? 40 : 16)); c.x += (tx - c.x) * k; c.z += (tz - c.z) * k; }
       // speed of the smoothed motion (not of raw network updates, which arrive in steps)
       const spd = jump > 4 ? c.spd : Math.min(9, Math.hypot(c.x - ox, c.z - oz) / Math.max(dt, 1e-3));
       c.spd += (spd - c.spd) * Math.min(1, dt * 8);
-      c.yaw += angDiff(c.yaw, p.yaw) * (local ? 1 : 1 - Math.exp(-dt * 12));
+      c.yaw += angDiff(c.yaw, tyaw) * (local ? 1 : 1 - Math.exp(-dt * (interp ? 30 : 12)));
       if (hidden) continue;
       // footsteps of others
       if (!local && p.mv && !p.cr && !(p.role === 'killer' && (p.char === 'wisp' || p.char === 'slimer'))) {

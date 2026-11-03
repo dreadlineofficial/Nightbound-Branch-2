@@ -30,7 +30,7 @@ No server is needed. The host listens two ways at once:
 
 Joining players try the direct connection first and switch to the relay automatically.
 
-The host runs the match and sends compact snapshots 20 times a second (a full keyframe once a second). Clients draw other players slightly in the past, interpolated between snapshots, so late or bunched packets don't cause stutter. Killer hits are lag-compensated against what the killer saw.
+The host runs the match and sends compact snapshots 30 times a second (a full keyframe once a second). On WebRTC, snapshots and player positions use a second, unordered data channel that never retransmits, so a lost packet is simply replaced by the next one and nothing waits behind it. Events (hits, generators, messages) and actions stay on the reliable channel. Clients draw other players slightly in the past, interpolated between snapshots, so late or bunched packets don't cause stutter. The host draws remote players the same way. Killer hits are lag-compensated against what the killer saw, for the host too. The host keeps simulating at full speed when its tab is in the background, and all players must be on the same network protocol version (older copies are asked to refresh).
 
 When the page is served by `node server.js`, everyone on that server uses its built-in WebSocket relay instead. Empty slots can be filled with bots, and a bot takes over if a player disconnects.
 

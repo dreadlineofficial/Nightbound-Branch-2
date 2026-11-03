@@ -8,12 +8,12 @@ import { QUALITY } from './world.js';
 import { setDetail } from './models.js';
 import { MenuScene } from './menu.js';
 import { loadForeman, onForemanReady } from './foremanGlb.js';
-import { packSnap, SnapReader } from './snap.js';
+import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound } from './audio.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
 
 window.__nbBooted = true;
@@ -466,7 +466,13 @@ const MAPS = MAP_NAMES;
 function resolveMap(m) { const ids = Object.keys(MAPS); return MAPS[m] ? m : ids[Math.floor(Math.random() * ids.length)]; }
 
 class HostSession {
-  constructor(roster, opts) { this.roster = roster; this.opts = opts; this.net = opts.net; this.myId = opts.myId; this.isHost = true; this.snapT = 0; this.kfT = 0; this.pending = []; }
+  constructor(roster, opts) {
+    this.roster = roster; this.opts = opts; this.net = opts.net; this.myId = opts.myId; this.isHost = true;
+    this.snapT = 0; this.kfT = 0; this.pending = []; this.snapDue = false;
+    this.writer = new SnapWriter();
+    this.tracks = new Map(); // player id -> Track (smoothed view of remote players on the host's screen)
+    this.lastSim = performance.now();
+  }
   start() {
     this.seed = Math.floor(Math.random() * 1e9);
     this.map = resolveMap(this.opts.map);
@@ -478,14 +484,55 @@ class HostSession {
     this.game.start();
   }
   state() { return this.sim.S; }
-  send(m) { this.sim.onMsg(this.myId, m); }
+  send(m) {
+    // lag compensation for the host too: remote players are drawn slightly in the past
+    if (m.t === 'act' && this.tracks.size) { let d = 0; for (const t of this.tracks.values()) d = Math.max(d, t.delay()); m.rt = this.sim.S.t - d - 0.02; }
+    this.sim.onMsg(this.myId, m);
+  }
   // connection id -> the player it controls (changes when a fallen survivor takes over a bot)
   pidOf(peer) { return (this.ctrl && this.ctrl.get(peer)) || peer; }
-  remote(id, m) { if (m && (m.t === 'pos' || m.t === 'in' || m.t === 'act')) this.sim.onMsg(this.pidOf(id), m); }
+  remote(id, m) {
+    if (!m || (m.t !== 'pos' && m.t !== 'in' && m.t !== 'act')) return;
+    const pid = this.pidOf(id);
+    if (m.t !== 'pos') {
+      // clients stamp actions with the host wall-clock moment they were looking at: convert to sim time
+      if (m.t === 'act' && typeof m.rt === 'number') m.rt = this.sim.S.t - (performance.now() / 1000 - m.rt);
+      this.sim.onMsg(pid, m);
+      return;
+    }
+    let tr = this.tracks.get(pid);
+    if (!tr) this.tracks.set(pid, tr = new Track());
+    if (!tr.fresh(m.ct)) return; // an older position that arrived late (unordered channel)
+    this.sim.onMsg(pid, m);
+    const p = this.sim.P(pid);
+    if (p) tr.push(m.ct, p.x, p.z, p.yaw, p.tp);
+  }
+  // where to draw a remote human on the host's screen (null: use the simulation position)
+  viewPos(p) {
+    if (p.bot || p.id === this.myId || p.reel || p.pull || (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down')) return null;
+    const tr = this.tracks.get(p.id);
+    return tr ? tr.sample(p.tp) : null;
+  }
+  // advance the simulation to "now"; called every frame and from a background timer
+  pump(minGap = 0) {
+    const now = performance.now(), el = (now - this.lastSim) / 1000;
+    if (el <= minGap) return;
+    this.lastSim = now;
+    this.simTick(Math.min(0.25, el));
+  }
   simTick(dt) {
     // fixed-size sub-steps keep the simulation real-time even at low frame rates
     const n = Math.max(1, Math.ceil(dt / 0.034)), h = dt / n;
     for (let i = 0; i < n; i++) this.step(h);
+    // at most one snapshot per tick: after a slow frame, send the newest state, not a burst of old ones
+    if (this.net && this.snapDue) {
+      this.snapDue = false;
+      const kf = this.kfT <= 0 || this.sim.S.phase !== 'play';
+      if (kf) this.kfT = 1;
+      // events must not be lost: they go on the reliable channel; the snapshot may be dropped
+      if (this.pending.length) { this.net.broadcast({ t: 'ev', e: this.pending }); this.pending = []; }
+      this.net.broadcast({ t: 's', s: this.writer.pack(this.sim.S, kf) }, true);
+    }
   }
   step(dt) {
     this.bots.update(dt);
@@ -505,21 +552,19 @@ class HostSession {
       this.snapT -= dt;
       this.kfT -= dt;
       if (this.snapT <= 0) {
-        this.snapT = 1 / SNAP_RATE;
-        // a full keyframe (names, perks, scores) every second and whenever the match isn't in play
-        const kf = this.kfT <= 0 || this.sim.S.phase !== 'play';
-        if (kf) this.kfT = 1;
-        this.net.broadcast({ t: 's', s: packSnap(this.sim.S, kf), e: this.pending });
-        this.pending = [];
+        // keep the cadence steady; a full keyframe (ids, names, perks, scores) goes out every second
+        this.snapT = Math.max(0, this.snapT + 1 / SNAP_RATE);
+        this.snapDue = true;
       }
     }
   }
-  tick(dt, realDt) { this.simTick(realDt); this.game.frame(dt); }
+  tick(dt) { this.pump(); this.game.frame(dt); }
   playerLeft(id) {
     id = this.pidOf(id);
     const p = this.sim.P(id);
     if (!p) return;
     p.bot = true;
+    this.tracks.delete(id);
     this.sim.inputs.get(id).e = false;
     this.sim.ev({ k: 'msg', text: p.name + ' disconnected, a bot took over.' });
   }
@@ -529,14 +574,13 @@ class HostSession {
 class ClientSession {
   constructor(net, start, myId) { this.net = net; this.myId = myId; this.isHost = false; this.M = buildMap(start.seed, MAP_NAMES[start.map] ? start.map : 'woods'); this.S = null; this.game = null; this.queued = []; this.reader = new SnapReader(); }
   onMsg(m) {
-    if (m.t !== 's') return;
-    const s = this.reader.read(m.s);
-    if (s) this.S = s;
-    // events still count when the snapshot itself had to wait for a keyframe
-    if (this.game) this.game.onEvents(m.e || []); else if (m.e) this.queued.push(...m.e);
+    if (m.t === 's') { const s = this.reader.read(m.s); if (s) this.S = s; }
+    // events arrive separately (reliably); they still count before the first keyframe
+    const e = m.e;
+    if (e && e.length) { if (this.game) this.game.onEvents(e); else this.queued.push(...e); }
   }
   state() { if (this.S) this.reader.interpolate(this.S, this.myId); return this.S; }
-  send(m) { if (m.t === 'act' && this.reader.rt != null) m.rt = +this.reader.rt.toFixed(3); this.net.send(m); }
+  send(m) { if (m.t === 'act' && this.reader.rt != null) m.rt = +this.reader.rt.toFixed(3); this.net.send(m, m.t === 'pos'); }
   tick(dt) {
     if (!this.S) return;
     if (!this.game) {
@@ -655,6 +699,13 @@ function hostMsg(id, m) {
     return;
   }
   if (m.t === 'hello') {
+    if (m.proto !== NET_PROTOCOL) {
+      const newer = typeof m.proto === 'number' && m.proto > NET_PROTOCOL;
+      lobby.net.send(id, { t: 'reject', reason: newer
+        ? `The host is on an older version of Nightbound (${VERSION}). Ask them to refresh the page or update.`
+        : `This room runs Nightbound ${VERSION}. Refresh the page (or download the latest copy) and join again.` });
+      return;
+    }
     if (lobby.players.length >= 5) { lobby.net.send(id, { t: 'reject', reason: 'The lobby is full.' }); return; }
     const killerTaken = lobby.players.some(p => p.role === 'killer');
     const survCount = lobby.players.filter(p => p.role === 'survivor').length;
@@ -704,7 +755,7 @@ async function doJoin(code) {
     net.on('msg', m => clientMsg(m));
     net.on('closed', r => { toast(r); leaveOnline(true); });
     const role = 'survivor';
-    net.send({ t: 'hello', name: settings.name, role, loadouts: myLoadouts() });
+    net.send({ t: 'hello', name: settings.name, role, loadouts: myLoadouts(), proto: NET_PROTOCOL, ver: VERSION });
     showLobby();
   } catch (e) { console.error(e); toast(e.message || String(e)); }
   loading(false);
@@ -717,7 +768,7 @@ function clientMsg(m) {
     case 'reject': toast(m.reason); leaveOnline(true); break;
     case 'chat': addChat(m.name, m.text); break;
     case 'start': startClientMatch(m); break;
-    case 's': if (session && !session.isHost) session.onMsg(m); break;
+    case 's': case 'ev': if (session && !session.isHost) session.onMsg(m); break;
     case 'tolobby': if (session) { endSession(); stopBG(); } lobby.inGame = false; showLobby(); break;
   }
 }
@@ -842,8 +893,19 @@ function loop(now) {
     else if (menu) menu.update(dt, renderer);
   } catch (e) { console.error(e); }
 }
-// keep the host simulation alive while its tab is in the background
-setInterval(() => { if (document.hidden && session && session.isHost) { try { session.simTick(0.05); } catch (e) { console.error(e); } } }, 50);
+// Keep the host simulation and its snapshots on schedule between frames and while the tab is in
+// the background. Browsers stop requestAnimationFrame and slow main-thread timers to ~1/s in hidden
+// tabs (a host alt-tabbing used to freeze everyone); timers inside a Worker are not throttled.
+function hostPump() {
+  // online hosts only (a bot match simply pauses in the background, as before)
+  if (!session || !session.isHost || !session.net || !session.pump) return;
+  try { session.pump(0.014); } catch (e) { console.error(e); }
+}
+try {
+  const src = 'setInterval(function(){postMessage(0)},16)';
+  const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  w.onmessage = hostPump;
+} catch { setInterval(hostPump, 16); }
 addEventListener('resize', () => { if (!session) renderer.setSize(innerWidth, innerHeight); });
 
 // ---------- OFFAL x Nightbound announcement ----------
