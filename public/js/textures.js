@@ -343,6 +343,17 @@ export function tex(name) {
       out = finish(c, H, 1.5, null);
       break;
     }
+    case 'pinstripe': {
+      // suiting: a fine twill with thin chalk stripes (Patrick Bateman's double-breasted suit)
+      const n = fbm(37, 32, 3);
+      const { c, H } = paint(256, (u, v, x, y) => {
+        const stripe = x % 6 === 0 ? 1 : 0, twill = (x + y) % 3 === 0 ? 0.9 : 1;
+        const w = stripe ? 0.95 : 0.5 * twill * (0.85 + n(u, v) * 0.3);
+        return [clamp(255 * w), clamp(255 * w), clamp(255 * w), stripe ? 1 : twill * 0.6];
+      });
+      out = finish(c, H, 0.8, null);
+      break;
+    }
     case 'grass': {
       // alpha blade texture for instanced grass
       const c = canvas(64), ctx = c.getContext('2d');

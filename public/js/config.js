@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 4;
+export const NET_PROTOCOL = 5;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -48,7 +48,7 @@ export const MODES = {
   infection: { name: 'Infection', short: 'Turned', desc: 'No cages. Downed survivors rise as killers a few seconds later. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
 };
 // killers an infected survivor can turn into
-export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer'];
+export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman'];
 
 export const KILLERS = {
   butcher: {
@@ -100,6 +100,15 @@ export const KILLERS = {
     ability2: { name: 'Lights Out', key: 'R', cooldown: 45, duration: 9, desc: 'Kill every light on the map for 9s: the fog closes in, you go silent, runners are revealed and one strike of your hook puts a survivor down.' },
     feature: { name: 'Hunts by Sound', desc: 'Survivors running within 22m of you give away their position with a noise ping, lights or no lights.' },
     color: 0xd8ccbc,
+  },
+  bateman: {
+    id: 'bateman', name: 'Patrick Bateman', speed: 4.6, terror: 30, weapon: 'Axe', crossover: 'American Psycho (fan-made)',
+    lore: 'Vice president at Pierce & Pierce. Impeccable taste, a flawless skincare routine, and an axe in his briefcase.',
+    exec: { name: 'Hip to Be Square', desc: 'Puts on his raincoat, lectures the survivor about Huey Lewis, then swings the axe.' },
+    ability: { name: 'Chainsaw Toss', cooldown: 4, aim: 0.6, range: 22, desc: 'Hold to aim (slowed), release to hurl your chainsaw. A hit puts a survivor straight down. Then go and pick it up (it comes back by itself after 20s).' },
+    ability2: { name: 'Business Card', key: 'R', cooldown: 25, range: 14, desc: 'Show your card. Survivors within 14m in front of you are intimidated: revealed and slowed by 15% for 4s.' },
+    feature: { name: 'Morning Routine', desc: 'After every hit, a 3s burst of +12% speed.' },
+    color: 0xc01a1a,
   },
 };
 
@@ -216,6 +225,12 @@ export const SKINS = {
     { id: 'ectoblue', name: 'Ecto Blue', price: 2500, desc: 'A rarer, colder spirit: icy blue ectoplasm.', fx: [['tint', { color: 0x4aa8ff, k: 0.7, e: 0x0a3a8a, ei: 0.8 }]] },
     { id: 'golden', name: 'Golden Glutton', price: 5000, desc: 'He ate the hotel safe. Solid gold, still hungry.', fx: [['tint', { color: 0xe8c040, k: 0.75, e: 0x5a3a00, ei: 0.5 }], ['crown', { color: 0xd8b040, gem: 0x40ff40 }]] },
   ],
+  bateman: [
+    { id: 'default', name: 'Pierce & Pierce', price: 0, desc: 'Charcoal pinstripe double-breasted suit, crisp white shirt, red silk tie and a cigar. Valentino Couture.' },
+    { id: 'raincoat', name: 'Hip to Be Square', price: 2500, rain: true, desc: 'A clear plastic raincoat over the suit, for the mess. Newspaper on the floor optional.' },
+    { id: 'morning', name: 'Morning Routine', price: 3000, suit: 0xf2efe8, shirt: 0xf2efe8, tie: 0xf2efe8, mask: 0xd8ead0, desc: 'White robe, herb-mint facial mask and a Walkman. Ice pack under the eyes.' },
+    { id: 'bloodbath', name: 'Bloodbath', price: 5000, suit: 0xe8e2d8, shirt: 0x8a0a08, tie: 0x5a0606, saw: true, desc: 'Shirt soaked through, chainsaw in hand. He has to return some videotapes.' },
+  ],
   foreman: [
     { id: 'default', name: 'Night Shift', price: 0 },
     { id: 'overtime', name: 'Overtime', price: 2000, flesh: 0x9a8a88, apron: 0x2a1a14, blood: 0x6a0a06, desc: 'Hard hat and a hi-vis vest over the apron. Safety first.', fx: [['hardhat', { color: 0xe0b020, lamp: true }], ['hivis', { color: 0xf09020 }]] },
@@ -229,6 +244,7 @@ export const CHAPTERS = [
   { id: 'offal', num: 'V', name: 'OFFAL', sub: '× Nightbound', price: 5000, killer: 'foreman', map: 'meatworks', banner: 'offal', isNew: true,
     tagline: 'Night shift at the Hollow Pines Meatworks. Headcount must be maintained.',
     contents: ['The Foreman: Chain Hook, Lights Out and Hunts by Sound', 'Execution: Reassignment', 'Map: Hollow Pines Meatworks (free for everyone)', '3 Foreman outfits in the Store'] },
+  { id: 'psycho', num: 'VII', name: 'American Psycho', sub: '(fan-made)', killer: 'bateman', base: true, isNew: true, tagline: 'Do you like Huey Lewis and the News?' },
   { id: 'base4', num: 'IV', name: 'The Last Light', killer: 'lamplighter', base: true, tagline: 'Every lantern is a door. Every door leads to him.' },
   { id: 'base3', num: 'III', name: 'Trophy Season', killer: 'harrower', base: true, tagline: 'He does not chase. He collects.' },
   { id: 'base2', num: 'II', name: 'Drowned Embrace', killer: 'wisp', base: true, tagline: 'She was here first. She will be here last.' },
@@ -239,8 +255,18 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.10.0';
+export const VERSION = '2.11.0';
 export const INBOX = [
+  {
+    id: 'v2.11', version: '2.11.0', date: 'Nov 2026', title: 'Patrick Bateman', tag: 'Crossover',
+    body: [
+      'New killer, free for everyone: Patrick Bateman (American Psycho, fan-made). Vice president at Pierce & Pierce, in a charcoal pinstripe double-breasted suit with a red silk tie, a cigar and an axe.',
+      'Chainsaw Toss (RMB): hold to rev up (slowed), release to hurl the chainsaw. A hit puts a survivor straight down. Then walk over and pick it back up (it returns by itself after 20s).',
+      'Business Card (R): survivors within 14m in front of him are intimidated: revealed and 15% slower for 4s.',
+      'Morning Routine: a 3s burst of +12% speed after every hit. Execution: Hip to Be Square.',
+      'Outfits in the Store: Hip to Be Square (clear raincoat), Morning Routine (robe, face mask and Walkman), Bloodbath (soaked shirt and chainsaw).',
+    ],
+  },
   {
     id: 'v2.10', version: '2.10.0', date: 'Nov 2026', title: 'Game Modes', tag: 'Update',
     gift: { embers: 1000, label: 'Gift: 1,000 Embers' },

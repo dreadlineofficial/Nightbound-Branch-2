@@ -44,6 +44,7 @@ export function speedOf(p, S, sprint, crouch) {
     if (!crouch && sprint && p.hp === 1 && has(p, 'fleet')) s *= 1.07;
     if (p.boost > 0) s *= p.boostMul || SPEED.hitBoost;
     if (p.slimed > 0) s *= 0.7;
+    if (p.card > 0) s *= 0.85; // intimidated by a business card
     return s;
   }
   const K = KILLERS[p.char];
@@ -55,7 +56,7 @@ export function speedOf(p, S, sprint, crouch) {
   else if (p.atk === 2) s *= p.atkHit ? 0.22 : 0.5;
   if (p.char === 'butcher' && p.ab === 1) s = 8.6;
   if (p.char === 'wisp') { if (p.ab === 1) s *= 1.15; else if (p.ab === 2 || p.ab === 3) s *= 0.4; }
-  if ((p.char === 'harrower' || p.char === 'foreman') && p.aim) s *= p.char === 'foreman' ? 0.75 : SPEED.aimSlow;
+  if ((p.char === 'harrower' || p.char === 'foreman' || p.char === 'bateman') && p.aim) s *= p.char === 'foreman' ? 0.75 : p.char === 'bateman' ? 0.6 : SPEED.aimSlow;
   if (p.diffMul) s *= p.diffMul;
   return s;
 }

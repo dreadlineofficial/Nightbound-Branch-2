@@ -278,6 +278,7 @@ export function makeKiller(id, sk = {}) {
     applySkinFx(R, sk);
     return R;
   }
+  if (id === 'bateman') return makeBateman(sk);
   if (id === 'foreman') { const g = makeForemanGlb(sk, DETAIL.lite); if (g) { applySkinFx(g, sk); return g; } }
   const R = new Rig();
   if (id === 'foreman') {
@@ -404,6 +405,101 @@ export function makeKiller(id, sk = {}) {
   return R;
 }
 
+// Patrick Bateman (American Psycho, fan-made): a charcoal pinstripe double-breasted suit,
+// crisp white shirt, red silk tie, slicked-back hair, a cigar in one hand and an axe in the other.
+function makeBateman(sk) {
+  const R = new Rig();
+  const skinM = mat(0xe9c6a8, { map: 'skin', rough: 0.5 });
+  const suit = mat(sk.suit ?? 0x30353c, { map: sk.suit ? 'cloth' : 'pinstripe', rough: 0.7 });
+  const shirt = mat(sk.shirt ?? 0xf4f2ee, { map: 'cloth', rough: 0.6 });
+  const tieM = mat(sk.tie ?? 0xc0262a, { map: 'cloth', rough: 0.45 });
+  const hair = mat(0x241710, { rough: 0.35 });
+  const shoes = mat(0x0c0c0c, { map: 'leather', rough: 0.25 });
+  const robe = sk.id === 'morning';
+  buildBody(R, { skin: skinM, top: suit, sleeve: suit, forearm: suit, hand: skinM, pants: robe ? skinM : sk.saw ? mat(0x26282c, { map: 'cloth', rough: 0.8 }) : suit, shoes: robe ? mat(0xf2efe8, { map: 'cloth' }) : shoes, hair, bulk: 1.04, legLen: 0.48, eye: 0x4a5a6a });
+  // slicked-back hair with a little lift at the front
+  R.mesh('head', G.sph(0.106, 18, 12), hair, 0, 0.14, -0.018, -0.12, 0, 0, 0.94, 0.7, 1.08);
+  R.mesh('head', G.sph(0.07, 12, 8), hair, 0.008, 0.185, 0.035, 0.3, 0, 0.08, 1.25, 0.42, 1.0);
+  for (const s of [-1, 1]) R.mesh('head', G.sph(0.03, 8, 6), hair, s * 0.085, 0.13, -0.02, 0, 0, 0, 0.5, 1.1, 1.2, false);
+  // shirt collar and front, red tie
+  R.mesh('spine', G.tor(0.056, 0.016), shirt, 0, 0.56, 0.01, Math.PI / 2 - 0.1, 0, 0, 1.1, 1, 0.85);
+  if (sk.saw) {
+    // Bloodbath: no jacket, a white shirt soaked through
+    const blood = mat(0x7a0606, { rough: 0.2 }), dried = mat(0x4a0404, { rough: 0.4 });
+    for (const [x, y, z, sx, sy, m] of [[0.04, 0.4, 0.12, 0.09, 0.14, blood], [-0.07, 0.25, 0.115, 0.06, 0.1, dried], [0.08, 0.12, 0.1, 0.05, 0.08, blood], [-0.02, 0.05, 0.11, 0.08, 0.05, dried], [0.12, 0.33, 0.07, 0.04, 0.07, blood]])
+      R.mesh('spine', G.sph(1, 10, 8), m, x, y, z, 0, 0, 0, sx, sy, 0.012, false);
+    for (const s of ['L', 'R']) R.mesh('el' + s, G.sph(1, 8, 6), blood, 0, -0.18, 0.03, 0, 0, 0, 0.035, 0.07, 0.03, false);
+    R.mesh('head', G.sph(1, 8, 6), blood, 0.04, 0.06, 0.085, 0, 0, 0, 0.025, 0.035, 0.01, false);
+  } else if (!robe) {
+    R.mesh('spine', G.box(0.11, 0.2, 0.02), shirt, 0, 0.44, 0.105, -0.1, 0, 0);
+    R.mesh('spine', G.box(0.04, 0.035, 0.03), tieM, 0, 0.53, 0.115, 0, 0, 0, 1, 1, 1, false);
+    R.mesh('spine', G.box(0.05, 0.24, 0.012), tieM, 0, 0.4, 0.118, -0.1, 0, 0, 1, 1, 1, false);
+    // double-breasted jacket: wide peaked lapels, six buttons, a pocket square
+    for (const s of [-1, 1]) R.mesh('spine', G.box(0.075, 0.24, 0.02), suit, s * 0.068, 0.42, 0.112, -0.12, 0, s * -0.42, 1, 1, 1, false);
+    R.mesh('spine', G.box(0.2, 0.3, 0.02), suit, 0.012, 0.18, 0.112, 0, 0, 0, 1, 1, 1, false);
+    const btn = mat(0x15171a, { rough: 0.3 });
+    for (let r = 0; r < 3; r++) for (const s of [-1, 1]) R.mesh('spine', G.sph(0.011, 6, 4), btn, s * 0.06, 0.27 - r * 0.075, 0.125, 0, 0, 0, 1, 1, 0.6, false);
+    R.mesh('spine', G.box(0.05, 0.02, 0.01), shirt, -0.1, 0.4, 0.118, 0, 0, 0, 1, 1, 1, false);
+    // white shirt cuffs
+    for (const s of ['L', 'R']) R.mesh('el' + s, G.cyl(0.028, 0.027, 0.03, 10), shirt, 0, -0.255, 0, 0, 0, 0, 1, 1, 1, false);
+  } else {
+    // Morning Routine: towelling robe, herb-mint mask, Walkman headphones
+    R.mesh('hips', lathe(0.62, [[0, 0.18], [0.5, 0.21], [1, 0.22]], 'down', 16), mat(0xf2efe8, { map: 'cloth', rough: 1, side: THREE.DoubleSide }), 0, 0.12, 0);
+    R.mesh('spine', G.box(0.03, 0.4, 0.02), mat(0xe2ded6, { map: 'cloth' }), 0, 0.3, 0.12, 0, 0, 0.35, 1, 1, 1, false);
+    R.mesh('head', G.sph(0.098, 16, 12), mat(sk.mask ?? 0xd8ead0, { rough: 0.9 }), 0, 0.085, 0.022, 0, 0, 0, 0.84, 0.9, 0.95);
+    for (const s of [-1, 1]) {
+      R.mesh('head', G.sph(0.022, 8, 6), mat(0x1a1a1a), s * 0.034, 0.112, 0.094, 0, 0, 0, 1.2, 0.8, 0.5, false);
+      R.mesh('head', G.cyl(0.04, 0.04, 0.03, 12), mat(0x2a2a2e, { rough: 0.4 }), s * 0.1, 0.1, 0, 0, 0, Math.PI / 2, 1, 1, 1, false);
+    }
+    R.mesh('head', G.tor(0.105, 0.008, Math.PI), mat(0x2a2a2e, { metal: 0.5, rough: 0.4 }), 0, 0.12, 0, 0, Math.PI / 2, 0);
+    R.mesh('hips', G.box(0.09, 0.12, 0.03), mat(0x3a3a40, { metal: 0.4, rough: 0.4 }), 0.14, 0.02, 0.1, 0, 0.5, 0, 1, 1, 1, false);
+  }
+  // Hip to Be Square: a clear plastic raincoat over everything
+  if (sk.rain) {
+    const plastic = mat(0xdfeaf0, { rough: 0.08, metal: 0.1, transparent: true, opacity: 0.32, side: THREE.DoubleSide });
+    R.mesh('spine', lathe(0.62, [[0, 0.16], [0.4, 0.2], [0.85, 0.215], [1, 0.12]], 'up', 18), plastic, 0, -0.04, 0, 0, 0, 0, 1.12, 1, 0.82);
+    R.mesh('hips', lathe(0.75, [[0, 0.2], [0.5, 0.25], [1, 0.3]], 'down', 18), plastic, 0, 0.1, 0, 0, 0, 0, 1.08, 1, 0.85);
+    for (const s of ['L', 'R']) { R.mesh('sh' + s, lathe(0.3, [[0, 0.065], [1, 0.05]], 'down', 10), plastic); R.mesh('el' + s, lathe(0.25, [[0, 0.05], [1, 0.045]], 'down', 10), plastic); }
+  }
+  // right hand: the axe (or the chainsaw in the Bloodbath outfit)
+  const steel = mat(0xb8bcc0, { map: 'metal', metal: 0.85, rough: 0.25 });
+  if (sk.saw) {
+    const g = chainsawParts();
+    for (const [geo, m, x, y, z, rx, ry, rz] of g) R.mesh('handR', geo, m, x, y - 0.06, z + 0.1, rx, ry, rz);
+  } else {
+    R.mesh('handR', G.cyl(0.018, 0.022, 0.78, 8), mat(0x6a4a2a, { map: 'wood', rough: 0.6 }), 0, -0.05, 0.2, Math.PI / 2, 0, 0);
+    R.mesh('handR', G.box(0.03, 0.18, 0.14), steel, 0, 0.03, 0.56);
+    R.mesh('handR', G.box(0.022, 0.06, 0.05), steel, 0, -0.06, 0.62, 0.5, 0, 0, 1, 1, 1, false);
+  }
+  // left hand: a cigar
+  if (!robe) {
+    R.mesh('handL', G.cyl(0.009, 0.01, 0.13, 8), mat(0x5a3a1e, { rough: 0.8 }), 0.02, -0.09, 0.05, 1.3, 0, 0.3);
+    R.mesh('handL', G.sph(0.011, 6, 4), mat(0xff6a20, { emissive: 0xff4a10, ei: 3 }), 0.035, -0.1, 0.115, 0, 0, 0, 1, 1, 1, false);
+  }
+  R.kind = 'killer'; R.killer = 'bateman';
+  R.root.scale.setScalar(1.07);
+  R.finalize();
+  applySkinFx(R, sk);
+  return R;
+}
+// chainsaw parts as [geo, material, x, y, z, rx, ry, rz] (shared by the prop and the outfit)
+function chainsawParts() {
+  const body = mat(0xd89a1e, { rough: 0.5 }), dark = mat(0x1a1a1a, { rough: 0.5 }), bar = mat(0x9a9ea2, { map: 'metal', metal: 0.8, rough: 0.3 });
+  return [
+    [G.box(0.12, 0.16, 0.3), body, 0, 0, 0, 0, 0, 0],
+    [G.box(0.1, 0.05, 0.12), dark, 0, 0.1, -0.04, 0, 0, 0],
+    [G.tor(0.06, 0.012, Math.PI), dark, 0, 0.1, 0.06, 0, Math.PI / 2, 0],
+    [G.box(0.025, 0.06, 0.55), bar, 0, -0.02, 0.4, 0, 0, 0],
+    [G.box(0.03, 0.075, 0.57), mat(0x2a2a2a, { metal: 0.6, rough: 0.4 }), 0, -0.02, 0.4, 0, 0, 0],
+  ];
+}
+export function makeChainsaw() {
+  const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
+  for (const [geo, m, x, y, z, rx, ry, rz] of chainsawParts()) { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z - 0.2); me.rotation.set(rx, ry, rz); me.castShadow = true; inner.add(me); }
+  g.userData.inner = inner;
+  return g;
+}
+
 // ---------- animation ----------
 const lerp = (a, b, k) => a + (b - a) * k;
 // s: { anim, speed, crouch, injured, t, atk, vaultF, ... }
@@ -503,7 +599,7 @@ export function animate(R, s, dt) {
     const downPose = () => { P.tiltX = 1.45; P.hipsY = -0.75; P.shL = -2.5; P.shR = -2.4; P.elL = -0.3; P.elR = -0.3; P.lgL = 0.1; P.lgR = -0.1; P.knL = 0.3; P.knR = 0.3; P.headX = -0.5; P.spineX = 0; };
     if (s.exec.role === 'killer') {
       P.spineX = R.hunch || 0; P.spineY = 0; P.lgL = 0; P.lgR = 0; P.knL = 0.05; P.knR = 0.05; P.hipsY = 0;
-      if (ch === 'butcher') {
+      if (ch === 'butcher' || ch === 'bateman') {
         if (f < 0.2) { P.spineX += 0.75; P.knL = P.knR = 0.7; P.lgL = P.lgR = -0.45; P.hipsY = -0.14; P.shL = -1.2; P.shR = -0.5; }
         else {
           P.shL = -1.75; P.elL = -0.25;
@@ -521,7 +617,7 @@ export function animate(R, s, dt) {
         else { P.shR = -1.2; P.shL = -0.5; P.spineY = -0.5; }
       }
     } else {
-      if (ch === 'butcher') {
+      if (ch === 'butcher' || ch === 'bateman') {
         if (f < 0.2 || f > 0.86) downPose();
         else {
           const alive = f < 0.6 ? 1 : 0.2;
@@ -575,9 +671,9 @@ export function makeViewModel(id) {
   const g = new THREE.Group();
   const arm = new THREE.Group(); g.add(arm);          // right arm + weapon, animated as a whole
   const add = (parent, geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.scale.set(sx, sy, sz); parent.add(me); return me; };
-  const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a }[id];
+  const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8 }[id];
   const bk = id === 'butcher' ? 1.5 : id === 'harrower' ? 1.25 : id === 'wisp' ? 0.85 : 1;
-  const armM = mat(skin, { map: id === 'lamplighter' || id === 'harrower' ? 'cloth' : 'skin', rough: 0.75 });
+  const armM = id === 'bateman' ? mat(0x30353c, { map: 'pinstripe', rough: 0.7 }) : mat(skin, { map: id === 'lamplighter' || id === 'harrower' ? 'cloth' : 'skin', rough: 0.75 });
   const handM = id === 'lamplighter' ? mat(0x111111, { map: 'leather' }) : mat(skin, { map: 'skin', rough: 0.7 });
   add(arm, lathe(0.42, [[0, 0.03 * bk], [0.3, 0.04 * bk], [0.75, 0.05 * bk], [1, 0.055 * bk]]), armM, 0, -0.02, 0.03, -Math.PI / 2, 0, 0);
   add(arm, G.sph(0.045 * bk, 12, 10), handM, 0, -0.005, 0.0, 0, 0, 0, 1.0, 0.75, 1.15);
@@ -596,6 +692,11 @@ export function makeViewModel(id) {
     add(arm, G.cyl(0.018, 0.022, 1.3), mat(0xd8ccae), 0, 0, -0.3, Math.PI / 2, 0, 0);
     add(arm, G.cone(0.04, 0.2, 6), mat(0xd8ccae), 0, 0, -1.04, -Math.PI / 2, 0, 0);
     tip.position.set(0, 0, -1.1); base.position.set(0, 0, -0.5);
+  } else if (id === 'bateman') {
+    add(arm, G.cyl(0.033, 0.032, 0.04, 10), mat(0xf4f2ee, { map: 'cloth' }), 0, -0.01, 0.03, -Math.PI / 2, 0, 0);
+    add(arm, G.cyl(0.018, 0.022, 0.7, 8), mat(0x6a4a2a, { map: 'wood', rough: 0.6 }), 0, 0.02, -0.25, Math.PI / 2, 0, 0);
+    add(arm, G.box(0.03, 0.2, 0.15), mat(0xb8bcc0, { map: 'metal', metal: 0.85, rough: 0.25 }), 0, 0.09, -0.56);
+    tip.position.set(0, 0.18, -0.6); base.position.set(0, 0.02, -0.3);
   } else if (id === 'foreman') {
     const steel = mat(0x8a8a88, { map: 'metal', metal: 0.8, rough: 0.35 });
     add(arm, G.cyl(0.014, 0.014, 0.25, 6), steel, 0, 0.03, -0.14, Math.PI / 2, 0, 0);
@@ -623,6 +724,11 @@ export function makeViewModel(id) {
     add(lant, G.cone(0.09, 0.06, 4), mat(0x2a2a28), 0, 0.11, 0, 0, Math.PI / 4, 0);
     g.userData.lantern = lant;
   }
+  if (id === 'bateman') {
+    // the chainsaw rides in his left hand until he throws it
+    const saw = makeChainsaw(); saw.position.set(0.02, -0.08, -0.12); saw.rotation.set(0, Math.PI, 0); saw.scale.setScalar(0.9); left.add(saw);
+    g.userData.saw = saw;
+  }
   g.userData = { ...g.userData, arm, left, tip, base, pose: null, id, bloodMesh };
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 5; } });
   return g;
@@ -641,7 +747,7 @@ const VP = {
   act:     [0.2, -0.5, -0.5, 0.6, 0.1, 0.2],
   tele:    [0.25, -0.55, -0.4, 0.4, 0.3, 0.3],
 };
-const LP = { idle: [-0.34, -0.44, -0.5, 0.2, -0.1, 0], carry: [-0.3, -0.25, -0.42, -0.4, -0.2, 0.3], wipe: [-0.12, -0.3, -0.38, 0.4, -0.6, 0], stun: [-0.18, -0.2, -0.28, -0.7, -0.2, -0.5], act: [-0.2, -0.5, -0.5, 0.6, -0.1, -0.2], lantern: [-0.3, -0.2, -0.52, 0.1, 0.15, 0], tele: [-0.1, -0.15, -0.45, -0.6, 0, 0] };
+const LP = { saw: [-0.36, -0.42, -0.5, 0.15, -0.15, 0.1], sawAim: [-0.18, -0.12, -0.5, -0.35, 0.35, -0.3], idle: [-0.34, -0.44, -0.5, 0.2, -0.1, 0], carry: [-0.3, -0.25, -0.42, -0.4, -0.2, 0.3], wipe: [-0.12, -0.3, -0.38, 0.4, -0.6, 0], stun: [-0.18, -0.2, -0.28, -0.7, -0.2, -0.5], act: [-0.2, -0.5, -0.5, 0.6, -0.1, -0.2], lantern: [-0.3, -0.2, -0.52, 0.1, 0.15, 0], tele: [-0.1, -0.15, -0.45, -0.6, 0, 0] };
 const mixP = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
 // s: { atk, atkF, atkHit, recF, aim, stun, rampage, carry, act, moving, speed, t, tele }
 export function animateView(v, s, dt) {
@@ -670,12 +776,13 @@ export function animateView(v, s, dt) {
   const kk = 1 - Math.exp(-dt * k);
   u.pose = mixP(cur, target, kk);
   u.arm.position.set(u.pose[0], u.pose[1], u.pose[2]); u.arm.rotation.set(u.pose[3], u.pose[4], u.pose[5]);
-  let lt = s.stun ? LP.stun : s.tele ? LP.tele : (s.atk === 2 && s.atkHit) ? LP.wipe : s.act ? LP.act : s.carry ? LP.carry : u.id === 'lamplighter' ? LP.lantern : LP.idle;
+  let lt = s.stun ? LP.stun : s.tele ? LP.tele : (s.atk === 2 && s.atkHit) ? LP.wipe : s.act ? LP.act : s.carry ? LP.carry : u.id === 'lamplighter' ? LP.lantern : u.saw && s.saw ? (s.aim ? LP.sawAim : LP.saw) : LP.idle;
   lt = lt.slice(); lt[1] += Math.abs(Math.sin(s.t * 4.5 + 1)) * 0.015 * bob;
   if (s.atk === 2 && s.atkHit) lt[0] += Math.sin(s.t * 7) * 0.06;
   u.lpose = mixP(u.lpose || lt, lt, 1 - Math.exp(-dt * 12));
   u.left.position.set(u.lpose[0], u.lpose[1], u.lpose[2]); u.left.rotation.set(u.lpose[3], u.lpose[4], u.lpose[5]);
-  u.left.visible = u.id === 'lamplighter' || s.carry || s.act || s.stun || (s.atk === 2 && s.atkHit) || s.tele;
+  u.left.visible = u.id === 'lamplighter' || (u.saw && s.saw) || s.carry || s.act || s.stun || (s.atk === 2 && s.atkHit) || s.tele;
+  if (u.saw) { u.saw.visible = !!s.saw && !s.carry; if (s.aim) u.saw.rotation.z = Math.sin(s.t * 60) * 0.02; }
   if (u.lantern) u.lantern.rotation.z = Math.sin(s.t * 3) * 0.15;
 }
 

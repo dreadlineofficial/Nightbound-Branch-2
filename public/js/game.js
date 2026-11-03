@@ -7,7 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
-import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, auraMat } from './models.js';
+import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat } from './models.js';
 import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
 import { losBlocked } from './map.js';
@@ -325,7 +325,7 @@ export class Game {
       if (e.code === 'KeyQ') this.send({ t: 'act', a: 'drop-carry' });
       if (e.code === 'KeyG') this.send({ t: 'act', a: 'trap' });
       if (e.code === 'KeyR' && this.mine() && this.mine().char === 'lamplighter') this.send({ t: 'act', a: 'teleport', yaw: this.mine().yaw });
-      if (e.code === 'KeyR' && this.mine() && (this.mine().char === 'foreman' || this.mine().char === 'slimer')) this.send({ t: 'act', a: 'ability2' });
+      if (e.code === 'KeyR' && this.mine() && this.mine().role === 'killer' && KILLERS[this.mine().char].ability2) this.send({ t: 'act', a: 'ability2' });
       if (e.code === 'KeyF' && this.mine() && this.mine().role === 'killer') { const ex = findExecute(this.M, this.S, this.mine()); if (ex) this.send({ t: 'act', a: 'execute', id: ex.id }); }
       if ((e.code === 'KeyA' || e.code === 'KeyD') && this.mine() && this.mine().st === 'carried') {
         if (e.code !== this.lastWigKey) { this.lastWigKey = e.code; this.send({ t: 'act', a: 'wig' }); this.wigFlash = 0.15; }
@@ -349,6 +349,9 @@ export class Game {
         if (me.char === 'foreman') {
           if (down && me.abCd <= 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'chain', yaw: me.yaw }); this.sendIn(); }
+        } else if (me.char === 'bateman') {
+          if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
+          else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'sawthrow', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
         } else if (me.char === 'harrower') {
           if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'throw', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
@@ -427,6 +430,7 @@ export class Game {
     this.updateTraps(S);
     this.updateSlime(S);
     this.updateSpears(dt, S);
+    this.updateSaws(dt, S);
     this.updateChains(S);
     this.updateLanterns(dt, S, me);
     this.updateGore(dt, S, me);
@@ -636,12 +640,13 @@ export class Game {
           if (local) R.root.visible = true;
         }
       } else if (anim === 'exec') {
-        const kc = K && this.chars.get(K.id);
+        const EK = playerById(S, p.execBy) || K;
+        const kc = EK && this.chars.get(EK.id);
         if (kc) {
           const f = st.exec.f, ch = st.exec.char, F = fwd(kc.yaw);
           const sm = (a0, a1) => { const x = Math.max(0, Math.min(1, (f - a0) / (a1 - a0))); return x * x * (3 - 2 * x); };
           let d = 1.05, yy = 0, side = 0;
-          if (ch === 'butcher') { d = 1.05 - sm(0.15, 0.25) * 0.35 + sm(0.86, 0.95) * 0.3; yy = (sm(0.18, 0.3) - sm(0.86, 0.93)) * 0.62; }
+          if (ch === 'butcher' || ch === 'bateman') { d = 1.05 - sm(0.15, 0.25) * 0.35 + sm(0.86, 0.95) * 0.3; yy = (sm(0.18, 0.3) - sm(0.86, 0.93)) * 0.62; }
           else if (ch === 'wisp') { d = 0.72; yy = sm(0.08, 0.4) * 0.95; }
           else if (ch === 'foreman') { const drag = sm(0.55, 0.92); d = 1.1 - sm(0.25, 0.35) * 0.25 - drag * 2.6; yy = sm(0.28, 0.4) * 1.05 - drag * 0.7; side = Math.sin(drag * Math.PI) * 0.9; }
           else { const up = sm(0.42, 0.62) - sm(0.86, 0.95); d = 1.25 - up * 0.3; yy = up * 1.75; side = sm(0.86, 1) * 1.2 + up * 0.95; }
@@ -650,7 +655,7 @@ export class Game {
           R.root.rotation.set(0, ch === 'harrower' && f > 0.42 && f < 0.86 ? kc.yaw + Math.PI / 2 : kc.yaw + Math.PI, 0);
           if (ch === 'wisp') R.setOpacity(f > 0.78 ? Math.max(0.02, 1 - (f - 0.78) / 0.2) : 1);
           if (ch === 'foreman') R.setOpacity(f > 0.72 ? Math.max(0.0, 1 - (f - 0.72) / 0.2) : 1);
-          this.execFx(p, K, f, ch, R.root.position);
+          this.execFx(p, EK, f, ch, R.root.position);
         }
       } else if (anim === 'caged') {
         const cg = this.M.cages[p.cage];
@@ -667,7 +672,7 @@ export class Game {
     // viewmodel
     if (this.view && me) {
       const c = this.chars.get(me.id), cs = (c && c.st) || {};
-      animateView(this.view, { atk: me.atk, atkF: cs.atkF, atkHit: me.atkHit, recF: cs.recF, aim: me.aim, stun: me.stun > 0, rampage: me.char === 'butcher' && me.ab === 1, carry: me.carry != null, act: me.act && me.act.k !== 'execute', speed: c ? c.spd : 0, t: this.t, tele: !!me.tele }, dt);
+      animateView(this.view, { atk: me.atk, atkF: cs.atkF, atkHit: me.atkHit, recF: cs.recF, aim: me.aim, stun: me.stun > 0, rampage: me.char === 'butcher' && me.ab === 1, carry: me.carry != null, act: me.act && me.act.k !== 'execute', speed: c ? c.spd : 0, t: this.t, tele: !!me.tele, saw: me.char === 'bateman' && me.ammo > 0 }, dt);
       this.view.visible = !(me.act && me.act.k === 'execute');
       const faded = me.char === 'wisp' && me.ab !== 0;
       if (faded !== this.viewFaded) { this.viewFaded = faded; this.view.traverse(o => { if (o.isMesh) { o.material.transparent = faded || o.userData.op < 1; o.material.opacity = faded ? 0.35 : o.userData.op; } }); }
@@ -808,6 +813,24 @@ export class Game {
     });
   }
 
+  // Patrick Bateman's thrown chainsaw: spinning in flight, idling on the ground until he fetches it
+  updateSaws(dt, S) {
+    this.saws ||= new Map();
+    const seen = new Set();
+    for (const sw of S.saws || []) {
+      seen.add(sw.id);
+      let m = this.saws.get(sw.id);
+      if (!m) { m = makeChainsaw(); this.scene.add(m); this.saws.set(sw.id, m); m.userData.spin = 0; }
+      const k = 1 - Math.exp(-dt * 25);
+      m.position.x += (sw.x - m.position.x) * (m.userData.placed ? k : 1); m.position.z += (sw.z - m.position.z) * (m.userData.placed ? k : 1);
+      m.position.y = sw.st === 'fly' ? sw.y : 0.1 + Math.abs(Math.sin(this.t * 40)) * 0.01;
+      m.userData.placed = true;
+      if (sw.st === 'fly') { m.userData.spin += dt * 22; m.rotation.set(0, Math.atan2(sw.vx, sw.vz), 0); m.userData.inner.rotation.set(m.userData.spin, 0, 0); }
+      else { m.userData.inner.rotation.set(0, 0, Math.PI / 2 - 0.15); }
+    }
+    for (const [id, m] of this.saws) if (!seen.has(id)) { this.scene.remove(m); this.saws.delete(id); }
+  }
+
   // ---------------- camera ----------------
   updateCamera(dt, S, me) {
     const cam = this.camera;
@@ -884,7 +907,14 @@ export class Game {
     const pitch = ({ mara: 1.15, eli: 0.75, june: 1.3, tomas: 0.8 }[victim.char] || 1);
     const mine = victim.id === this.myId || K.id === this.myId;
     const bloodAt = (n, y = 1.1) => { this.blood.spawn(pos.x, pos.y + y, pos.z, n, 0x6a0303, 3.2, 1.4, -9.8, 1.4); this.blood.spawn(pos.x, pos.y + y, pos.z, Math.floor(n / 3), 0x3a0101, 1.2, 1.4, -9.8, 0.5); if (this.decals) this.decals.add(pos.x + (Math.random() - 0.5) * 0.6, pos.z + (Math.random() - 0.5) * 0.6, 0.9 + n / 80, Math.random() < 0.5 ? 0 : 2); };
-    if (ch === 'butcher') {
+    if (ch === 'bateman') {
+      once('lecture', 0.04, () => { if (mine) this.feed('"Do you like Huey Lewis and the News?"', 'big'); });
+      once('scream', 0.22, () => sound.play('scream', pos.x, pos.z, { pitch, len: 1.2 }));
+      once('hip', 0.35, () => { if (mine) this.feed('"Hip to be square!"', 'big'); sound.play('swing', pos.x, pos.z); });
+      once('chop1', 0.5, () => { bloodAt(80); sound.play('thunk', pos.x, pos.z); sound.play('hit', pos.x, pos.z, { pitch, down: true }); if (mine) this.shake = 0.7; });
+      once('chop2', 0.72, () => { bloodAt(130); sound.play('thunk', pos.x, pos.z); if (mine) { this.shake = 1; this.flash = 0.8; } });
+      once('drop', 0.9, () => sound.play('drop', pos.x, pos.z));
+    } else if (ch === 'butcher') {
       once('scream', 0.22, () => sound.play('scream', pos.x, pos.z, { pitch, len: 1.2 }));
       once('chop1', 0.5, () => { bloodAt(70); sound.play('thunk', pos.x, pos.z); sound.play('hit', pos.x, pos.z, { pitch, down: true }); if (mine) this.shake = 0.7; });
       once('chop2', 0.72, () => { bloodAt(120); sound.play('thunk', pos.x, pos.z); sound.play('break', pos.x, pos.z); if (mine) { this.shake = 1; this.flash = 0.8; } });
@@ -1155,6 +1185,16 @@ export class Game {
           if (e.id === this.myId) { this.feed('You have turned! Hunt down the survivors.', 'big'); this.flash = 0.8; this.shake = 1; }
           break;
         }
+        case 'sawthrow': { const p = S && playerById(S, e.id); sound.play('chainsaw', e.x, e.z); if (p && p.id !== this.myId) this.feed('Chainsaw!'); break; }
+        case 'sawhit': sound.play('chainsaw', e.x, e.z); this.blood.spawn(e.x, 1.2, e.z, 70, 0x6a0303, 3.4, 1.4, -9.8, 1.4); if (e.id === this.myId) { this.shake = 1; this.flash = 0.8; this.feed('The chainsaw cut you down!', 'big'); } break;
+        case 'sawland': sound.play('thud', e.x, e.z); this.sparks.spawn(e.x, 0.2, e.z, 14, 0xffd080, 2, 0.4, -9); break;
+        case 'sawpickup': if (e.id === this.myId) this.feed(e.back ? 'Your chainsaw is back in your hand.' : 'Chainsaw picked up.'); break;
+        case 'card': {
+          sound.play('card', e.x, e.z);
+          if ((e.ids || []).includes(this.myId)) { this.feed('"Look at that subtle off-white coloring. The tasteful thickness of it." You are intimidated: slowed and revealed.', 'big'); this.flash = 0.25; }
+          else if (e.id === this.myId) this.feed((e.ids || []).length ? `Business card: ${(e.ids || []).length} intimidated.` : 'Nobody saw your card.');
+          break;
+        }
         case 'laststand': if (e.id === this.myId) { this.feed('You are the last survivor! Survive 45 seconds.', 'big'); this.flash = 0.4; } sound.play('powered'); break;
         case 'drop': { const b = this.M.bars[e.id]; sound.play('drop', b.x, b.z); this.smoke.spawn(b.x, 0.3, b.z, 6, 0x5a5048, 1.2, 1.5, 0.3, 1.2); break; }
         case 'break': { const b = this.M.bars[e.id]; sound.play('break', b.x, b.z); this.blood.spawn(b.x, 0.6, b.z, 40, 0x6a4a30, 4, 1.2, -9, 1.5); break; }
@@ -1237,7 +1277,7 @@ export class Game {
     this.hudCache = {};
     const k = (x) => `<kbd>${x}</kbd>`;
     $('controls-hint').innerHTML = me.role === 'killer'
-      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : me.char === 'foreman' ? ` · ${k('R')} Lights Out` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} vault · ${k('Q')} drop · ${k('Tab')} status`
+      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} vault · ${k('Q')} drop · ${k('Tab')} status`
       : `${k('WASD')} move · ${k('Shift')} run · ${k('Ctrl')} crouch · ${k('E')} interact · ${k('RMB')} flashlight · ${k('G')} ghost trap · ${k('Space')} vault / barricade / skill check · ${k('Tab')} status`;
     $('controls-hint').classList.remove('fade');
     clearTimeout(this.hintT); this.hintT = setTimeout(() => $('controls-hint').classList.add('fade'), 14000);
@@ -1271,6 +1311,11 @@ export class Game {
       pct = me.abCd / def.cooldown;
       sub = me.pull ? 'Reeling…' : me.aim ? 'Aiming…' : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       extra = me.ab ? `Lights Out · ${Math.ceil(me.abT)}s · one hit downs` : me.ab2Cd > 0 ? `<kbd>R</kbd> Lights Out ${Math.ceil(me.ab2Cd)}s` : '<kbd>R</kbd> Lights Out ready';
+    } else if (me.char === 'bateman') {
+      const d2 = K.ability2, held = me.ammo > 0;
+      ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1;
+      sub = !held ? 'Go get your chainsaw' : me.aim ? (me.abT >= def.aim ? 'Release to throw!' : 'Revving…') : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
+      extra = me.haste > 0 ? `Morning Routine · +12% speed` : me.ab2Cd > 0 ? `<kbd>R</kbd> Business Card ${Math.ceil(me.ab2Cd)}s` : '<kbd>R</kbd> Business Card ready';
     } else if (me.char === 'slimer') {
       const n = (this.S.slime || []).length;
       ready = me.abCd <= 0; pct = me.abCd / def.cooldown;
@@ -1360,6 +1405,7 @@ export class Game {
           }
           if (me.healP > 0 && me.hp === 1 && !me.act) { label = 'Being healed'; prog = me.healP; }
           if (me.mark > 0) status = `Marked <small>The Harrower can see you · ${Math.ceil(me.mark)}s</small>`;
+          if (me.card > 0) status = `Intimidated <small>Slowed and revealed · ${Math.ceil(me.card)}s</small>`;
         } else if (me.st === 'down') {
           status = me.healP > 0 ? 'Being helped up' : 'You are dying<small>Crawl to safety — a teammate can help you up</small>';
           if (me.healP > 0) { prog = me.healP; label = 'Recovering'; }

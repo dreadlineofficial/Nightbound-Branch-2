@@ -21,7 +21,7 @@ export class Sim {
       bars: M.bars.map(() => 0),
       cages: M.cages.map(() => null), cageBroken: M.cages.map(() => false),
       gates: M.gates.map(() => ({ p: 0, open: false })),
-      spears: [], lanterns: [], lid: 0, dark: 0, chains: [], traps: [], tid: 0, slime: [],
+      spears: [], lanterns: [], lid: 0, dark: 0, chains: [], traps: [], tid: 0, slime: [], saws: [],
     };
     let si = 0, ki = 0;
     for (const r of roster) {
@@ -37,7 +37,7 @@ export class Sim {
         carry: null, atk: 0, atkT: 0, atkHit: false, stun: 0, ab: 0, abT: 0, abCd: 0, aim: false,
         reveal: 0, sixT: 0, chase: 0, mark: 0,
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
-        ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : 0, ammoT: 0,
+        ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
         item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
@@ -80,6 +80,7 @@ export class Sim {
         if ('flash' in m && p.role === 'survivor') p.flashOn = !!m.flash && p.flash > 0 && p.st === 'ok' && !p.act && !p.vault;
         if (p.role === 'killer' && p.char === 'foreman') p.aim = !!m.aim && p.abCd <= 0 && !p.pull && p.carry == null && !p.act && p.stun <= 0;
         if (p.role === 'killer' && p.char === 'harrower') p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0;
+        if (p.role === 'killer' && p.char === 'bateman') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
         break;
       }
       case 'act': this.onAct(p, m); break;
@@ -180,6 +181,16 @@ export class Sim {
         this.ev({ k: 'throw', id: p.id, x: p.x, z: p.z });
         break;
       }
+      case 'sawthrow': {
+        // Patrick Bateman hurls his chainsaw: it flies flat and fast, then lies where it lands
+        if (p.role !== 'killer' || p.char !== 'bateman' || !p.aim || p.ammo <= 0 || p.stun > 0 || p.carry != null || p.act) return;
+        if (p.abT < KILLERS.bateman.ability.aim) return; // he has to wind up
+        const yaw = num(m.yaw, p.yaw), pitch = Math.max(-0.4, Math.min(0.4, num(m.pitch, 0))), sp = 20, f = fwd(yaw);
+        S.saws.push({ id: ++S.lid, st: 'fly', x: p.x + f.x * 0.7, z: p.z + f.z * 0.7, y: 1.3, vx: f.x * sp * Math.cos(pitch), vz: f.z * sp * Math.cos(pitch), vy: 2.2 + sp * Math.sin(pitch), t: 0, by: p.id });
+        p.ammo = 0; p.ammoT = 0; p.aim = false; p.abT = 0;
+        this.ev({ k: 'sawthrow', id: p.id, x: p.x, z: p.z });
+        break;
+      }
       case 'teleport': {
         if (p.role !== 'killer' || p.char !== 'lamplighter' || p.teleCd > 0 || p.tele || p.stun > 0 || p.act || p.carry != null || p.atk || p.vault) return;
         const yaw = num(m.yaw, p.yaw);
@@ -205,6 +216,18 @@ export class Sim {
         break;
       }
       case 'ability2': {
+        if (p.role === 'killer' && p.char === 'bateman' && p.ab2Cd <= 0 && !p.act && p.stun <= 0 && !p.atk) {
+          // Business Card: everyone in front of him who can see it is intimidated
+          const D = KILLERS.bateman.ability2, f = fwd(p.yaw), ids = [];
+          for (const s of S.players) {
+            if (s.role !== 'survivor' || s.st !== 'ok') continue;
+            const dx = s.x - p.x, dz = s.z - p.z, d = Math.hypot(dx, dz);
+            if (d > D.range || (d > 1 && (dx * f.x + dz * f.z) / d < 0.5) || losBlocked(M, p.x, p.z, s.x, s.z, 1.2)) continue;
+            s.card = 4; s.reveal = Math.max(s.reveal, 5); ids.push(s.id);
+          }
+          p.ab2Cd = D.cooldown; p.score.b += ids.length * 150;
+          this.ev({ k: 'card', id: p.id, x: p.x, z: p.z, ids });
+        }
         if (p.role === 'killer' && p.char === 'slimer' && p.ab2Cd <= 0 && !p.act && p.stun <= 0 && p.carry == null && !(p.phase > 0)) {
           p.phase = KILLERS.slimer.ability2.duration; p.ab2Cd = KILLERS.slimer.ability2.cooldown;
           this.ev({ k: 'phase', id: p.id, x: p.x, z: p.z });
@@ -369,6 +392,7 @@ export class Sim {
       if (p.phase > 0) { p.phase = Math.max(0, p.phase - dt); if (p.phase === 0) this.endPhase(p); }
       if (p.ambush > 0) p.ambush = Math.max(0, p.ambush - dt);
       if (p.haste > 0) p.haste = Math.max(0, p.haste - dt);
+      if (p.card > 0) p.card = Math.max(0, p.card - dt);
       if (p.mark > 0) p.mark = Math.max(0, p.mark - dt);
       if (p.char === 'butcher' && p.role === 'killer' && p.charges < KILLERS.butcher.ability.charges) { p.chargeT += dt; if (p.chargeT >= KILLERS.butcher.ability.cooldown) { p.chargeT = 0; p.charges++; } }
       if (p.char === 'harrower' && p.role === 'killer' && p.ammo < KILLERS.harrower.ability.ammo) { p.ammoT += dt; if (p.ammoT >= KILLERS.harrower.ability.reload) { p.ammoT = 0; p.ammo++; } }
@@ -393,8 +417,9 @@ export class Sim {
     // ---- interactions (hold E) ----
     for (const p of S.players) this.updateAction(p, dt);
 
-    // ---- spears ----
+    // ---- spears, chainsaws ----
     this.updateSpears(dt);
+    this.updateSaws(dt);
 
     // ---- survivor states ----
     for (const p of S.players) {
@@ -507,7 +532,7 @@ export class Sim {
     Object.assign(p, {
       role: 'killer', char, skin: 'default', perks: [], st: 'ok', hp: 2, act: null, prog: 0, healP: 0, bleed: 0, turn: 0, boost: 0, slimed: 0, mark: 0, reveal: 0,
       carry: null, atk: 0, atkT: 0, atkHit: false, stun: 1.5, ab: 0, abT: 0, abCd: 0, ab2Cd: 0, aim: false, flash: 0, flashOn: false, traps: 0, glare: 0, blind: 0, blindImm: 6,
-      charges: char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0, ammo: char === 'harrower' ? KILLERS.harrower.ability.ammo : 0, ammoT: 0,
+      charges: char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0, ammo: char === 'harrower' ? KILLERS.harrower.ability.ammo : char === 'bateman' ? 1 : 0, ammoT: 0, card: 0,
       outcome: 'infected', diffMul: p.bot ? this.diff.killerSpeed : 1,
     });
     p.tp++;
@@ -663,6 +688,7 @@ export class Sim {
     s.hp = instantDown ? 0 : s.hp - 1;
     K.score.a += 300;
     if (this.mode === 'rush') K.haste = Math.max(K.haste || 0, 2.5);
+    if (K.char === 'bateman') K.haste = Math.max(K.haste || 0, 3); // Morning Routine
     if (s.hp <= 0) {
       s.hp = 0; s.st = 'down'; s.bleed = RULES.bleedout; s.healP = 0; s.boost = 0;
       if (this.mode === 'infection') s.turn = 3;
@@ -931,6 +957,48 @@ export class Sim {
       const f = Math.min(1, s.reel.t / 0.45), e = 1 - (1 - f) * (1 - f);
       s.x = s.reel.x0 + (s.reel.x1 - s.reel.x0) * e; s.z = s.reel.z0 + (s.reel.z1 - s.reel.z0) * e;
       if (f >= 1) { s.reel = null; s.tp++; }
+    }
+  }
+
+  // Patrick Bateman's thrown chainsaw
+  updateSaws(dt) {
+    const S = this.S, M = this.M;
+    for (const p of S.players) if (p.role === 'killer' && p.char === 'bateman' && p.aim) p.abT += dt;
+    for (let i = S.saws.length - 1; i >= 0; i--) {
+      const sw = S.saws[i], K = this.P(sw.by);
+      sw.t += dt;
+      if (!K || K.role !== 'killer' || K.char !== 'bateman') { S.saws.splice(i, 1); continue; }
+      if (sw.st === 'ground') {
+        // he walks over to pick it back up (or it finds its own way back)
+        if (Math.hypot(K.x - sw.x, K.z - sw.z) < 1.4 || sw.t > 20) {
+          S.saws.splice(i, 1); K.ammo = 1; K.abCd = KILLERS.bateman.ability.cooldown;
+          this.ev({ k: 'sawpickup', id: K.id, x: sw.x, z: sw.z, back: sw.t > 20 });
+        }
+        continue;
+      }
+      let land = false;
+      const steps = 4, h = dt / steps;
+      for (let k = 0; k < steps && !land; k++) {
+        const px = sw.x, pz = sw.z;
+        sw.vy -= 9 * h;
+        sw.x += sw.vx * h; sw.z += sw.vz * h; sw.y += sw.vy * h;
+        for (const s of S.players) {
+          if (s.role !== 'survivor' || s.st !== 'ok') continue;
+          if (sw.y < (s.cr ? 1.15 : 1.85) && Math.hypot(sw.x - s.x, sw.z - s.z) < 0.5) {
+            this.damage(s, K, true); K.score.b += 400;
+            this.ev({ k: 'sawhit', id: s.id, by: K.id, x: s.x, z: s.z });
+            land = true; break;
+          }
+        }
+        if (land) break;
+        if (sw.y <= 0.15 || Math.hypot(sw.x - K.x, sw.z - K.z) > KILLERS.bateman.ability.range) land = true;
+        else if (losBlocked(M, px, pz, sw.x, sw.z, Math.min(1.2, sw.y))) { sw.x = px; sw.z = pz; land = true; }
+      }
+      if (land) {
+        const spot = this.safeSpot(sw.x, sw.z, K.x, K.z);
+        Object.assign(sw, { st: 'ground', x: spot.x, z: spot.z, y: 0.12, vx: 0, vy: 0, vz: 0, t: 0 });
+        this.ev({ k: 'sawland', id: K.id, x: sw.x, z: sw.z });
+      }
     }
   }
 

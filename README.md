@@ -55,6 +55,7 @@ Pick one in the bot match setup or the online lobby (the host chooses).
 | **The Harrower** | *Bone Spear*: 3 regrowing spears | *Trophy Mark*: speared survivors are revealed | Trophy Hunt |
 | **The Lamplighter** | *Cursed Lanterns* reveal nearby survivors | *Shadow Step* (R): teleport to a lantern | Last Light |
 | **The Foreman** *(OFFAL crossover chapter)* | *Lights Out*: the whole map goes dark, fog closes in, he goes silent | *Hunts by Sound*: runners near him are revealed in the dark, and one hook hit downs | Reassignment |
+| **Patrick Bateman** *(American Psycho fan-made)* | *Chainsaw Toss*: a thrown chainsaw that downs on hit; go and pick it up | *Business Card* (R): intimidates (reveals + slows) survivors in front of him; speed burst after hits | Hip to Be Square |
 | **The Slimer** *(Ghostbusters fan-made)* | *Slime Spit*: puddles that slow and reveal survivors | *Ectoplasmic*: floats silently with a small terror radius | Slimed |
 
 Executions (**F**) work on a downed survivor who has been caged twice or on the last survivor alive.
