@@ -137,7 +137,7 @@ export const SURV_PERKS = {
 
 export const KILLER_PERKS = {
   scent:      { name: 'Scent of Fear', icon: '☠', desc: 'Injured survivors within 24m have their auras revealed to you.' },
-  static:     { name: 'Static Sense',  icon: 'ϟ', desc: 'Generators being repaired glow through walls.' },
+  static:     { name: 'Static Sense',  icon: 'ϟ', desc: 'Survivors repairing a generator are revealed to you.' },
   overload:   { name: 'Overload',      icon: '✸', desc: 'Kicking a generator instantly removes 8% progress, and it regresses 50% faster.' },
   relentless: { name: 'Relentless',    icon: '⟳', desc: 'Recovery after a successful strike is 35% shorter.' },
   dread:      { name: 'Dread',         icon: '♒', desc: 'Terror radius +8m. Survivors inside your terror radius repair 10% slower.' },
@@ -255,8 +255,17 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.11.0';
+export const VERSION = '2.11.1';
 export const INBOX = [
+  {
+    id: 'v2.11.1', version: '2.11.1', date: 'Nov 2026', title: 'The Killer Knows', tag: 'Update',
+    body: [
+      'Killers now always see which generators are being repaired (they glow yellow), and a marker shows where each generator was finished.',
+      'A caged survivor stays visible to the killer, through walls, until someone frees them.',
+      'The Foreman\'s Chain Hook now flies where you aim, up and down. Aim at a treetop or a high wall and he is flung up to the hook, then drops down at its foot.',
+      'Static Sense (killer perk) now reveals the survivors who are repairing a generator.',
+    ],
+  },
   {
     id: 'v2.11', version: '2.11.0', date: 'Nov 2026', title: 'Patrick Bateman', tag: 'Crossover',
     body: [

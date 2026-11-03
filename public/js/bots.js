@@ -625,7 +625,7 @@ export class Bots {
         if (gs.done || g.id === b.patrolGen) continue;
         if (b.leaveCage && b.leaveCage.t > 0 && Math.hypot(g.x - b.leaveCage.x, g.z - b.leaveCage.z) < 20) continue;
         const d = Math.hypot(g.x - p.x, g.z - p.z);
-        const heard = gs.n > 0 && d < 40;
+        const heard = gs.n > 0; // killers always know which generators are being repaired
         const s = gs.p * 25 + (heard ? 30 : 0) - d * 0.5 + Math.random() * 12;
         if (s > bs) { bs = s; gi = g.id; }
       }

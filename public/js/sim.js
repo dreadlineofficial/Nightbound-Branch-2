@@ -210,7 +210,9 @@ export class Sim {
       case 'chain': {
         if (p.role !== 'killer' || p.char !== 'foreman' || p.abCd > 0 || p.stun > 0 || p.carry != null || p.act || p.pull || p.atk) return;
         const yaw = num(m.yaw, p.yaw), f = fwd(yaw);
-        S.chains.push({ by: p.id, x: p.x + f.x * 0.5, z: p.z + f.z * 0.5, dx: f.x, dz: f.z, d: 0, st: 'fly', t: 0, tgt: null });
+        // the hook flies where he aims, up and down too: aim high to grab a treetop or a roof
+        const pitch = Math.max(-0.35, Math.min(1.0, num(m.pitch, 0)));
+        S.chains.push({ by: p.id, x: p.x + f.x * 0.5, z: p.z + f.z * 0.5, y: 1.55, dx: f.x, dz: f.z, cp: Math.cos(pitch), sp: Math.sin(pitch), d: 0, st: 'fly', t: 0, tgt: null });
         p.abCd = KILLERS.foreman.ability.cooldown; p.aim = false;
         this.ev({ k: 'chainthrow', id: p.id, x: p.x, z: p.z });
         break;
@@ -904,7 +906,7 @@ export class Sim {
       K.pull.t += dt;
       const f = Math.min(1, K.pull.t / K.pull.d), e = f * f * (3 - 2 * f);
       K.x = K.pull.x0 + (K.pull.x1 - K.pull.x0) * e; K.z = K.pull.z0 + (K.pull.z1 - K.pull.z0) * e;
-      if (f >= 1) { K.pull = null; K.tp++; }
+      if (f >= 1) { if (K.pull.h) this.ev({ k: 'chainland', id: K.id, x: K.x, z: K.z }); K.pull = null; K.tp++; }
     }
     for (let i = S.chains.length - 1; i >= 0; i--) {
       const c = S.chains[i];
@@ -913,11 +915,11 @@ export class Sim {
       if (c.st === 'fly') {
         const step = 34 * dt, n = 4;
         for (let k = 0; k < n && c.st === 'fly'; k++) {
-          const px = c.x, pz = c.z;
-          c.x += c.dx * step / n; c.z += c.dz * step / n; c.d += step / n;
+          const px = c.x, pz = c.z, cp = c.cp ?? 1, sp = c.sp ?? 0;
+          c.x += c.dx * cp * step / n; c.z += c.dz * cp * step / n; c.y = (c.y ?? 1.55) + sp * step / n; c.d += step / n;
           for (const s of S.players) {
             if (s.role !== 'survivor' || s.st !== 'ok' || s.reel) continue;
-            if (Math.hypot(s.x - c.x, s.z - c.z) < 0.45) {
+            if (Math.hypot(s.x - c.x, s.z - c.z) < 0.45 && c.y > 0.1 && c.y < (s.cr ? 1.2 : 1.95)) {
               this.chainDmg = true; this.damage(s, K, false); this.chainDmg = false;
               if (s.st === 'ok') { const dd = Math.hypot(s.x - K.x, s.z - K.z) || 1, keep = Math.max(2.6, dd * 0.55); const tx = K.x + (s.x - K.x) / dd * keep, tz = K.z + (s.z - K.z) / dd * keep; const spot = this.safeSpot(tx, tz, s.x, s.z); s.reel = { t: 0, x0: s.x, z0: s.z, x1: spot.x, z1: spot.z }; s.act = null; s.tp++; }
               K.score.b += 300;
@@ -927,14 +929,21 @@ export class Sim {
             }
           }
           if (c.st !== 'fly') break;
-          if (losBlocked(M, px, pz, c.x, c.z, 1.0)) {
-            // caught a wall: yank the Foreman across to it
-            const back = 0.9, gx = c.x - c.dx * back, gz = c.z - c.dz * back;
-            const dd = Math.hypot(gx - K.x, gz - K.z);
-            if (dd > 2.5 && K.carry == null) { K.pull = { t: 0, d: Math.max(0.25, dd / 16), x0: K.x, z0: K.z, x1: gx, z1: gz }; K.atk = 0; this.ev({ k: 'chaingrab', id: K.id, x: c.x, z: c.z }); }
-            c.st = 'back'; c.t = 0; c.x = gx; c.z = gz;
+          const ground = c.y <= 0.05;
+          if (ground || losBlocked(M, px, pz, c.x, c.z, Math.max(0.6, c.y))) {
+            // caught a wall, a treetop or the ground: yank the Foreman across to it. Caught high
+            // up, he is flung up to the hook and then drops down at the foot of what it bit into
+            const back = ground ? 0 : 0.9, gx = c.x - c.dx * back, gz = c.z - c.dz * back, gy = Math.max(0, c.y);
+            const dd = Math.hypot(gx - K.x, gz - K.z), h = gy > 2.2 ? gy : 0;
+            if ((dd > 2.5 || h) && K.carry == null) {
+              const spot = this.safeSpot(gx, gz, K.x, K.z);
+              K.pull = { t: 0, d: Math.max(0.25, dd / 16) + (h ? 0.3 + Math.sqrt(h) * 0.12 : 0), x0: K.x, z0: K.z, x1: spot.x, z1: spot.z, h: h ? +h.toFixed(2) : 0 };
+              K.atk = 0; this.ev({ k: 'chaingrab', id: K.id, x: c.x, z: c.z, y: gy });
+            }
+            c.st = 'back'; c.t = 0; c.x = gx; c.z = gz; c.y = gy;
             break;
           }
+          if (c.y > 14) { c.st = 'back'; c.t = 0; }
           if (c.d > range) { c.st = 'back'; c.t = 0; }
         }
       } else if (c.st === 'reel') {
@@ -945,7 +954,7 @@ export class Sim {
         // retract
         const dd = Math.hypot(c.x - K.x, c.z - K.z) || 1, step = 40 * dt;
         if (dd < step + 0.5 || c.t > 1.2) { S.chains.splice(i, 1); continue; }
-        c.x += (K.x - c.x) / dd * step; c.z += (K.z - c.z) / dd * step;
+        c.x += (K.x - c.x) / dd * step; c.z += (K.z - c.z) / dd * step; c.y = (c.y ?? 1.55) + (1.55 - (c.y ?? 1.55)) * Math.min(1, dt * 8);
       }
     }
   }

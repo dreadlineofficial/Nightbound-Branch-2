@@ -158,6 +158,15 @@ class BloodDecals {
   }
 }
 
+// height of a killer swinging on a high chain hook: up to the hook, then a drop at the end
+function pullLift(p) {
+  const P = p.pull;
+  if (!P || !P.h) return 0;
+  const f = Math.min(1, P.t / P.d);
+  if (f < 0.7) { const u = f / 0.7; return P.h * (1 - (1 - u) * (1 - u)); }
+  const u = (f - 0.7) / 0.3; return P.h * (1 - u * u);
+}
+
 export class Game {
   constructor(o) {
     this.o = o;
@@ -348,7 +357,7 @@ export class Game {
       if (e.button === 2) {
         if (me.char === 'foreman') {
           if (down && me.abCd <= 0) { this.aimHeld = true; this.sendIn(); }
-          else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'chain', yaw: me.yaw }); this.sendIn(); }
+          else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'chain', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
         } else if (me.char === 'bateman') {
           if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'sawthrow', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
@@ -583,6 +592,8 @@ export class Game {
       const spd = jump > 4 ? c.spd : Math.min(9, Math.hypot(c.x - ox, c.z - oz) / Math.max(dt, 1e-3));
       c.spd += (spd - c.spd) * Math.min(1, dt * 8);
       c.yaw += angDiff(c.yaw, tyaw) * (local ? 1 : 1 - Math.exp(-dt * (interp ? 30 : 12)));
+      // the Foreman flung up to a high hook point, then dropping back down
+      c.lift = (c.lift || 0) + (pullLift(p) - (c.lift || 0)) * Math.min(1, dt * 20);
       if (hidden) continue;
       // footsteps of others
       if (!local && p.mv && !p.cr && !(p.role === 'killer' && (p.char === 'wisp' || p.char === 'slimer'))) {
@@ -627,7 +638,7 @@ export class Game {
       st.flash = flashOn;
       animate(R, st, dt);
       // placement
-      R.root.position.set(c.x, y, c.z);
+      R.root.position.set(c.x, y + c.lift, c.z);
       R.root.rotation.set(0, c.yaw, 0);
       if (anim === 'carried') {
         const kc = K && this.chars.get(K.id);
@@ -767,7 +778,7 @@ export class Game {
       const g = this.chainMeshes[i], K = playerById(S, c.by), kc = K && this.chars.get(K.id);
       if (!kc) return;
       const rx = -Math.cos(kc.yaw), rz = Math.sin(kc.yaw);
-      const a = new THREE.Vector3(kc.x + rx * 0.35, 1.55, kc.z + rz * 0.35), b = new THREE.Vector3(c.x, 1.25, c.z);
+      const a = new THREE.Vector3(kc.x + rx * 0.35, 1.55 + (kc.lift || 0), kc.z + rz * 0.35), b = new THREE.Vector3(c.x, c.y != null ? c.y : 1.25, c.z);
       const mid = a.clone().add(b).multiplyScalar(0.5), len = a.distanceTo(b);
       const u = g.userData;
       u.link.position.copy(mid); u.link.scale.set(1, Math.max(0.01, len), 1);
@@ -870,7 +881,8 @@ export class Game {
       let vy = 0;
       if (me.vault) { const v = me.vault; vy = Math.sin(Math.min(1, v.t / v.d) * Math.PI) * 0.4; }
       const stunTilt = me.stun > 0 ? Math.sin(this.t * 6) * 0.08 : 0;
-      cam.position.set(me.x, eye + bob + vy, me.z);
+      const lift = (this.chars.get(me.id) || {}).lift || 0;
+      cam.position.set(me.x, eye + bob + vy + lift, me.z);
       cam.rotation.set(me.pitch + sy, me.yaw + Math.PI + sx, stunTilt);
       cam.fov = (this.settings.fov || 75) + (me.char === 'butcher' && me.ab === 1 ? 14 : 0) + (me.atk === 1 ? 4 : 0);
       cam.updateProjectionMatrix();
@@ -1051,7 +1063,8 @@ export class Game {
       let col = null;
       if (p.id === me.id && !(me.st === 'dead' || me.st === 'out')) col = null;
       else if (killerView && p.role === 'survivor') {
-        if (p.st === 'ok' && (p.reveal > 0 || (has(me, 'scent') && p.hp === 1 && dist(p, me) < 24))) col = 0xff3030;
+        if (p.st === 'ok' && (p.reveal > 0 || (has(me, 'scent') && p.hp === 1 && dist(p, me) < 24) || (has(me, 'static') && p.act && p.act.k === 'repair'))) col = 0xff3030;
+        else if (p.st === 'caged') col = 0xff8a2a; // caged survivors stay in sight until they are freed
       } else if (!killerView) {
         if (p.role === 'survivor') {
           const far = dist(p, me) > 6 || me.st === 'dead' || me.st === 'out';
@@ -1066,7 +1079,7 @@ export class Game {
     for (let i = 0; i < this.M.gens.length; i++) {
       const gs = S.gens[i], a = this.W.gens[i].userData.aura, g = this.M.gens[i];
       let on = false, col = 0xffe8a0;
-      if (killerView) { if (has(me, 'static') && gs.n > 0 && !gs.done) { on = true; col = 0xffd040; } }
+      if (killerView) { if (gs.n > 0 && !gs.done) { on = true; col = 0xffd040; } } // the killer always knows which generators are being repaired
       else if (!gs.done && !S.gatesPowered && !(S.dark > 0) && S.mode !== 'dark') { on = Math.hypot(g.x - me.x, g.z - me.z) > 6; col = gs.reg ? 0xff6040 : 0xffe8a0; }
       a.visible = on; if (on) a.material = this.auraMatFor(col);
     }
@@ -1166,6 +1179,7 @@ export class Game {
           sound.play('gen', e.x, e.z);
           this.sparks.spawn(e.x, 1.6, e.z, 60, 0xffc060, 4, 1.2, -6);
           this.feed(e.left > 0 ? `A generator has been repaired. ${e.left} to go.` : 'All required generators repaired!');
+          if (me && me.role === 'killer') this.marker(e.x, 1.5, e.z, 'gen'); // the killer sees where it was finished
           break;
         case 'genfail': {
           const g = this.M.gens[e.id];
@@ -1195,6 +1209,7 @@ export class Game {
           else if (e.id === this.myId) this.feed((e.ids || []).length ? `Business card: ${(e.ids || []).length} intimidated.` : 'Nobody saw your card.');
           break;
         }
+        case 'chainland': sound.play('thud', e.x, e.z); this.smoke.spawn(e.x, 0.3, e.z, 10, 0x2a2622, 1.4, 1.2, 0.3, 0.6); if (e.id === this.myId) this.shake = 0.8; break;
         case 'laststand': if (e.id === this.myId) { this.feed('You are the last survivor! Survive 45 seconds.', 'big'); this.flash = 0.4; } sound.play('powered'); break;
         case 'drop': { const b = this.M.bars[e.id]; sound.play('drop', b.x, b.z); this.smoke.spawn(b.x, 0.3, b.z, 6, 0x5a5048, 1.2, 1.5, 0.3, 1.2); break; }
         case 'break': { const b = this.M.bars[e.id]; sound.play('break', b.x, b.z); this.blood.spawn(b.x, 0.6, b.z, 40, 0x6a4a30, 4, 1.2, -9, 1.5); break; }
