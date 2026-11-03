@@ -5,7 +5,7 @@ import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
 import { makeRealism } from './realism.js';
-import { makeStaticKiller, animateStaticKiller } from './glbModels.js';
+import { makeStaticKiller, animateStaticKiller, cloneStatic } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
 
 // ---------- aura material ----------
@@ -473,7 +473,7 @@ function makeBateman(sk) {
   if (sk.saw) {
     const g = chainsawParts();
     for (const [geo, m, x, y, z, rx, ry, rz] of g) R.mesh('handR', geo, m, x, y - 0.06, z + 0.1, rx, ry, rz);
-  } else {
+  } else if (!cloneStatic('axe')) {
     R.mesh('handR', G.cyl(0.018, 0.022, 0.78, 8), mat(0x6a4a2a, { map: 'wood', rough: 0.6 }), 0, -0.05, 0.2, Math.PI / 2, 0, 0);
     R.mesh('handR', G.box(0.03, 0.18, 0.14), steel, 0, 0.03, 0.56);
     R.mesh('handR', G.box(0.022, 0.06, 0.05), steel, 0, -0.06, 0.62, 0.5, 0, 0, 1, 1, 1, false);
@@ -486,6 +486,8 @@ function makeBateman(sk) {
   R.kind = 'killer'; R.killer = 'bateman';
   R.root.scale.setScalar(1.07);
   R.finalize();
+  // the real fire axe (model) in his right hand
+  if (!sk.saw) { const axe = cloneStatic('axe'); if (axe) { axe.position.set(0, -0.06, 0.18); axe.rotation.set(Math.PI / 2, 0, 0); R.j.handR.add(axe); fitAxe(axe); } }
   applySkinFx(R, sk);
   return R;
 }
@@ -503,6 +505,13 @@ function makeDoll(sk) {
   R.kind = 'killer'; R.killer = 'chucky';
   R.finalize();
   return R;
+}
+// the axe model's longest side is its handle: point it along +Z (forward from the fist), blade up
+function fitAxe(axe) {
+  const b = new THREE.Box3().setFromObject(axe), s = b.getSize(new THREE.Vector3());
+  const inner = axe.children[0];
+  if (s.y >= s.x && s.y >= s.z) { axe.rotation.set(Math.PI / 2, 0, 0); } else if (s.x >= s.z) { axe.rotation.set(0, Math.PI / 2, Math.PI / 2); }
+  return inner;
 }
 // chainsaw parts as [geo, material, x, y, z, rx, ry, rz] (shared by the prop and the outfit)
 function chainsawParts() {
@@ -725,8 +734,12 @@ export function makeViewModel(id) {
     tip.position.set(0, 0, -1.1); base.position.set(0, 0, -0.5);
   } else if (id === 'bateman') {
     add(arm, G.cyl(0.033, 0.032, 0.04, 10), mat(0xf4f2ee, { map: 'cloth' }), 0, -0.01, 0.03, -Math.PI / 2, 0, 0);
-    add(arm, G.cyl(0.018, 0.022, 0.7, 8), mat(0x6a4a2a, { map: 'wood', rough: 0.6 }), 0, 0.02, -0.25, Math.PI / 2, 0, 0);
-    add(arm, G.box(0.03, 0.2, 0.15), mat(0xb8bcc0, { map: 'metal', metal: 0.85, rough: 0.25 }), 0, 0.09, -0.56);
+    const axe = cloneStatic('axe');
+    if (axe) { const holder = new THREE.Group(); holder.position.set(0, 0.02, -0.32); arm.add(holder); axe.rotation.set(-Math.PI / 2, 0, 0); holder.add(axe); fitAxe(axe); axe.rotation.x = -axe.rotation.x; axe.scale.setScalar(0.85); }
+    else {
+      add(arm, G.cyl(0.018, 0.022, 0.7, 8), mat(0x6a4a2a, { map: 'wood', rough: 0.6 }), 0, 0.02, -0.25, Math.PI / 2, 0, 0);
+      add(arm, G.box(0.03, 0.2, 0.15), mat(0xb8bcc0, { map: 'metal', metal: 0.85, rough: 0.25 }), 0, 0.09, -0.56);
+    }
     tip.position.set(0, 0.18, -0.6); base.position.set(0, 0.02, -0.3);
   } else if (id === 'foreman') {
     const steel = mat(0x8a8a88, { map: 'metal', metal: 0.8, rough: 0.35 });

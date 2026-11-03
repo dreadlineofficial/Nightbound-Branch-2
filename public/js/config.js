@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.18.2';
+export const VERSION = '2.18.3';
 export const INBOX = [
+  {
+    id: 'v2.18.3', version: '2.18.3', date: 'Nov 2026', title: 'Sharper Steel, Wetter Gore', tag: 'Update',
+    body: ['Patrick Bateman now swings a real fire axe, in first and third person.', 'Blood is no longer flat dots: droplets are glossy, stretch as they fly and bead up where they land (Low and Potato graphics keep the cheap version).'],
+  },
   {
     id: 'v2.18.2', version: '2.18.2', date: 'Nov 2026', title: 'Turntable Preview', tag: 'Update',
     body: ['In the Store and on the Loadout screen, drag the character to spin them all the way around and scroll to zoom in on their outfit.'],

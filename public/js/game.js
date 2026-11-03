@@ -115,6 +115,43 @@ class Particles {
   }
 }
 
+// ---------- blood droplets: lit, glossy and stretched along their flight (same API as Particles) ----------
+class BloodDrops extends Particles {
+  constructor(scene, max = 900, lite = false) {
+    super(scene, THREE.NormalBlending, 0.055, max, 'droplet');
+    if (lite) return; // low-end: keep the cheap point sprites
+    scene.remove(this.pts);
+    this.size = new Float32Array(max); for (let i = 0; i < max; i++) this.size[i] = 0.008 + Math.pow(Math.random(), 2.2) * 0.03;
+    const geo = new THREE.SphereGeometry(1, 7, 5);
+    this.mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, metalness: 0.05, emissive: 0x120000 }), max);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
+    this.mesh.frustumCulled = false; this.mesh.count = 0;
+    scene.add(this.mesh);
+    this.m4 = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.v = new THREE.Vector3(); this.up = new THREE.Vector3(0, 1, 0); this.s = new THREE.Vector3(); this.p = new THREE.Vector3();
+  }
+  update(dt) {
+    super.update(dt);
+    if (!this.mesh) return;
+    let k = 0;
+    for (let i = 0; i < this.n; i++) {
+      if (this.life[i] <= 0) continue;
+      const r = this.size[i], vx = this.vel[i * 3], vy = this.vel[i * 3 + 1], vz = this.vel[i * 3 + 2], sp = Math.hypot(vx, vy, vz);
+      const onGround = this.pos[i * 3 + 1] <= 0.021;
+      this.v.set(vx, vy, vz); if (sp > 0.01) this.q.setFromUnitVectors(this.up, this.v.multiplyScalar(1 / sp)); else this.q.identity();
+      // in flight: a streak; on the ground: a flattened bead
+      if (onGround) this.s.set(r * 1.6, r * 0.25, r * 1.6); else this.s.set(r, r * (1 + Math.min(4, sp * 0.35)), r);
+      this.p.set(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2]);
+      this.m4.compose(this.p, onGround ? this.q.identity() : this.q, this.s);
+      this.mesh.setMatrixAt(k, this.m4);
+      this.mesh.instanceColor.setXYZ(k, this.col[i * 3] * 0.8, this.col[i * 3 + 1] * 0.5, this.col[i * 3 + 2] * 0.5);
+      k++;
+    }
+    this.mesh.count = k;
+    this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor.needsUpdate = true;
+  }
+}
+
 // ---------- blood decals: wet pools, splatters, sprays and drag smears that dry over time ----------
 class BloodDecals {
   constructor(scene, max, lite) {
@@ -218,7 +255,7 @@ export class Game {
       this.scene.add(this.torchLight, this.torchLight.target);
       this.torchBest = Infinity;
     }
-    this.blood = new Particles(this.scene, THREE.NormalBlending, 0.055, 900, 'droplet');
+    this.blood = new BloodDrops(this.scene, 900, this.settings.quality === 'potato' || this.settings.quality === 'low');
     const lite = this.settings.quality === 'potato' || this.settings.quality === 'low';
     this.decals = new BloodDecals(this.scene, { potato: 40, low: 80, medium: 160, high: 240 }[this.settings.quality] || 120, lite);
     this.blood.onLand = (x, z) => { if (this.decals.landBudget >= 1 && Math.random() < 0.35) { this.decals.landBudget--; this.decals.add(x, z, 0.12 + Math.random() * 0.2, 0); } };
