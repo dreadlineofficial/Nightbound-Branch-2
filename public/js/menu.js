@@ -151,7 +151,8 @@ export class MenuScene {
     // frame the whole body; the shift puts it between the store list (left) and the outfit card
     // (vertical fov 50deg: feet at ~62% of the screen height, the figure ~30% right of centre)
     const d = 2 + h * 1.3, ly = 0.112 * d + h * 0.08 - 0.18;
-    VIEWS.show = { pos: new THREE.Vector3(SHOW.x - place * d, ly + 0.35, SHOW.z + d), look: new THREE.Vector3(SHOW.x - place * d, ly, SHOW.z) };
+    this.showBase = { d, ly, place, h };
+    this.applyShowView();
     this.showRim.color.setHex(killer ? (KILLERS[char].color ?? 0xff3020) : 0x5a8aff);
   }
 
@@ -185,6 +186,16 @@ export class MenuScene {
     for (const s of this.fogSprites) s.material.color.setHex(char === 'wisp' ? 0x3a6a8a : char === 'lamplighter' ? 0x2a6a3a : 0x8a2a2a);
   }
   setMode(m) { this.mode = m; }
+  // turntable: drag to spin the showcased character, scroll to zoom in on them
+  spinShow(dx) { this.showYaw = (this.showYaw || 0) + dx; }
+  zoomShow(dz) { this.showZoom = Math.max(0.68, Math.min(1.35, (this.showZoom || 1) * dz)); this.applyShowView(); }
+  applyShowView() {
+    const B = this.showBase; if (!B) return;
+    const z = this.showZoom || 1, d = B.d * z;
+    // zooming in drifts the aim up toward the chest/face
+    const ly = B.ly + (1 - z) * B.h * 0.45;
+    VIEWS.show = { pos: new THREE.Vector3(SHOW.x - B.place * d, ly + 0.35 * z, SHOW.z + d), look: new THREE.Vector3(SHOW.x - B.place * d, ly, SHOW.z) };
+  }
   setShift(on) { this.shiftT = on ? 1 : 0; }
 
   update(dt, renderer) {
@@ -229,7 +240,7 @@ export class MenuScene {
     this.showKey.intensity += ((showing ? 70 : 0) - this.showKey.intensity) * lk;
     this.showRim.intensity += ((showing ? 26 : 0) - this.showRim.intensity) * lk;
     this.showFill.intensity += ((showing ? 7 : 0) - this.showFill.intensity) * lk;
-    if (this.showRig) animate(this.showRig, { anim: this.showKiller ? 'idle' : 'idle', speed: 0, t, injured: false }, dt);
+    if (this.showRig) { animate(this.showRig, { anim: this.showKiller ? 'idle' : 'idle', speed: 0, t, injured: false }, dt); this.showRig.root.rotation.y = 0.35 + (this.showYaw || 0); }
     if (this.showPet) this.showPet.pose(t);
     // characters
     for (const r of this.survRigs) animate(r, { anim: r.stand ? 'idle' : 'sit', speed: 0, t, injured: false }, dt);

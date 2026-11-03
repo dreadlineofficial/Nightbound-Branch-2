@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.18.1';
+export const VERSION = '2.18.2';
 export const INBOX = [
+  {
+    id: 'v2.18.2', version: '2.18.2', date: 'Nov 2026', title: 'Turntable Preview', tag: 'Update',
+    body: ['In the Store and on the Loadout screen, drag the character to spin them all the way around and scroll to zoom in on their outfit.'],
+  },
   {
     id: 'v2.18.1', version: '2.18.1', date: 'Nov 2026', title: 'The New Slimer', tag: 'Crossover', gb: true,
     body: ['The Slimer has a brand-new realistic model: slick green ectoplasm, red eyes, a huge lipped mouth full of teeth. He floats, bobs, squashes and stretches, lunges into his attacks and wobbles when stunned. Ecto Blue and Golden Glutton recolour the new model.'],

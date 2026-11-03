@@ -582,3 +582,9 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .last-updated span { color: rgba(233,224,208,.4); }
 .last-updated b { color: var(--gold); font-weight: 600; }
 #menu.panel-open .last-updated, #menu.store-open .last-updated { display: none; }
+
+/* showroom turntable pad (over the showcased character) */
+#show-drag { position: fixed; z-index: 45; top: 110px; bottom: 250px; left: 54vw; right: 2vw; cursor: grab; touch-action: none; }
+#show-drag.lo { left: calc(min(760px, 58vw) + 2vw); bottom: 40px; top: 90px; }
+#show-drag.dragging { cursor: grabbing; }
+#show-drag span { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(233,224,208,.45); text-shadow: 0 1px 3px #000; white-space: nowrap; pointer-events: none; }

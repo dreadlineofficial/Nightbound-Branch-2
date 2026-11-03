@@ -519,6 +519,21 @@ function renderInbox() {
 $('inbox-btn').querySelector('.ib-ico').innerHTML = icon('mail');
 $('inbox-btn').addEventListener('click', () => { sound.init(); sound.play('click'); for (const x of $('mainnav').children) x.classList.remove('on'); openPanel('p-inbox', 'Inbox'); });
 renderInboxBadge();
+// showroom turntable: an invisible pad over the showcased character
+{
+  const pad = $('show-drag'); let drag = null;
+  document.body.appendChild(pad); // above the Store overlay
+  pad.addEventListener('pointerdown', e => { drag = e.clientX; pad.setPointerCapture(e.pointerId); pad.classList.add('dragging'); });
+  pad.addEventListener('pointermove', e => { if (drag == null || !menu) return; menu.spinShow((e.clientX - drag) * 0.012); drag = e.clientX; });
+  const end = () => { drag = null; pad.classList.remove('dragging'); };
+  pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+  pad.addEventListener('wheel', e => { e.preventDefault(); if (menu) menu.zoomShow(e.deltaY > 0 ? 1.08 : 1 / 1.08); }, { passive: false });
+  setInterval(() => {
+    const on = !!menu && menu.mode === 'show' && !session && (!$('store').classList.contains('hidden') || openSection === 'p-loadout');
+    pad.classList.toggle('hidden', !on);
+    pad.classList.toggle('lo', openSection === 'p-loadout');
+  }, 200);
+}
 // "Last updated": the build stamps its time into the page; the dev server reports its newest file
 let builtAt = typeof window !== 'undefined' && window.__NB_BUILT__ ? +window.__NB_BUILT__ : 0;
 function renderUpdated() {
