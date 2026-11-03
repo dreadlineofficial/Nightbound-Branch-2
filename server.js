@@ -20,6 +20,11 @@ const server = createServer(async (req, res) => {
   try {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (p === '/health') { res.writeHead(200); res.end('ok'); return; }
+    if (p === '/__built') { // newest source file's time, for the home screen's "Last updated"
+      const { readdir } = await import('node:fs/promises');
+      let t = 0; for (const f of await readdir(join(root, 'js'))) t = Math.max(t, (await stat(join(root, 'js', f))).mtimeMs);
+      res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-cache' }); res.end(String(Math.round(t))); return;
+    }
     if (p.endsWith('/')) p += 'index.html';
     const f = normalize(join(root, p));
     if (!f.startsWith(root)) throw 0;

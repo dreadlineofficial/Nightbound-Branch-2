@@ -576,3 +576,9 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .pet-card .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .pet-card .ch-price .ico { width: 16px; height: 16px; vertical-align: -2px; }
 .lo-pet button.locked { opacity: .55; }
+
+/* "Last updated" on the home screen */
+.last-updated { position: absolute; right: 28px; bottom: 18px; z-index: 3; font-size: 12px; letter-spacing: .08em; color: rgba(233,224,208,.55); text-shadow: 0 1px 4px #000; pointer-events: auto; }
+.last-updated span { color: rgba(233,224,208,.4); }
+.last-updated b { color: var(--gold); font-weight: 600; }
+#menu.panel-open .last-updated, #menu.store-open .last-updated { display: none; }

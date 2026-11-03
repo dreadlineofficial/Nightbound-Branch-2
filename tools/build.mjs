@@ -47,7 +47,7 @@ const rayGlb = (await readFile(join(pub, 'models/ray.glb'))).toString('base64');
 const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `<script id="nb-foreman-glb" type="application/octet-stream">${glb}</script>\n<script id="nb-chucky-glb" type="application/octet-stream">${chucky}</script>\n<script id="nb-ted-glb" type="application/octet-stream">${tedGlb}</script>\n<script id="nb-ray-glb" type="application/octet-stream">${rayGlb}</script>\n<script>${peer}</script>\n<script>${js}</script>`);
 // the web build stays small: it fetches public/models/foreman.glb instead of embedding it
 const web = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `<script>${peer}</script>\n<script>${js}</script>`);
-const note = '<title>Nightbound</title>\n  <!-- Built file: everything is inlined. Source lives in public/. -->';
+const note = `<title>Nightbound</title>\n  <!-- Built file: everything is inlined. Source lives in public/. -->\n  <script>window.__NB_BUILT__=${Date.now()}</script>`;
 const offline = withModel.replace('<title>Nightbound</title>', note), page = web.replace('<title>Nightbound</title>', note);
 await writeFile(join(root, 'Nightbound.html'), offline);
 await writeFile(join(root, 'index.html'), page); // GitHub Pages entry point

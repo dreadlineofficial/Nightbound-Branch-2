@@ -517,6 +517,17 @@ function renderInbox() {
 $('inbox-btn').querySelector('.ib-ico').innerHTML = icon('mail');
 $('inbox-btn').addEventListener('click', () => { sound.init(); sound.play('click'); for (const x of $('mainnav').children) x.classList.remove('on'); openPanel('p-inbox', 'Inbox'); });
 renderInboxBadge();
+// "Last updated": the build stamps its time into the page; the dev server reports its newest file
+let builtAt = typeof window !== 'undefined' && window.__NB_BUILT__ ? +window.__NB_BUILT__ : 0;
+function renderUpdated() {
+  if (!builtAt) return;
+  const s = Math.max(0, (Date.now() - builtAt) / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  const ago = d >= 1 ? `${d}d ${h % 24}h` : h >= 1 ? `${h}h ${m % 60}m` : m >= 1 ? `${m}m` : 'just now';
+  $('last-updated').innerHTML = `<span>v${esc(VERSION)}</span> · Last updated <b>${ago}${ago === 'just now' ? '' : ' ago'}</b>`;
+  $('last-updated').title = new Date(builtAt).toLocaleString();
+}
+if (!builtAt && location.protocol !== 'file:') fetch('__built').then(r => r.ok ? r.text() : '').then(t => { builtAt = +t || 0; renderUpdated(); }).catch(() => {});
+renderUpdated(); setInterval(renderUpdated, 30000);
 if (profile.lastVersion !== VERSION) {
   profile.lastVersion = VERSION; saveProfile();
   setTimeout(() => toast('New in v' + VERSION + ': ' + INBOX[0].title + '. Check your Inbox!', 6000), 1500);
