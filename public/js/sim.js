@@ -718,7 +718,7 @@ export class Sim {
         K.atk = 2; K.atkHit = true; K.atkT = RULES.hitCooldown * (has(K, 'relentless') ? 0.65 : 1);
         break;
       }
-      if (K.atk === 1 && K.atkT <= 0) { K.atk = 2; K.atkHit = false; K.atkT = RULES.missCooldown; }
+      if (K.atk === 1 && K.atkT <= 0) { K.atk = 2; K.atkHit = false; K.atkT = RULES.missCooldown; this.ev({ k: 'whiff', id: K.id }); }
     } else if (K.atk === 2) {
       K.atkT -= dt;
       if (K.atkT <= 0) { K.atk = 0; K.atkHit = false; }

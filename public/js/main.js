@@ -16,7 +16,7 @@ import { loadStatic } from './glbModels.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
-import { sound } from './audio.js';
+import { sound, loadClip } from './audio.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
@@ -127,6 +127,7 @@ function startBG() {
 loadForeman();
 loadChucky();
 loadTed();
+for (const n of ['bringit', 'email', 'weak', 'cock', 'shit', 'idle', 'arfh']) loadClip('ted/' + n);
 loadStatic('axe').then(m => { if (m) forgetArt('bateman'); });
 loadStatic('ghosttrap');
 loadStatic('slimer').then(m => { if (!m) return; forgetArt('slimer'); if (menu && menu.killerChar === 'slimer') menu.setKiller('slimer', menu.killerSkin); });
@@ -334,6 +335,7 @@ function renderSettings() {
   $('set-fov').value = settings.fov; $('set-fov-v').textContent = settings.fov;
   $('set-vol').value = settings.vol; $('set-music').value = settings.music;
   $('set-invert').checked = !!settings.invert;
+  $('set-subs').checked = settings.subs !== false;
   $('set-net').value = settings.net;
   renderCam();
 }
@@ -352,6 +354,7 @@ $('set-fov').addEventListener('input', e => { settings.fov = +e.target.value; $(
 $('set-vol').addEventListener('input', e => { settings.vol = +e.target.value; sound.setVolume(settings.vol); saveSettings(); });
 $('set-music').addEventListener('input', e => { settings.music = +e.target.value; sound.setMusic(settings.music); saveSettings(); });
 $('set-invert').addEventListener('change', e => { settings.invert = e.target.checked; saveSettings(); });
+$('set-subs').addEventListener('change', e => { settings.subs = e.target.checked; saveSettings(); });
 $('set-net').addEventListener('change', e => { settings.net = e.target.value; saveSettings(); });
 // ---------- camera placement (settings and pause menu share these controls) ----------
 const CAM_DEF = { side: 1, dist: 1, height: 0, angle: 0 };

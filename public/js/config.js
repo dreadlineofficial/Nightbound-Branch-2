@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.3';
+export const VERSION = '2.19.4';
 export const INBOX = [
+  {
+    id: 'v2.19.4', version: '2.19.4', date: 'Nov 2026', title: 'Ted Speaks', tag: 'Update',
+    body: ['Ted now talks, with subtitles. He has something to say when you run from the killer, when he kicks back with his bong, when someone blows a skill check, gets downed twice in a minute or (if you\'re the killer) whiffs a swing, and every now and then for no reason at all.', 'He also lets out an "Arfh!" when he sees you die.', 'Subtitles can be turned off in Settings.'],
+  },
   {
     id: 'v2.19.3', version: '2.19.3', date: 'Nov 2026', title: 'Black Squares Fix', tag: 'Fix',
     body: ['Fixed big black boxes spreading across the screen while walking with the Realistic look. Ambient occlusion is off for now, and a safety pass stops any bad pixel from being smeared by the glow effect.'],

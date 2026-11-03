@@ -9,7 +9,7 @@ import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
-import { Sidekick } from './sidekicks.js';
+import { Sidekick, TED_LINES } from './sidekicks.js';
 import { staticReady, cloneStatic } from './glbModels.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat } from './models.js';
 import { stepMover, startVault } from './movement.js';
@@ -984,11 +984,26 @@ export class Game {
       // a disguised body's sidekick would give Chucky away: it stays with the doll; ghosts' pets wait
       const c = this.chars.get(p.id);
       const owner = c ? { ...p, x: c.x, z: c.z, yaw: c.yaw } : p;
-      k.update(dt, owner, { visible: !(p.st === 'ghost' && p.id !== this.myId), smoke: (x, y, z) => this.smoke.spawn(x, y, z, 6, 0xcfd6c8, 0.25, 1.4, 0.35, 0.5) });
+      let killerD = null;
+      if (p.role === 'survivor') for (const q of S.players) if (q.role === 'killer' && !q.disguise) { const d = Math.hypot(q.x - owner.x, q.z - owner.z); if (killerD == null || d < killerD) killerD = d; }
+      k.update(dt, owner, { visible: !(p.st === 'ghost' && p.id !== this.myId), killerD, say: (line, x, z) => this.petVoice(line, x, z) });
     }
     for (const [id, k] of this.pets) if (!S.players.some(p => p.id === id)) { k.dispose(); this.pets.delete(id); }
   }
   petReact(id, mood, time) { const k = this.pets && this.pets.get(id); if (k) k.react(mood, time); }
+  petSay(id, line, gap) { const k = this.pets && this.pets.get(id); if (k) k.say(line, gap); }
+  // a sidekick's voice line: played from where they stand, with a subtitle if you can hear it
+  petVoice(line, x, z) {
+    const len = sound.clip('ted/' + line, x, z);
+    if (!len && sound.ok) return;
+    const heard = Math.hypot(x - sound.lx, z - sound.lz) < 40;
+    if (this.settings.subs === false || !heard) return;
+    let el = document.getElementById('subs');
+    if (!el) { el = document.createElement('div'); el.id = 'subs'; this.hud.appendChild(el); }
+    el.innerHTML = `<b>Ted:</b> ${TED_LINES[line].replace(/[<>&]/g, '')}`;
+    el.classList.add('show');
+    clearTimeout(this.subsT); this.subsT = setTimeout(() => el.classList.remove('show'), ((len || 2.5) + 0.8) * 1000);
+  }
 
   // Chucky's spare dolls (Soul Split), lying where they were dropped
   updateDolls(S) {
@@ -1415,6 +1430,10 @@ export class Game {
         case 'hit': {
           const hc = this.chars.get(e.id); if (hc) hc.hitAt = this.t;
           this.petReact(e.id, e.down ? 'panic' : 'jump', e.down ? 3 : 1.2); this.petReact(e.by, 'cheer', 1.5);
+          if (e.down) { // downed twice inside a minute: Ted has opinions
+            const dl = ((this.downLog ||= {})[e.id] ||= []); dl.push(this.t); while (dl.length && dl[0] < this.t - 60) dl.shift();
+            if (dl.length >= 2) this.petSay(e.id, 'cock', 20);
+          }
           if (e.by === this.myId) { this.shake = 0.45; this.hitStop = 0.08; this.splat(); }
           sound.play('hit', e.x, e.z, { pitch: pitchOf(e.id), down: e.down });
           {
@@ -1451,6 +1470,7 @@ export class Game {
           if (me && me.role === 'killer') this.marker(e.x, 1.5, e.z, 'gen'); // the killer sees where it was finished
           break;
         case 'genfail': {
+          if (e.by) this.petSay(e.by, Math.random() < 0.6 ? 'shit' : 'cock', 15);
           const g = this.M.gens[e.id];
           sound.play('genfail', g.x, g.z);
           this.sparks.spawn(g.x, 1.3, g.z, 70, 0xffaa40, 5, 0.8, -9);
@@ -1517,7 +1537,8 @@ export class Game {
         case 'rampage': { const p = S && playerById(S, e.id); if (p) sound.play('roar', p.x, p.z); break; }
         case 'exec': { const p = S && playerById(S, e.id); if (p) sound.play('caged', p.x, p.z); if (e.id === this.myId) this.feed('You are being executed…', 'big'); break; }
         case 'escfail': if (e.id === this.myId) this.feed(`You failed to break free (${e.left} attempts left).`); break;
-        case 'sc': if (e.r === 'miss' && e.id !== this.myId) { const p = S && playerById(S, e.id); if (p) sound.play('genfail', p.x, p.z); } break;
+        case 'whiff': this.petSay(e.id, 'cock', 25); break;
+        case 'sc': if (e.r === 'miss') this.petSay(e.id, Math.random() < 0.6 ? 'shit' : 'cock', 15); if (e.r === 'miss' && e.id !== this.myId) { const p = S && playerById(S, e.id); if (p) sound.play('genfail', p.x, p.z); } break;
       }
     }
   }

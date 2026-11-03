@@ -248,6 +248,17 @@ function poseRosy(R, s) {
   R.head.rotation.y = s.look || 0;
 }
 
+// ---------------- Ted's voice lines (with subtitles) ----------------
+export const TED_LINES = {
+  bringit: 'Bring it in, you bastard! Come on!',
+  email: 'Can you just e-mail me the rest of this story?',
+  weak: 'Jesus, this is weak. Not even getting me high. I gotta have a talk with my weed guy.',
+  cock: "You know you're acting like a cock, you know that?",
+  shit: 'Shit.',
+  idle: 'Thank you for creeping up my night, and Jesus be with you.',
+  arfh: 'Arfh!',
+};
+
 // ---------------- the sidekick ----------------
 export class Sidekick {
   constructor(scene, M, kind, ownerId) {
@@ -258,7 +269,15 @@ export class Sidekick {
     this.mood = null; this.moodT = 0; this.stuck = 0; this.side = Math.random() < 0.5 ? -1 : 1;
     this.c = null; // Ted's camp: { ph, t, D (chair spot), S (where he stands to set it up), ... }
     this.puffs = new Puffs(scene);
+    this.voiceAt = -99; this.said = {}; this.queued = null; this.idleNext = 40 + Math.random() * 50;
     scene.add(this.rig.root);
+  }
+  // queue a line (Ted only); `gap` = seconds before this same line may repeat
+  say(line, gap = 30, force = false) {
+    if (this.kind !== 'ted' || !TED_LINES[line]) return false;
+    if ((!force && this.t - this.voiceAt < 7) || this.t - (this.said[line] ?? -999) < gap) return false;
+    this.voiceAt = this.t; this.said[line] = this.t; this.queued = line;
+    return true;
   }
   dispose() { this.scene.remove(this.rig.root); if (this.camp) this.scene.remove(this.camp); this.camp = null; this.c = null; this.puffs.clear(); }
   react(mood, time = 1.6) { this.mood = mood; this.moodT = time; }
@@ -273,6 +292,16 @@ export class Sidekick {
   update(dt, owner, env) {
     this.t += dt;
     this.puffs.update(dt);
+    if (this.queued) { env.say && R0(this) && env.say(this.queued, this.x, this.z); this.queued = null; }
+    // seeing the owner die
+    if (owner && this.prevSt && this.prevSt !== 'dead' && owner.st === 'dead') this.say('arfh', 5, true);
+    if (owner) this.prevSt = owner.st;
+    if (owner && this.kind === 'ted' && env.visible !== false && owner.st !== 'out' && owner.st !== 'ghost') {
+      // running from the monster
+      if (owner.role === 'survivor' && owner.st === 'ok' && owner.mv === 2 && env.killerD != null && env.killerD < 14 && Math.random() < dt * 0.25) this.say(Math.random() < 0.5 ? 'bringit' : 'email', 45);
+      // every so often, for no reason at all
+      if (this.t > this.idleNext) { this.idleNext = this.t + 70 + Math.random() * 60; if (!(this.c && this.c.ph === 'seated')) this.say('idle', 60); }
+    }
     if (this.kind === 'ted' && !this.real && ted) { this.dispose(); this.rig = makeTedRig(); this.real = true; this.scene.add(this.rig.root); }
     const R = this.rig;
     if (!owner) { R.root.visible = false; return; }
@@ -456,7 +485,7 @@ export class Sidekick {
         tedReach(R, 'R', P.gripR, right.clone().multiplyScalar(1.2).add(down));
         tedReach(R, 'L', P.gripL, right.clone().negate().multiplyScalar(1.2).add(down));
       }
-      if (c.exhale) { c.exhale = false; this.puffs.add(P.mouth, fwd); }
+      if (c.exhale) { c.exhale = false; this.puffs.add(P.mouth, fwd); this.say('weak', 50); }
     }
     return true;
   }
@@ -469,6 +498,8 @@ export class Sidekick {
     if (moved > 1e-3) this.yaw += Math.atan2(Math.sin(Math.atan2(dx, dz) - this.yaw), Math.cos(Math.atan2(dx, dz) - this.yaw)) * Math.min(1, dt * 10);
   }
 }
+
+const R0 = sk => sk.rig && sk.rig.root.visible;
 
 // for menus: a sidekick standing in the showroom
 export function makeSidekickModel(kind) {

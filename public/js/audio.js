@@ -1,4 +1,4 @@
-// Fully synthesized audio (WebAudio). No sound files needed.
+// Synthesized audio (WebAudio), plus a few recorded voice clips for sidekicks.
 export class Sound {
   constructor() { this.ctx = null; this.vol = 0.8; this.music = 0.7; this.lx = 0; this.lz = 0; this.lyaw = 0; }
   init() {
@@ -237,4 +237,33 @@ export class Sound {
     for (const k in this.loops) { const L = this.loops[k]; if (L.g) L.g.gain.setTargetAtTime(0, t, 0.3); if (L.dg) L.dg.gain.setTargetAtTime(0, t, 0.3); if (L.rep) { L.rep.g.gain.setTargetAtTime(0, t, 0.2); L.done.g.gain.setTargetAtTime(0, t, 0.2); } }
   }
 }
+// ---------- recorded voice clips (sidekick lines) ----------
+// Clips are decoded with an offline context so they're ready before the first user gesture;
+// AudioBuffers work in any context.
+const clips = {}, clipLoading = {};
+async function clipBytes(name) {
+  const el = document.getElementById('nb-voice-' + name);
+  if (el && el.textContent.trim()) { const s = atob(el.textContent.trim()), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b.buffer; }
+  const dev = !!document.querySelector('script[type=importmap]');
+  for (const url of dev ? [`audio/${name}.mp3`, `public/audio/${name}.mp3`] : [`public/audio/${name}.mp3`, `audio/${name}.mp3`]) {
+    try { const r = await fetch(url); if (r.ok) return await r.arrayBuffer(); } catch (_) {}
+  }
+  throw new Error('voice clip ' + name + ' unavailable');
+}
+export function loadClip(name) {
+  if (clipLoading[name]) return clipLoading[name];
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  clipLoading[name] = clipBytes(name).then(buf => new Promise((res, rej) => new OAC(1, 1, 44100).decodeAudioData(buf, res, rej))).then(b => (clips[name] = b)).catch(e => { console.warn(e.message || e); return null; });
+  return clipLoading[name];
+}
+// play a clip from a spot in the world; returns its length in seconds (0: not heard / not loaded)
+Sound.prototype.clip = function (name, x, z, opt = {}) {
+  const b = clips[name];
+  if (!b || !this.ok) return 0;
+  const out = this.out(x, z, opt.ref ?? 7, opt.maxD ?? 40);
+  if (!out) return 0;
+  out.gain.value = opt.vol ?? 1;
+  const src = this.ctx.createBufferSource(); src.buffer = b; src.connect(out); src.start();
+  return b.duration;
+};
 export const sound = new Sound();
