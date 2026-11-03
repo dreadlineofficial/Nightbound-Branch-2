@@ -71,6 +71,12 @@ const I = {
   skullsmall: `<circle cx="32" cy="28" r="16"/>`,
   chainsaw: `<path d="M8 30h16v14H8z"/><path d="M24 33h28a4 4 0 0 1 0 8H24"/><path d="M12 30v-6h10v6"/><path d="M28 33l3-3 3 3 3-3 3 3 3-3 3 3"/>`,
   knife: `<path d="M12 52l8-8"/><path d="M20 44l26-30c4 6 2 14-4 20L26 50z"/><path d="M14 40l10 10"/>`,
+  triage: `<path d="M26 10h12v16h16v12H38v16H26V38H10V26h16z"/><path d="M14 54l8-8"/>`,
+  overclock: `<circle cx="32" cy="34" r="20"/><path d="M32 34l10-12"/><path d="M26 8h12"/><path d="M48 14l4-4"/>`,
+  exposure: `<rect x="10" y="20" width="44" height="30" rx="4"/><circle cx="32" cy="35" r="9"/><path d="M22 20l4-8h12l4 8"/><path d="M50 12l6-4M54 20h6"/>`,
+  pathfinder: `<path d="M32 6l8 16-8 6-8-6z"/><path d="M32 28v28"/><path d="M14 44h36"/><circle cx="32" cy="44" r="4"/>`,
+  containment: `<rect x="14" y="26" width="36" height="18" rx="3"/><path d="M14 30l-6-8M50 30l6-8"/><path d="M20 44v10M44 44v10"/><path d="M26 34h12"/>`,
+  exorcist: `<circle cx="32" cy="26" r="14"/><path d="M26 22h12M32 16v20"/><path d="M18 52c4-8 24-8 28 0"/>`,
   card: `<rect x="10" y="18" width="44" height="28" rx="2"/><path d="M18 28h16"/><path d="M18 35h28"/><path d="M18 40h20"/>`,
 };
 

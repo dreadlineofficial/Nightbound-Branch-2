@@ -1124,10 +1124,11 @@ export class Game {
         if (p.st === 'ok' && (p.reveal > 0 || (has(me, 'scent') && p.hp === 1 && dist(p, me) < 24) || (has(me, 'static') && p.act && p.act.k === 'repair'))) col = 0xff3030;
         else if (p.st === 'caged') col = 0xff8a2a; // caged survivors stay in sight until they are freed
       } else if (!killerView) {
-        if (lookRole(p) === 'survivor') {
+        if (p.disguise && has(me, 'exorcist') && dist(p, me) < 20) col = 0xb06aff; // Exorcist: Chucky inside a survivor
+        else if (lookRole(p) === 'survivor') {
           const far = dist(p, me) > 6 || me.st === 'dead' || me.st === 'out';
           col = !far ? null : p.st === 'caged' || p.st === 'exec' ? 0xff4a3a : p.st === 'down' ? 0xffa030 : p.st === 'carried' ? 0xff7030 : p.st === 'ok' ? 0xe8d8a0 : null;
-        } else if (lookRole(p) === 'killer' && ((has(me, 'sixth') && me.sixT < 4 && me.st !== 'dead') || me.st === 'dead' || me.st === 'out')) col = 0xff2020;
+        } else if (lookRole(p) === 'killer' && (p.exposed > 0 || (has(me, 'sixth') && me.sixT < 4 && me.st !== 'dead') || me.st === 'dead' || me.st === 'out')) col = 0xff2020;
       }
       if (p.st === 'dead' || p.st === 'out') col = null;
       if ((S.dark > 0 || S.mode === 'dark') && !killerView && p.role === 'survivor') col = null; // Lights Out: you lose track of each other
@@ -1149,7 +1150,7 @@ export class Game {
     }
     for (let i = 0; i < this.M.gates.length; i++) {
       const a = this.W.gates[i].userData.aura;
-      const on = S.gatesPowered && !S.gates[i].open && Math.hypot(this.M.gates[i].x - me.x, this.M.gates[i].z - me.z) > 8;
+      const on = (S.gatesPowered || (!killerView && has(me, 'pathfinder'))) && !S.gates[i].open && Math.hypot(this.M.gates[i].x - me.x, this.M.gates[i].z - me.z) > 8;
       a.visible = on; if (on) a.material = this.auraMatFor(0xffffff);
     }
   }
@@ -1294,6 +1295,8 @@ export class Game {
         }
         case 'chainland': sound.play('thud', e.x, e.z); this.smoke.spawn(e.x, 0.3, e.z, 10, 0x2a2622, 1.4, 1.2, 0.3, 0.6); if (e.id === this.myId) this.shake = 0.8; break;
         case 'pulse': if (me && me.role === 'survivor' && me.st === 'ok') { this.feed('The infected can sense you…', 'big'); this.flash = 0.2; } else if (me && me.role === 'killer') this.feed('You sense the living.'); break;
+        case 'exposed': if (me && me.role === 'survivor') this.feed(`${name(e.by)}'s Exposure: the killer is revealed!`, e.by === this.myId ? 'big' : ''); if (e.id === this.myId) this.feed('Exposed! The survivors can see you.', 'big'); break;
+        case 'overclock': this.sparks.spawn(e.x, 1.5, e.z, 30, 0x8affff, 2, 0.8, -6); if (me && me.role === 'survivor') this.feed('Overclock: another generator jumped ahead.'); break;
         case 'laststand': if (e.id === this.myId) { this.feed('You are the last survivor! Survive 45 seconds.', 'big'); this.flash = 0.4; } sound.play('powered'); break;
         case 'drop': { const b = this.M.bars[e.id]; sound.play('drop', b.x, b.z); this.smoke.spawn(b.x, 0.3, b.z, 6, 0x5a5048, 1.2, 1.5, 0.3, 1.2); break; }
         case 'break': { const b = this.M.bars[e.id]; sound.play('break', b.x, b.z); this.blood.spawn(b.x, 0.6, b.z, 40, 0x6a4a30, 4, 1.2, -9, 1.5); break; }

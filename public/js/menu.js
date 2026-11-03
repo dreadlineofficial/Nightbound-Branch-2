@@ -130,7 +130,7 @@ export class MenuScene {
   }
 
   // stand one character in the showroom, facing the camera
-  setShowcase(char, skin = 'default') {
+  setShowcase(char, skin = 'default', place = 0.3) {
     if (this.showRig) this.scene.remove(this.showRig.root);
     const killer = !!KILLERS[char];
     const rig = killer ? makeKiller(char, skinOf(char, skin)) : makeSurvivor(SURVIVORS[char] || SURVIVORS.mara, skinOf(char, skin));
@@ -145,7 +145,7 @@ export class MenuScene {
     // frame the whole body; the shift puts it between the store list (left) and the outfit card
     // (vertical fov 50deg: feet at ~62% of the screen height, the figure ~30% right of centre)
     const d = 2 + h * 1.3, ly = 0.112 * d + h * 0.08 - 0.18;
-    VIEWS.show = { pos: new THREE.Vector3(SHOW.x - 0.3 * d, ly + 0.35, SHOW.z + d), look: new THREE.Vector3(SHOW.x - 0.3 * d, ly, SHOW.z) };
+    VIEWS.show = { pos: new THREE.Vector3(SHOW.x - place * d, ly + 0.35, SHOW.z + d), look: new THREE.Vector3(SHOW.x - place * d, ly, SHOW.z) };
     this.showRim.color.setHex(killer ? (KILLERS[char].color ?? 0xff3020) : 0x5a8aff);
   }
 

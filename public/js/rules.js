@@ -144,7 +144,7 @@ export function actionTime(k, p, S) {
     case 'kick': return RULES.kickTime * (has(p, 'brute') ? 0.65 : 1);
     case 'break': return RULES.breakTime * (has(p, 'brute') ? 0.65 : 1);
     case 'rescue': return RULES.rescueTime * (has(p, 'lockpick') ? 0.5 : 1) * (S && anyKillerHas(S, 'rust') ? 2 : 1);
-    case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1) * (modeOf(S) === 'rush' ? 0.5 : 1);
+    case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1) * (has(p, 'pathfinder') ? 0.6 : 1) * (modeOf(S) === 'rush' ? 0.5 : 1);
     default: return 0;
   }
 }

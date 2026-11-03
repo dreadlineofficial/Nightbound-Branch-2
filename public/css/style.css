@@ -517,3 +517,51 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .lore-card p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.55; color: #d6cdc0; }
 .lore-card i { font-style: normal; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: #a89c8c; }
 .lore-card[open] i { display: none; }
+
+/* ---------- Loadout (DbD-style): panel on the left, the character standing on the right ---------- */
+.panel.loadout { right: auto; left: 0; width: min(760px, 58vw); background: #0b090c; border-right: 1px solid var(--line); border-left: 0; box-shadow: 18px 0 40px rgba(0,0,0,.6); }
+.lo2-inv-t .ico, .lo2-detail .row .ico, .lo2-detail .ch-price .ico { width: 15px; height: 15px; vertical-align: -2px; }
+.lo2-detail .ch-price { font-size: 20px; }
+.lo2 { display: flex; flex-direction: column; gap: 14px; }
+.lo2-chars { display: flex; flex-wrap: wrap; gap: 8px; }
+.lo2-por { position: relative; width: 78px; height: 96px; padding: 0; border: 1px solid var(--line); background: #120e10; cursor: pointer; overflow: hidden; transition: .15s; }
+.lo2-por img { width: 100%; height: 78px; object-fit: cover; display: block; }
+.lo2-por span { position: absolute; left: 0; right: 0; bottom: 2px; font-family: var(--cond); font-size: 11px; letter-spacing: .04em; color: var(--bone); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; }
+.lo2-por.on { border-color: var(--red2); box-shadow: 0 0 0 1px var(--red2), 0 0 18px rgba(179,32,30,.35); }
+.lo2-por:hover { border-color: rgba(233,224,208,.4); }
+.lo2-por.locked img { filter: grayscale(1) brightness(.45); }
+.lo2-por .lock { position: absolute; top: 4px; right: 4px; font-style: normal; font-size: 10px; background: var(--red); color: #fff; padding: 1px 4px; }
+.lo2-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.lo2-head b { font-family: var(--display); font-weight: 400; font-size: 30px; letter-spacing: .04em; color: var(--bone); }
+.lo2-head span { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+.lo2-head span .ico { width: 18px; height: 18px; }
+.lo2-row { display: flex; align-items: center; gap: 18px; }
+.lo2-lbl { width: 64px; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--dim); }
+.lo2-slots { display: flex; gap: 10px; }
+.slot-d, .inv-d { position: relative; background: none; border: 0; padding: 4px; cursor: pointer; }
+.slot-d .diamond { width: 52px; height: 52px; background: rgba(0,0,0,.4); border: 1px dashed rgba(233,224,208,.25); }
+.slot-d.full .diamond { background: linear-gradient(135deg, #5a3a8a, #1e1230); border: 2px solid #b48aff; box-shadow: 0 0 16px rgba(160,110,255,.35); }
+.slot-d.full .diamond.k { background: linear-gradient(135deg, #7a1a18, #200a0a); border-color: #e04a3a; box-shadow: 0 0 16px rgba(224,74,58,.35); }
+.lo2-inv-t { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); border-top: 1px solid var(--line); padding-top: 10px; }
+.lo2-inv-t span:last-child { letter-spacing: .06em; }
+.lo2-inv { display: grid; grid-template-columns: repeat(auto-fill, 64px); gap: 6px 8px; }
+.inv-d .diamond { width: 44px; height: 44px; background: linear-gradient(135deg, #4a2e78, #180e28); border-color: #8a64c8; transition: .15s; }
+.inv-d .diamond.k { background: linear-gradient(135deg, #5a1a18, #200a0a); border-color: #b33a30; }
+.inv-d .diamond.ex { background: linear-gradient(135deg, #7a5a1a, #2a1a08); border-color: #e8c060; }
+.inv-d:hover .diamond { transform: rotate(45deg) scale(1.08); }
+.inv-d.sel .diamond { box-shadow: 0 0 0 2px #fff, 0 0 18px rgba(255,255,255,.35); }
+.inv-d.eq::after { content: '✓'; position: absolute; top: 0; right: 4px; font-size: 13px; color: #9aff9a; text-shadow: 0 0 4px #000; }
+.inv-d.locked .diamond { filter: grayscale(.85) brightness(.5); }
+.inv-d.other { opacity: .45; }
+.inv-d .pr { position: absolute; left: 0; right: 0; bottom: -2px; font-style: normal; font-size: 10.5px; color: var(--gold); text-align: center; text-shadow: 0 1px 3px #000; }
+.lo2-detail { display: flex; gap: 16px; align-items: flex-start; padding: 12px 14px; background: rgba(0,0,0,.35); border: 1px solid var(--line); min-height: 96px; }
+.lo2-detail > .diamond { width: 52px; height: 52px; margin: 10px; background: linear-gradient(135deg, #5a3a8a, #1e1230); border-color: #b48aff; }
+.lo2-detail > .diamond.k { background: linear-gradient(135deg, #7a1a18, #200a0a); border-color: #e04a3a; }
+.lo2-detail > .diamond.ex { background: linear-gradient(135deg, #7a5a1a, #2a1a08); border-color: #e8c060; }
+.lo2-detail b { display: block; font-family: var(--cond); font-weight: 600; font-size: 20px; letter-spacing: .04em; color: var(--bone); }
+.lo2-detail em { display: inline-block; font-style: normal; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #e8c060; margin-bottom: 2px; }
+.lo2-detail small { display: block; color: #cfc6b8; font-size: 13.5px; line-height: 1.45; margin: 2px 0 8px; }
+.lo2-detail .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lo2-detail .pd-note { font-size: 12.5px; color: #e8c060; }
+.diamond.ex { background: linear-gradient(135deg, #7a5a1a, #2a1a08); border-color: #e8c060; }
+@media (max-width: 760px) { .panel.loadout { width: 100vw; } }

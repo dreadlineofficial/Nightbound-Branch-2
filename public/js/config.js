@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 9;
+export const NET_PROTOCOL = 10;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -142,6 +142,13 @@ export const SURV_PERKS = {
   acrobat:  { name: 'Acrobat',      icon: '⤴', desc: 'Vault windows and barricades 30% faster.' },
   resolve:  { name: 'Resolve',      icon: '♥', desc: 'Struggle free from the killer 40% faster. Bleed out 50% slower and crawl 30% faster.' },
   fleet:    { name: 'Fleet Foot',   icon: '»', desc: 'While injured, run 7% faster. Your post-hit speed burst lasts 50% longer.' },
+  // character-exclusive perks: only that survivor can equip them
+  triage:      { name: 'Triage',      only: 'mara',     desc: 'Help a dying survivor back up twice as fast.' },
+  overclock:   { name: 'Overclock',   only: 'eli',      desc: 'When a generator you are repairing is finished, the nearest unfinished generator jumps ahead by 10%.' },
+  exposure:    { name: 'Exposure',    only: 'june',     desc: 'Blinding the killer with your flashlight reveals the killer\'s aura to every survivor for 6 seconds.' },
+  pathfinder:  { name: 'Pathfinder',  only: 'tomas',    desc: 'You always see the exit gates\' auras, and open them 40% faster.' },
+  containment: { name: 'Containment', only: 'raghuvir', desc: 'Carry one extra Ghost Trap. Your traps stun the killer for 4 seconds instead of 2.6.' },
+  exorcist:    { name: 'Exorcist',    only: 'abeer',    desc: 'You cannot be possessed. A survivor body Chucky has possessed shows up to you in purple within 20m.' },
 };
 
 export const KILLER_PERKS = {
@@ -158,6 +165,13 @@ export const KILLER_PERKS = {
   stalker:    { name: 'Stalker',       icon: '◐', desc: 'Terror radius -14m. Your lunge reaches 20% farther.' },
 };
 
+// perk prices in Embers (perks not listed are free); exclusive perks cost 2,500
+export const PERK_PRICES = {
+  medic: 1500, hushed: 1500, sixth: 2000, lockpick: 1500, acrobat: 1500, resolve: 2000, fleet: 2000,
+  triage: 2500, overclock: 2500, exposure: 2500, pathfinder: 2500, containment: 2500, exorcist: 2500,
+  static: 1500, dread: 1500, brute: 1500, rust: 2000, sentry: 2000, fury: 1500, irongrip: 2000, stalker: 2500,
+};
+export const PERK_SLOTS = 4;
 export const DEFAULT_SURV_PERKS = ['steady', 'shared', 'lastwind'];
 export const DEFAULT_KILLER_PERKS = ['scent', 'overload', 'relentless'];
 
@@ -343,8 +357,18 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.15.3';
+export const VERSION = '2.16.0';
 export const INBOX = [
+  {
+    id: 'v2.16', version: '2.16.0', date: 'Nov 2026', title: 'Perk Shop & New Loadout', tag: 'Update',
+    gift: { embers: 3000, label: 'Gift: 3,000 Embers' },
+    body: [
+      'A new Loadout screen: pick your character from the portrait row, your four equipped perks sit in diamond slots, and every perk is in the inventory grid below. Your character stands on the right.',
+      'Four perk slots instead of three.',
+      'Perks are now bought with Embers (1,500 to 2,500). The default perks are free, and anything you already had equipped stays yours.',
+      'Six new survivor-exclusive perks: Triage (Mara), Overclock (Eli), Exposure (June), Pathfinder (Tomas), Containment (Raghuvir) and Exorcist (Abeer, who cannot be possessed).',
+    ],
+  },
   {
     id: 'v2.15.3', version: '2.15.3', date: 'Nov 2026', title: 'Store Showroom', tag: 'Update',
     body: [

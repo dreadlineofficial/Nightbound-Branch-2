@@ -14,7 +14,7 @@ import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound } from './audio.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
 
 window.__nbBooted = true;
@@ -56,6 +56,13 @@ if (!KILLERS[profile.killer.char]) profile.killer.char = 'butcher';
 // drop perks that no longer exist (Death Warrant was removed in 2.4)
 profile.killer.perks = (profile.killer.perks || []).filter(k => KILLER_PERKS[k]);
 profile.survivor.perks = (profile.survivor.perks || []).filter(k => SURV_PERKS[k]);
+// perks are bought with Embers; defaults are free, and anything already equipped stays owned
+profile.perksOwned ||= {};
+for (const k of [...profile.survivor.perks, ...profile.killer.perks]) profile.perksOwned[k] = true;
+const perkPrice = k => PERK_PRICES[k] || 0;
+const ownsPerk = k => !perkPrice(k) || !!profile.perksOwned[k];
+const perkFits = (k, char) => !SURV_PERKS[k] || !SURV_PERKS[k].only || SURV_PERKS[k].only === char;
+const charName0 = id => (KILLERS[id] || SURVIVORS[id] || {}).name || id;
 const saveSettings = () => store.set('settings', settings);
 const saveProfile = () => store.set('profile', profile);
 saveSettings();
@@ -148,7 +155,8 @@ let openSection = null;
 function openPanel(id, title, wide = false) {
   for (const p of SECTIONS) $(p).classList.toggle('hidden', p !== id);
   $('panel').classList.remove('hidden');
-  $('panel').classList.toggle('wide', wide);
+  $('panel').classList.toggle('wide', wide && id !== 'p-loadout');
+  $('panel').classList.toggle('loadout', id === 'p-loadout');
   $('panel-title').textContent = title;
   $('menu').classList.add('panel-open');
   $('menu').classList.remove('hidden');
@@ -164,6 +172,8 @@ function closePanel() {
   if (openSection === 'p-lobby' && lobby) { leaveOnline(); return; }
   $('panel').classList.add('hidden');
   $('menu').classList.remove('panel-open');
+  if (openSection === 'p-loadout' && menu) { menu.setMode(menuMode); menu.showFor = null; }
+  $('panel').classList.remove('loadout');
   openSection = null;
   if (menu) menu.setShift(false);
   for (const b of $('mainnav').children) b.classList.remove('on');
@@ -209,37 +219,84 @@ function setSeg(id, v) { for (const x of $(id).children) x.classList.toggle('on'
 
 // ---------- loadout ----------
 let loTab = 'survivor';
-seg('lo-tab', v => { loTab = v; setScene(v); renderLoadout($('lo-body'), loTab, false); });
+seg('lo-tab', v => { loTab = v; menuMode = v; loSel = null; renderLoadout($('lo-body'), loTab, false); });
 // a character's story: the title and the first paragraph, the rest behind "Read more"
 function loreHTML(id, open = false) {
   const L = LORE[id]; if (!L) return '';
   const name = (KILLERS[id] || SURVIVORS[id] || {}).name || '';
   return `<details class="lore-card" ${open ? 'open' : ''}><summary><span class="lore-k">Lore · ${esc(name)}</span><b>${esc(L.title)}</b><p>${esc(L.story[0])}</p><i>Read more</i></summary>${L.story.slice(1).map(x => `<p>${esc(x)}</p>`).join('')}</details>`;
 }
+let loSel = null; // perk selected on the full Loadout screen
 function renderLoadout(container, role, compact, onChange) {
   const defs = role === 'killer' ? KILLERS : SURVIVORS;
   const perks = role === 'killer' ? KILLER_PERKS : SURV_PERKS;
   const lo = profile[role];
-  const color = c => '#' + (c.shirt ?? c.color).toString(16).padStart(6, '0');
-  container.innerHTML = `<div class="lo-sub"><span>${role === 'killer' ? 'Killer' : 'Survivor'}</span></div>
-    <div class="chars">${Object.values(defs).map(c => `<div class="char ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" style="--c:${color(c)}"><b>${esc(c.name)}${ownsChar(c.id) ? '' : ' <span class="newtag">DLC</span>'}</b>${c.lore ? `<small>${esc(c.lore)}</small>` : !compact ? `<small>${esc(BIOS[c.id] || '')}</small>` : ''}${c.ability ? `<div class="ab">${icon(POWER_ICON[c.id])}${esc(c.ability.name)}</div>${!compact ? `<div class="ft">${esc(c.ability.desc)}</div><div class="ab">${icon('shadowstep')}${esc(c.feature.name)}</div><div class="ft">${esc(c.feature.desc)}</div><div class="ab">${icon('exec')}${esc(c.exec.name)}</div><div class="ft">${esc(c.exec.desc)}</div>` : ''}` : ''}</div>`).join('')}</div>
-${!compact && LORE[lo.char] ? loreHTML(lo.char) : ''}
-${role === 'survivor' ? `<div class="lo-sub"><span>Item</span><span>pick one to carry</span></div><div class="seg lo-item"><button data-item="flashlight" class="${lo.item !== 'trap' ? 'on' : ''}">Flashlight</button><button data-item="trap" class="${lo.item === 'trap' ? 'on' : ''}">Ghost Trap</button></div>` : ''}
-    <div class="lo-sub"><span>Perks</span><span>${lo.perks.length} / 3 equipped</span></div>
-    <div class="perkgrid">${Object.entries(perks).map(([k, p]) => `<div class="pk ${lo.perks.includes(k) ? 'on' : ''}" data-p="${k}"><div class="diamond ${role === 'killer' ? 'k' : ''}">${icon(k)}</div><div><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></div></div>`).join('')}</div>`;
-  container.querySelectorAll('.char').forEach(el => el.onclick = () => {
+  // drop perks this character can't use (an exclusive perk after switching survivor)
+  lo.perks = lo.perks.filter(k => perks[k] && perkFits(k, lo.char) && ownsPerk(k)).slice(0, PERK_SLOTS);
+  const rerender = () => { renderLoadout(container, role, compact, onChange); onChange && onChange(); };
+  const toggle = k => {
+    if (!ownsPerk(k) || !perkFits(k, lo.char)) return;
+    const i = lo.perks.indexOf(k);
+    if (i >= 0) lo.perks.splice(i, 1); else { if (lo.perks.length >= PERK_SLOTS) lo.perks.shift(); lo.perks.push(k); }
+    saveProfile(); sound.play('click');
+  };
+  if (compact) {
+    // lobby / bot setup: just the perks you own and can use
+    const color = c => '#' + (c.shirt ?? c.color).toString(16).padStart(6, '0');
+    const usable = Object.entries(perks).filter(([k]) => ownsPerk(k) && perkFits(k, lo.char));
+    container.innerHTML = `<div class="lo-sub"><span>${role === 'killer' ? 'Killer' : 'Survivor'}</span></div>
+      <div class="chars">${Object.values(defs).map(c => `<div class="char ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" style="--c:${color(c)}"><b>${esc(c.name)}${ownsChar(c.id) ? '' : ' <span class="newtag">DLC</span>'}</b>${c.ability ? `<div class="ab">${icon(POWER_ICON[c.id])}${esc(c.ability.name)}</div>` : ''}</div>`).join('')}</div>
+      ${role === 'survivor' ? `<div class="lo-sub"><span>Item</span></div><div class="seg lo-item"><button data-item="flashlight" class="${lo.item !== 'trap' ? 'on' : ''}">Flashlight</button><button data-item="trap" class="${lo.item === 'trap' ? 'on' : ''}">Ghost Trap</button></div>` : ''}
+      <div class="lo-sub"><span>Perks</span><span>${lo.perks.length} / ${PERK_SLOTS} · buy more in Loadout</span></div>
+      <div class="perkgrid">${usable.map(([k, p]) => `<div class="pk ${lo.perks.includes(k) ? 'on' : ''}" data-p="${k}"><div class="diamond ${role === 'killer' ? 'k' : ''} ${p.only ? 'ex' : ''}">${icon(k)}</div><div><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></div></div>`).join('')}</div>`;
+    container.querySelectorAll('.pk').forEach(el => el.onclick = () => { toggle(el.dataset.p); rerender(); });
+  } else {
+    // full Loadout: character row, equipped slots, the perk inventory and the selected perk;
+    // the character stands in the showroom on the right
+    if (!loSel || !perks[loSel]) loSel = lo.perks[0] || Object.keys(perks)[0];
+    const list = Object.entries(perks).sort(([a, x], [b, y]) => (x.only === lo.char ? -1 : 0) - (y.only === lo.char ? -1 : 0) || (ownsPerk(b) - ownsPerk(a)) || (!!x.only - !!y.only));
+    const P = perks[loSel], own = ownsPerk(loSel), fits = perkFits(loSel, lo.char), eq = lo.perks.includes(loSel);
+    const act = !fits ? `<span class="pd-note">Only ${esc(charName0(P.only))} can use this perk${own ? '' : ` · ${price(perkPrice(loSel))}`}</span>${!own ? `<button class="btn" data-buyperk="${loSel}">Buy</button>` : ''}`
+      : !own ? `<span class="ch-price">${price(perkPrice(loSel))}</span><button class="btn primary" data-buyperk="${loSel}">Buy perk</button>`
+      : `<button class="btn ${eq ? '' : 'primary'}" data-eqperk="${loSel}">${eq ? 'Unequip' : 'Equip'}</button>`;
+    const slots = Array.from({ length: PERK_SLOTS }, (_, i) => { const k = lo.perks[i]; return `<button class="slot-d ${k ? 'full' : ''}" ${k ? `data-slot="${k}"` : ''} title="${k ? esc(perks[k].name) : 'Empty slot'}"><span class="diamond ${role === 'killer' ? 'k' : ''} ${k && perks[k].only ? 'ex' : ''}">${k ? icon(k) : ''}</span></button>`; }).join('');
+    const grid = list.map(([k, p]) => {
+      const o = ownsPerk(k), f = perkFits(k, lo.char);
+      return `<button class="inv-d ${lo.perks.includes(k) ? 'eq' : ''} ${o ? '' : 'locked'} ${f ? '' : 'other'} ${k === loSel ? 'sel' : ''}" data-perk="${k}" title="${esc(p.name)}"><span class="diamond ${role === 'killer' ? 'k' : ''} ${p.only ? 'ex' : ''}">${icon(k)}</span>${!o ? `<i class="pr">${(perkPrice(k) / 1000).toFixed(1).replace('.0', '')}k</i>` : ''}</button>`;
+    }).join('');
+    container.innerHTML = `<div class="lo2">
+      <div class="lo2-chars">${Object.values(defs).map(c => `<button class="lo2-por ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" title="${esc(c.name)}"><img alt="" src="${art('portrait', c.id, skinId(c.id), 120, 120)}"><span>${esc(c.name.replace(/^The /, ''))}</span>${ownsChar(c.id) ? '' : '<i class="lock">DLC</i>'}</button>`).join('')}</div>
+      <div class="lo2-head"><b>${esc(charName0(lo.char))}</b>${role === 'killer' && defs[lo.char] ? `<span>${icon(POWER_ICON[lo.char])}${esc(defs[lo.char].ability.name)}</span>` : ''}</div>
+      ${role === 'survivor' ? `<div class="lo2-row"><span class="lo2-lbl">Item</span><div class="seg lo-item"><button data-item="flashlight" class="${lo.item !== 'trap' ? 'on' : ''}">Flashlight</button><button data-item="trap" class="${lo.item === 'trap' ? 'on' : ''}">Ghost Trap</button></div></div>` : ''}
+      <div class="lo2-row"><span class="lo2-lbl">Perks</span><div class="lo2-slots">${slots}</div></div>
+      <div class="lo2-inv-t"><span>Inventory · Perks</span><span>${Object.keys(perks).filter(ownsPerk).length} / ${Object.keys(perks).length} owned · ${price(profile.stats.embers)}</span></div>
+      <div class="lo2-inv">${grid}</div>
+      <div class="lo2-detail"><span class="diamond ${role === 'killer' ? 'k' : ''} ${P.only ? 'ex' : ''}">${icon(loSel)}</span><div><b>${esc(P.name)}</b>${P.only ? `<em>${esc(charName0(P.only))} only</em>` : ''}<small>${esc(P.desc)}</small><div class="row">${act}</div></div></div>
+      ${LORE[lo.char] ? loreHTML(lo.char) : ''}
+    </div>`;
+    container.querySelectorAll('.inv-d').forEach(el => {
+      el.onclick = () => { loSel = el.dataset.perk; sound.play('hover'); rerender(); };
+      el.ondblclick = () => { toggle(el.dataset.perk); rerender(); };
+    });
+    container.querySelectorAll('[data-slot]').forEach(el => el.onclick = () => { loSel = el.dataset.slot; toggle(el.dataset.slot); rerender(); });
+    container.querySelectorAll('[data-eqperk]').forEach(el => el.onclick = () => { toggle(el.dataset.eqperk); rerender(); });
+    container.querySelectorAll('[data-buyperk]').forEach(el => el.onclick = () => {
+      const k = el.dataset.buyperk;
+      if (ownsPerk(k) || !spend(perkPrice(k), perks[k].name)) return;
+      profile.perksOwned[k] = true;
+      if (perkFits(k, lo.char) && lo.perks.length < PERK_SLOTS) lo.perks.push(k);
+      saveProfile(); rerender();
+    });
+    if (menu) { menu.setShowcase(lo.char, skinId(lo.char), 0.42); menu.setMode('show'); }
+  }
+  container.querySelectorAll('.char, .lo2-por').forEach(el => el.onclick = () => {
     if (!ownsChar(el.dataset.c)) { sound.play('click'); openStore('chapters'); return; }
     lo.char = el.dataset.c; saveProfile(); sound.play('click');
     if (menu) { if (role === 'killer') menu.setKiller(lo.char, skinId(lo.char)); else menu.setSurvivor(lo.char, skinId(lo.char)); }
-    setScene(role);
-    renderLoadout(container, role, compact, onChange); onChange && onChange();
+    if (compact) setScene(role);
+    rerender();
   });
-  container.querySelectorAll('[data-item]').forEach(el => el.onclick = () => { lo.item = el.dataset.item; saveProfile(); sound.play('click'); renderLoadout(container, role, compact, onChange); onChange && onChange(); });
-  container.querySelectorAll('.pk').forEach(el => el.onclick = () => {
-    const k = el.dataset.p, i = lo.perks.indexOf(k);
-    if (i >= 0) lo.perks.splice(i, 1); else { if (lo.perks.length >= 3) lo.perks.shift(); lo.perks.push(k); }
-    saveProfile(); sound.play('click'); renderLoadout(container, role, compact, onChange); onChange && onChange();
-  });
+  container.querySelectorAll('[data-item]').forEach(el => el.onclick = () => { lo.item = el.dataset.item; saveProfile(); sound.play('click'); rerender(); });
 }
 
 // ---------- settings ----------
@@ -457,7 +514,7 @@ function renderBotsPanel() {
   $('bots-survivors-row').classList.toggle('hidden', !k || duo);
   renderLoadout($('bots-loadout'), botsCfg.role, true);
 }
-const randomPerks = (pool, n = 3) => Object.keys(pool).sort(() => Math.random() - 0.5).slice(0, n);
+const randomPerks = (pool, n = PERK_SLOTS, char) => Object.keys(pool).filter(k => perkFits(k, char)).sort(() => Math.random() - 0.5).slice(0, n);
 function botSurvivor(i, used) {
   const free = Object.keys(SURVIVORS).filter(c => !used.includes(c));
   const char = free.length ? free[Math.floor(Math.random() * free.length)] : Object.keys(SURVIVORS)[i % 4];
@@ -468,7 +525,7 @@ function botSurvivor(i, used) {
   const nm = pool[Math.floor(Math.random() * pool.length)] || 'Bot ' + i;
   used.names.push(nm);
   const sk = SKINS[char]; const skin = Math.random() < 0.5 ? 'default' : sk[1 + Math.floor(Math.random() * (sk.length - 1))].id;
-  return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS), item, bot: true };
+  return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS, PERK_SLOTS, char), item, bot: true };
 }
 function botKiller(char, n = 0, avoid = []) {
   const ks = Object.keys(KILLERS).filter(k => !avoid.includes(k));
@@ -737,7 +794,8 @@ $('btn-host').addEventListener('click', async () => {
 
 function sanitizeLoadout(role, char, perks) {
   const defs = role === 'killer' ? KILLERS : SURVIVORS, pool = role === 'killer' ? KILLER_PERKS : SURV_PERKS;
-  return { char: defs[char] ? char : Object.keys(defs)[0], perks: (Array.isArray(perks) ? perks : []).filter(k => pool[k]).slice(0, 3) };
+  const c = defs[char] ? char : Object.keys(defs)[0];
+  return { char: c, perks: (Array.isArray(perks) ? perks : []).filter(k => pool[k] && perkFits(k, c)).slice(0, PERK_SLOTS) };
 }
 function cleanSkin(char, skin) { return (SKINS[char] || []).some(s => s.id === skin) ? skin : 'default';
 }

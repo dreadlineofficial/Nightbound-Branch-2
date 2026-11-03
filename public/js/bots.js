@@ -502,7 +502,7 @@ export class Bots {
     if (downed && sim.possessionOn && p.char === 'chucky' && !p.disguise && p.possCd <= 0 && dd < 2 && !sim.possession) {
       b.possPlan ||= {}; const key = downed.id + ':' + downed.stage;
       b.possPlan[key] ??= Math.random() < 0.6;
-      if (b.possPlan[key] && S.players.filter(o => o.role === 'survivor' && o.st === 'ok').length >= 2) { sim.onMsg(p.id, { t: 'act', a: 'possess' }); return; }
+      if (b.possPlan[key] && !(downed.perks || []).includes('exorcist') && S.players.filter(o => o.role === 'survivor' && o.st === 'ok').length >= 2) { sim.onMsg(p.id, { t: 'act', a: 'possess' }); return; }
     }
     if (downed && (!target || dd < 18 || dist(p, target) > 6)) {
       b.target = null;

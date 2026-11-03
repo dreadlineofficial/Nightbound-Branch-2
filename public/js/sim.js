@@ -1,5 +1,5 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
-import { RULES, KILLERS, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL } from './config.js';
+import { RULES, KILLERS, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS } from './config.js';
 import { barBox, losBlocked, moveCircle, findPath } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute,
@@ -60,7 +60,7 @@ export class Sim {
     const M = this.M;
     {
       return ({
-        id: r.id, name: r.name, role: r.role, char: r.char, skin: typeof r.skin === 'string' ? r.skin.slice(0, 24) : 'default', perks: (r.perks || []).slice(0, 3), bot: !!r.bot,
+        id: r.id, name: r.name, role: r.role, char: r.char, skin: typeof r.skin === 'string' ? r.skin.slice(0, 24) : 'default', perks: (r.perks || []).filter(k => !SURV_PERKS[k] || !SURV_PERKS[k].only || SURV_PERKS[k].only === r.char).slice(0, PERK_SLOTS), bot: !!r.bot,
         x: sp.x, z: sp.z, yaw: r.role === 'killer' ? M.spawns.killerYaw : M.spawns.survivorYaw, pitch: 0, mv: 0, cr: 0, tp: 0,
         st: 'ok', hp: 2, act: null, prog: 0, healP: 0, bleed: 0, cage: -1, stage: 0, cageT: 0, cageMax: 1, esc: 0,
         wig: 0, boost: 0, boostMul: SPEED.hitBoost, vault: null,
@@ -69,7 +69,7 @@ export class Sim {
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
         ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0,
+        item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
       });
@@ -227,7 +227,7 @@ export class Sim {
         if (p.role !== 'killer' || p.char !== 'chucky' || p.harmless || p.possCd > 0 || this.possession || this.mode === 'infection') return;
         if (p.stun > 0 || p.act || p.carry != null || p.leap || p.atk) return;
         let X = null, bd = 2.2;
-        for (const s of S.players) if (s.role === 'survivor' && s.st === 'down' && !(s.turn > 0)) { const d = dist(p, s); if (d < bd) { bd = d; X = s; } }
+        for (const s of S.players) if (s.role === 'survivor' && s.st === 'down' && !(s.turn > 0) && !has(s, 'exorcist')) { const d = dist(p, s); if (d < bd) { bd = d; X = s; } }
         if (X) this.possess(p, X);
         break;
       }
@@ -460,6 +460,7 @@ export class Sim {
       if (p.haste > 0) p.haste = Math.max(0, p.haste - dt);
       if (p.card > 0) { p.card = Math.max(0, p.card - dt); if (p.mv === 2) p.reveal = Math.max(p.reveal, 0.4); }
       if (p.possCd > 0) p.possCd = Math.max(0, p.possCd - dt);
+      if (p.exposed > 0) p.exposed = Math.max(0, p.exposed - dt);
       if (p.mark > 0) p.mark = Math.max(0, p.mark - dt);
       if (p.char === 'butcher' && p.role === 'killer' && p.charges < KILLERS.butcher.ability.charges) { p.chargeT += dt; if (p.chargeT >= KILLERS.butcher.ability.cooldown) { p.chargeT = 0; p.charges++; } }
       if (p.char === 'harrower' && p.role === 'killer' && p.ammo < KILLERS.harrower.ability.ammo) { p.ammoT += dt; if (p.ammoT >= KILLERS.harrower.ability.reload) { p.ammoT = 0; p.ammo++; } }
@@ -474,7 +475,7 @@ export class Sim {
     this.updateFlashlights(Ks, dt);
     for (const K of Ks) if (S.traps.length && !K.vault && !K.disguise && !(K.act && K.act.k === 'execute')) {
       const hit = S.traps.find(t => Math.hypot(t.x - K.x, t.z - K.z) < 0.85);
-      if (hit) { S.traps = S.traps.filter(t => t !== hit); this.stunKiller(K, 2.6, false); const by = this.P(hit.by); if (by) by.score.d += 500; this.ev({ k: 'trapped', id: K.id, by: hit.by, x: hit.x, z: hit.z }); }
+      if (hit) { S.traps = S.traps.filter(t => t !== hit); const by = this.P(hit.by); this.stunKiller(K, by && has(by, 'containment') ? 4 : 2.6, false); if (by) by.score.d += 500; this.ev({ k: 'trapped', id: K.id, by: hit.by, x: hit.x, z: hit.z }); }
     }
 
     // ---- killer attack / abilities ----
@@ -652,6 +653,7 @@ export class Sim {
         K.glare = 0; K.blind = RULES.blindTime; K.blindImm = RULES.blindImmune;
         this.stunKiller(K, RULES.flashStun, false);
         lit.score.d += save ? 700 : 350;
+        if (has(lit, 'exposure')) { K.exposed = 6; this.ev({ k: 'exposed', id: K.id, by: lit.id }); }
         this.ev({ k: 'blind', id: K.id, by: lit.id, save });
       }
     } else K.glare = Math.max(0, K.glare - dt * 1.5);
@@ -814,11 +816,14 @@ export class Sim {
     g.p = 1; g.done = true; g.reg = false;
     S.gensDone++;
     const sentry = anyKillerHas(S, 'sentry');
+    const boost = S.players.some(p => p.act && p.act.k === 'repair' && p.act.id === i && has(p, 'overclock'));
     for (const p of S.players) if (p.act && p.act.k === 'repair' && p.act.id === i) {
       p.act = null; p.prog = 0; p.score.a += 300;
       if (sentry) p.reveal = 6;
       this.inputs.get(p.id).latch = true;
     }
+    // Overclock: the nearest unfinished generator jumps ahead
+    if (boost) { let best = null, bd = 1e9; for (const g of M.gens) if (!S.gens[g.id].done && g.id !== i) { const d = Math.hypot(g.x - M.gens[i].x, g.z - M.gens[i].z); if (d < bd) { bd = d; best = g; } } if (best) { S.gens[best.id].p = Math.min(0.99, S.gens[best.id].p + 0.1); this.ev({ k: 'overclock', id: best.id, x: best.x, z: best.z }); } }
     this.ev({ k: 'gen', id: i, x: M.gens[i].x, z: M.gens[i].z, left: Math.max(0, S.gensNeeded - S.gensDone) });
     if (S.gensDone >= S.gensNeeded && !S.gatesPowered) {
       S.gatesPowered = true;
@@ -883,6 +888,7 @@ export class Sim {
         if (!t) { this.cancelAct(p); return; }
         let rate = 1 / RULES.healTime;
         if (has(p, 'medic')) rate *= a.k === 'self' ? 0.5 : 1.3;
+        if (has(p, 'triage') && t.st === 'down') rate *= 2;
         else if (a.k === 'self') rate *= 0.5;
         t.healP += rate * dt;
         p.prog = t.healP;
