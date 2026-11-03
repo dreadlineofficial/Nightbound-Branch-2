@@ -14,7 +14,7 @@ import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound } from './audio.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
 
 window.__nbBooted = true;
@@ -210,6 +210,12 @@ function setSeg(id, v) { for (const x of $(id).children) x.classList.toggle('on'
 // ---------- loadout ----------
 let loTab = 'survivor';
 seg('lo-tab', v => { loTab = v; setScene(v); renderLoadout($('lo-body'), loTab, false); });
+// a character's story: the title and the first paragraph, the rest behind "Read more"
+function loreHTML(id, open = false) {
+  const L = LORE[id]; if (!L) return '';
+  const name = (KILLERS[id] || SURVIVORS[id] || {}).name || '';
+  return `<details class="lore-card" ${open ? 'open' : ''}><summary><span class="lore-k">Lore · ${esc(name)}</span><b>${esc(L.title)}</b><p>${esc(L.story[0])}</p><i>Read more</i></summary>${L.story.slice(1).map(x => `<p>${esc(x)}</p>`).join('')}</details>`;
+}
 function renderLoadout(container, role, compact, onChange) {
   const defs = role === 'killer' ? KILLERS : SURVIVORS;
   const perks = role === 'killer' ? KILLER_PERKS : SURV_PERKS;
@@ -217,6 +223,7 @@ function renderLoadout(container, role, compact, onChange) {
   const color = c => '#' + (c.shirt ?? c.color).toString(16).padStart(6, '0');
   container.innerHTML = `<div class="lo-sub"><span>${role === 'killer' ? 'Killer' : 'Survivor'}</span></div>
     <div class="chars">${Object.values(defs).map(c => `<div class="char ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" style="--c:${color(c)}"><b>${esc(c.name)}${ownsChar(c.id) ? '' : ' <span class="newtag">DLC</span>'}</b>${c.lore ? `<small>${esc(c.lore)}</small>` : !compact ? `<small>${esc(BIOS[c.id] || '')}</small>` : ''}${c.ability ? `<div class="ab">${icon(POWER_ICON[c.id])}${esc(c.ability.name)}</div>${!compact ? `<div class="ft">${esc(c.ability.desc)}</div><div class="ab">${icon('shadowstep')}${esc(c.feature.name)}</div><div class="ft">${esc(c.feature.desc)}</div><div class="ab">${icon('exec')}${esc(c.exec.name)}</div><div class="ft">${esc(c.exec.desc)}</div>` : ''}` : ''}</div>`).join('')}</div>
+${!compact && LORE[lo.char] ? loreHTML(lo.char) : ''}
 ${role === 'survivor' ? `<div class="lo-sub"><span>Item</span><span>pick one to carry</span></div><div class="seg lo-item"><button data-item="flashlight" class="${lo.item !== 'trap' ? 'on' : ''}">Flashlight</button><button data-item="trap" class="${lo.item === 'trap' ? 'on' : ''}">Ghost Trap</button></div>` : ''}
     <div class="lo-sub"><span>Perks</span><span>${lo.perks.length} / 3 equipped</span></div>
     <div class="perkgrid">${Object.entries(perks).map(([k, p]) => `<div class="pk ${lo.perks.includes(k) ? 'on' : ''}" data-p="${k}"><div class="diamond ${role === 'killer' ? 'k' : ''}">${icon(k)}</div><div><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></div></div>`).join('')}</div>`;
@@ -347,6 +354,7 @@ function charactersHTML() {
   }
   return `<div class="cs-wrap"><div class="cs-roles"><button data-role="survivor" class="${storeRole === 'survivor' ? 'on' : ''}">Survivors</button><button data-role="killer" class="${storeRole === 'killer' ? 'on' : ''}">Killers</button></div>
     <div class="cs-grid">${grid}</div>
+    ${loreHTML(storeChar)}
     <div class="cs-sub"><b>${esc(charName(storeChar))}</b><span>Outfits</span></div>
     <div class="cs-outfits">${outfits}</div></div>${detail}`;
 }

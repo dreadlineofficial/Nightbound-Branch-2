@@ -169,6 +169,79 @@ export const DIFFICULTY = {
   hard:   { react: 0.25, skill: 0.96, great: 0.3, aim: 0.92, killerSpeed: 1.0, sight: 38, reach: 2.9 },
 };
 
+// ---------------- Lore (shown on the Loadout screen and in the Store) ----------------
+export const LORE = {
+  mara: { title: 'The Medic Who Stayed', story: [
+    'Mara Voss spent eleven years on an ambulance crew in a town where the night shift never ended. She learned to keep her hands steady and her voice low, and to never, ever look at the clock.',
+    'The call came in at 3:12 a.m.: a crash on the moor road, four injured. She found the car wrapped around an oak, engine still running, and nobody inside. Just a trail of red handprints leading into the fog.',
+    'She followed it. She always follows it. Somewhere out there, the Entity keeps sending her patients, and Mara keeps patching them up, knowing full well it only wants them fresh for the next hunt.',
+  ] },
+  eli: { title: 'Grease and Grit', story: [
+    'Eli Okafor could fix anything with an engine: tractors, ferries, a 1962 Cadillac nobody else would touch. His garage on the edge of Gravemoor was the last stop before the highway, and the first one back.',
+    'One winter a customer left a car with a note on the dash: Do not drive it at night. Eli drove it at night. The headlights showed him roads that were not on any map, and when the engine finally died, the generators of the Entity\'s realm were humming all around him.',
+    'He has stopped asking how they work. He just knows they want to run, and that every one he brings to life is a door creaking open somewhere.',
+  ] },
+  june: { title: 'The Last Photograph', story: [
+    'June Harlow made her name chasing stories nobody else wanted: missing hikers, ghost towns, a lake where the ice never quite froze. Her editor called her fearless. Her mother called her reckless. They were both right.',
+    'Her final assignment was a roll of film found in a hiker\'s abandoned tent. Thirty-six frames, all of the same treeline, each one a little closer. The thirty-sixth frame showed a lantern, and a hand reaching for the camera.',
+    'She went back to take the thirty-seventh. Now she keeps shooting, frame after frame, convinced that if she gets the right picture she can show the world exactly where everyone went.',
+  ] },
+  tomas: { title: 'Ranger of the Lost Trails', story: [
+    'Tomás Reyes walked the moor trails for twenty years as a park ranger. He knew every stone, every bog, every shortcut. He pulled lost hikers out of the fog more times than he could count.',
+    'Then the trails began to change. A path he had walked a thousand times went on for three days. A cabin he had built himself appeared on a hill it had never stood on. The radio only played whispers.',
+    'He is still on duty. He still counts the survivors at every campfire, still marks the safe routes in chalk. The marks are always gone by morning, but he draws them again anyway.',
+  ] },
+  raghuvir: { title: 'The Founder', story: [
+    'Started the entire Ghostbusters business. It fell into shambles, since after the Ghostbusters\' success of saving the world, nobody needed them anymore. When ghosts started re-appearing, it was too late. Raghuvir had gotten possessed.',
+    'Thankfully, Abeer was able to force the demon to un-possess him. Unfortunately, once both were united, a portal opened up, and the entity grabbed both, pulling them into the realm of Nightbound.',
+    'Somewhere, in some alternate universe, things went differently. They were saved. But the entity? It can warp reality to get what it wants.',
+  ] },
+  abeer: { title: 'The Partner', story: [
+    'Was with the Ghostbusters ever since it had started. After the business fell into shambles, and Raghuvir got possessed, he ended up un-possessing Raghuvir.',
+    'However, the entity pulled both into the realm of Nightbound.',
+  ] },
+  butcher: { title: 'The Man Who Never Clocked Out', story: [
+    'Before the fog, he was the foreman of the Gravemoor slaughterhouse: a big, quiet man who started before dawn and left after dark. The town ate well because of him, and never asked what kept the cleaver so sharp.',
+    'When the plant closed he kept coming in. He kept working. The lights were shut off and the doors were chained, and still the townsfolk heard the cleaver at night, slow and steady, like a heartbeat.',
+    'The Entity did not have to take him. It simply opened a door, and he walked through with his apron on, ready for his shift.',
+  ] },
+  wisp: { title: 'The Drowned Bride', story: [
+    'Her name was Elinor, and she was to be married on the shore of Gravemoor Lake on the first day of spring. The groom never came. She waited on the dock in her white dress until the ice gave way beneath her.',
+    'They never found her body. They found frost on the windows of every house in the village, in the shape of a hand, and they heard a woman singing under the ice.',
+    'She is still waiting for someone to come for her. When the air turns cold and your breath fogs, she has decided it is you.',
+  ] },
+  harrower: { title: 'The Collector', story: [
+    'He was the greatest hunter the old country ever produced, a man who took a trophy from every kill and hung it in a hall of bone. Kings paid him. Wolves fled him. He grew bored.',
+    'He went looking for prey worth his time and followed a white stag into the fog. The stag led him to a realm where the prey runs forever, heals forever and never stops being afraid.',
+    'He wears the antlers of the stag now. Every survivor he marks is a trophy he has not yet hung, and he is very patient.',
+  ] },
+  lamplighter: { title: 'Keeper of the Moor Road', story: [
+    'For forty years, old Silas lit the lamps along the moor road so travellers would not lose their way in the fog. He knew each lamp by name. He knew each traveller by the sound of their footsteps.',
+    'One night the lamps would not light. Silas walked the road with his pole until dawn, and dawn did not come. When the green flame finally caught, it lit a road that went somewhere else.',
+    'He still guides travellers. He simply guides them to him. Every lantern he hangs is a promise: wherever you run in the dark, he can step out of the light beside you.',
+  ] },
+  slimer: { title: 'The Hungry Ghost', story: [
+    'A fan-made crossover. A green, gluttonous spirit from the Ghostbusters\' world, once trapped and contained. When their business collapsed and the containment unit went dark, he was the first one out.',
+    'He ate his way through a hotel kitchen, then a city, then the walls between worlds, and fell straight into the Entity\'s realm. He found it full of frightened people who had never seen a ghost.',
+    'He has never been happier. The Entity feeds him, the survivors run, and somewhere out there two old Ghostbusters are still carrying proton packs. He would very much like to say hello.',
+  ] },
+  foreman: { title: 'Headcount Must Be Maintained', story: [
+    'From the OFFAL crossover chapter. The Hollow Pines Meatworks ran three shifts a day, and the Foreman made sure every one of them was full. Late workers were reassigned. Nobody was quite sure where.',
+    'The night the plant burned, every worker on the floor was counted, and the count came up short. The Foreman went back inside to find the missing ones. He never came out.',
+    'He is still on the clock, hunting by sound and by light, dragging stragglers back to the line. The quota is never met. It never will be.',
+  ] },
+  chucky: { title: 'Friends Till the End', story: [
+    'A fan-made crossover. A Good Guy doll carrying the soul of a strangler who learned a little voodoo and would not stay dead. He has been burned, shot, melted and buried, and every time he has found another body to come back in.',
+    'The Entity found him in a toy factory furnace, still laughing, and offered him a place where the playtime never ends. He said yes before it had finished asking.',
+    'Survivors underestimate him because he is small. That is exactly what he wants. He can hide in their bodies, split his soul between dolls, and he will always, always come back for one more game.',
+  ] },
+  bateman: { title: 'Mergers and Acquisitions', story: [
+    'A fan-made crossover. Vice president at Pierce & Pierce in the late eighties, with a flawless morning routine, an impeccable wardrobe, a business card with a tasteful thickness and a hobby nobody at the office believed.',
+    'The Entity did not need to warp reality to take him. It only had to show him a place where every confession is forgotten, every victim comes back, and nobody ever asks him to return the videotapes.',
+    'He treats the trials like a deal: precise, professional, and slightly bored. He would like you to know his card has a watermark.',
+  ] },
+};
+
 // ---------------- Store: skins (bought with embers) ----------------
 export const SKINS = {
   mara: [
@@ -270,8 +343,15 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.15.1';
+export const VERSION = '2.15.2';
 export const INBOX = [
+  {
+    id: 'v2.15.2', version: '2.15.2', date: 'Nov 2026', title: 'Character Lore', tag: 'Update',
+    body: [
+      'Every survivor and killer now has a backstory. Read it on the Loadout screen (tap Read more) or on each character\'s page in the Store.',
+      'Raghuvir and Abeer: how the Ghostbusters fell apart, and how the Entity pulled them both into Nightbound.',
+    ],
+  },
   {
     id: 'v2.15.1', version: '2.15.1', date: 'Nov 2026', title: 'Patrick Bateman Buff', tag: 'Balance',
     body: [
