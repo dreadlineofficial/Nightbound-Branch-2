@@ -9,7 +9,7 @@ import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } fr
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { Sidekick } from './sidekicks.js';
-import { staticReady } from './glbModels.js';
+import { staticReady, cloneStatic } from './glbModels.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat } from './models.js';
 import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
@@ -1163,7 +1163,7 @@ export class Game {
     }
   }
 
-  // ghost traps on the ground: a striped box with a glowing slot
+  // ghost traps on the ground ("HW Detail #4 GHOST TRAP" model; a striped box if it didn't load)
   updateTraps(S) {
     this.trapMeshes ||= new Map();
     const live = new Set((S.traps || []).map(t => t.id));
@@ -1171,12 +1171,16 @@ export class Game {
     for (const t of S.traps || []) {
       if (this.trapMeshes.has(t.id)) { const m = this.trapMeshes.get(t.id); m.userData.glow.material.opacity = 0.5 + Math.sin(this.t * 6) * 0.3; continue; }
       const g = new THREE.Group(); g.position.set(t.x, 0, t.z);
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.3), new THREE.MeshStandardMaterial({ color: 0x2a2c2e, metalness: 0.6, roughness: 0.4 })); body.position.y = 0.07; g.add(body);
-      for (const s of [-1, 1]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.02, 0.06), new THREE.MeshStandardMaterial({ color: 0xe0b020 })); st.position.set(0, 0.145, s * 0.1); g.add(st); }
-      const slot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.012, 0.05), new THREE.MeshBasicMaterial({ color: 0xffe080, toneMapped: false })); slot.position.y = 0.152; g.add(slot);
+      const model = cloneStatic('ghosttrap');
+      if (model) { model.rotation.y = Math.random() * Math.PI * 2; g.add(model); }
+      else {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.3), new THREE.MeshStandardMaterial({ color: 0x2a2c2e, metalness: 0.6, roughness: 0.4 })); body.position.y = 0.07; g.add(body);
+        for (const s of [-1, 1]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.02, 0.06), new THREE.MeshStandardMaterial({ color: 0xe0b020 })); st.position.set(0, 0.145, s * 0.1); g.add(st); }
+        const slot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.012, 0.05), new THREE.MeshBasicMaterial({ color: 0xffe080, toneMapped: false })); slot.position.y = 0.152; g.add(slot);
+      }
       const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.6, 4), new THREE.MeshStandardMaterial({ color: 0x111111 })); cord.rotation.z = Math.PI / 2; cord.position.set(0.5, 0.02, 0); g.add(cord);
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex ||= (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })(), color: 0xffd060, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-      glow.scale.setScalar(0.7); glow.position.y = 0.2; g.add(glow); g.userData.glow = glow;
+      glow.scale.setScalar(model ? 0.4 : 0.7); glow.position.y = model ? 0.28 : 0.2; g.add(glow); g.userData.glow = glow;
       this.scene.add(g); this.trapMeshes.set(t.id, g);
     }
   }

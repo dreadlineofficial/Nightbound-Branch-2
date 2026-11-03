@@ -9,7 +9,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const SPEC = {
   slimer: { size: 1.55, axis: 'y', origin: 'center' },
   axe: { size: 0.82, axis: 'max', origin: 'center' },
-  ghosttrap: { size: 0.42, axis: 'x', origin: 'bottom' },
+  ghosttrap: { size: 0.5, axis: 'x', origin: 'bottom' },
 };
 const tpl = {}, loading = {}, waiters = {};
 

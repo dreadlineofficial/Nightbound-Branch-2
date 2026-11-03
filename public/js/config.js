@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.18.6';
+export const VERSION = '2.18.7';
 export const INBOX = [
+  {
+    id: 'v2.18.7', version: '2.18.7', date: 'Nov 2026', title: 'The Real Ghost Trap', tag: 'Update',
+    body: ['Ghost traps set by Raghuvir and Abeer now use a detailed trap model, with the hazard stripes, side panel and foot pedal handle, still glowing so you can spot them.'],
+  },
   {
     id: 'v2.18.6', version: '2.18.6', date: 'Nov 2026', title: 'Axe Grip Fix', tag: 'Fix',
     body: ['Patrick Bateman\'s fire axe no longer floats in front of the camera: the handle now sits in his fist, in first person and third person, with the blade leading every swing.'],
