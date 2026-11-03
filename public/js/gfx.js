@@ -1,7 +1,7 @@
 // Visual style: 'realistic' (default) or 'classic' (the original look, lighter on old laptops).
 // Realistic adds: sharper, higher-resolution surface textures with stronger relief and full
 // anisotropic filtering; fabric and skin with a soft sheen; smoother character geometry;
-// image-based night-sky reflections; multisampled anti-aliasing and (High) ambient occlusion.
+// image-based night-sky reflections; multisampled anti-aliasing.
 import * as THREE from 'three';
 
 export const GFX = { style: 'realistic', aniso: 4 };
@@ -48,8 +48,8 @@ export function surface(name, base) {
   if (!realistic()) return null;
   const P = (extra) => new THREE.MeshPhysicalMaterial({ ...base, ...extra });
   switch (name) {
-    case 'skin': return P({ roughness: Math.min(base.roughness ?? 0.7, 0.62), sheen: 0.35, sheenRoughness: 0.55, sheenColor: new THREE.Color(0xff9c84) });
-    case 'cloth': case 'pinstripe': case 'canvas': return P({ sheen: 0.7, sheenRoughness: 0.75, sheenColor: new THREE.Color(base.color).lerp(new THREE.Color(0xffffff), 0.35) });
+    case 'skin': return P({ roughness: Math.min(base.roughness ?? 0.7, 0.62), sheen: 0.35, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xff9c84) });
+    case 'cloth': case 'pinstripe': case 'canvas': return P({ sheen: 0.6, sheenRoughness: 0.8, sheenColor: new THREE.Color(base.color).lerp(new THREE.Color(0xffffff), 0.35) });
     case 'leather': return P({ roughness: Math.min(base.roughness ?? 0.6, 0.5), clearcoat: 0.25, clearcoatRoughness: 0.45 });
     default: return null;
   }

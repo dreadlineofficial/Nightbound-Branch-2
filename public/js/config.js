@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.2';
+export const VERSION = '2.19.3';
 export const INBOX = [
+  {
+    id: 'v2.19.3', version: '2.19.3', date: 'Nov 2026', title: 'Black Squares Fix', tag: 'Fix',
+    body: ['Fixed big black boxes spreading across the screen while walking with the Realistic look. Ambient occlusion is off for now, and a safety pass stops any bad pixel from being smeared by the glow effect.'],
+  },
   {
     id: 'v2.19.2', version: '2.19.2', date: 'Nov 2026', title: 'Scratch Marks', tag: 'Update',
     body: ['Running survivors now leave glowing orange scratch marks behind them, scattered along their trail. Only the killer can see them, and they fade after about ten seconds.', 'Survivors: walk or crouch to stop leaving a trail.'],

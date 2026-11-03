@@ -5,7 +5,6 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
@@ -41,6 +40,15 @@ const PROTON_CORE = new THREE.ShaderMaterial({ transparent: true, depthWrite: fa
   vertexShader: BEAM_MAT.vertexShader,
   fragmentShader: `varying float vY; varying vec3 vN; varying vec3 vV; void main(){ gl_FragColor = vec4(0.7, 0.85, 1.0, (1.0 - vY * 0.5) * 0.9); }` });
 
+const SanitizeShader = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main(){ vec4 c = texture2D(tDiffuse, vUv); vec3 v = c.rgb;
+      bvec3 bad = bvec3(!(v.r == v.r) || abs(v.r) > 6e4, !(v.g == v.g) || abs(v.g) > 6e4, !(v.b == v.b) || abs(v.b) > 6e4);
+      if (any(bad)) v = vec3(0.0);
+      gl_FragColor = vec4(clamp(v, 0.0, 48.0), 1.0); }`,
+};
 const PostShader = {
   uniforms: { tDiffuse: { value: null }, time: { value: 0 }, red: { value: 0 }, desat: { value: 0 }, flash: { value: 0 }, vig: { value: 0.9 }, grain: { value: 0.01 }, pulse: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
@@ -318,13 +326,8 @@ export class Game {
       const rt = real ? new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 }) : undefined;
       this.composer = new EffectComposer(r, rt);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
-      if (real && this.settings.quality === 'high') {
-        // contact shadows where things meet: feet on the ground, folds in clothes, corners of rooms
-        this.ao = new GTAOPass(this.scene, this.camera, innerWidth, innerHeight);
-        this.ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 2, thickness: 0.6, scale: 1, samples: 12 });
-        this.ao.blendIntensity = 0.55;
-        this.composer.addPass(this.ao);
-      }
+      // guard: one bad (NaN / infinite) pixel would otherwise be smeared by bloom into growing black squares
+      this.composer.addPass(new ShaderPass(SanitizeShader));
       if (q.bloom) { this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.5, 0.8); this.composer.addPass(this.bloom); }
       this.post = new ShaderPass(PostShader); this.composer.addPass(this.post);
       this.composer.addPass(new OutputPass());
