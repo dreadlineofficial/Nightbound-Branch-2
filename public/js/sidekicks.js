@@ -156,12 +156,20 @@ export class Sidekick {
     if (!owner) { R.root.visible = false; return; }
     if (this.moodT > 0) { this.moodT -= dt; if (this.moodT <= 0) this.mood = null; }
     const dead = owner.st === 'dead', gone = owner.st === 'out' || owner.st === 'ghost';
+    // Ted sets up camp (chair, beer, bong) by a dead owner, and also while they repair a generator
+    // or sit in a cage; Rosy lies down beside them
+    const campMode = dead ? 'dead' : owner.st === 'caged' ? 'cage' : (owner.act && owner.act.k === 'repair') ? 'repair' : null;
+    if (this.campMode !== campMode) { this.campMode = campMode; this.deadAt = null; }
     R.root.visible = !gone && env.visible !== false;
     if (!this.placed) { this.x = owner.x + 1; this.z = owner.z - 0.6; this.placed = true; }
     const pose = { t: this.t };
-    if (dead) {
-      // sit by the body: Ted with a chair, a beer and his bong, Rosy lying down
-      if (!this.deadAt) this.deadAt = { x: owner.x + Math.cos(owner.yaw || 0) * 0.9, z: owner.z - Math.sin(owner.yaw || 0) * 0.9, yaw: Math.atan2(owner.x - (owner.x + Math.cos(owner.yaw || 0) * 0.9), owner.z - (owner.z - Math.sin(owner.yaw || 0) * 0.9)) };
+    if (campMode) {
+      // sit by the owner: Ted with a chair, a beer and his bong, Rosy lying down
+      if (!this.deadAt) {
+        const off = campMode === 'cage' ? 1.4 : 1.1, a = (owner.yaw || 0) + (campMode === 'repair' ? Math.PI * 0.75 : 0);
+        const x = owner.x + Math.cos(a) * off, z = owner.z - Math.sin(a) * off;
+        this.deadAt = { x, z, yaw: Math.atan2(owner.x - x, owner.z - z) };
+      }
       const D = this.deadAt;
       this.x += (D.x - this.x) * Math.min(1, dt * 3); this.z += (D.z - this.z) * Math.min(1, dt * 3); this.yaw = D.yaw;
       if (R.kind === 'ted') {

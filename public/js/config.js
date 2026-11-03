@@ -174,7 +174,7 @@ export const PERK_PRICES = {
 export const PERK_SLOTS = 4;
 // ---------------- Sidekicks (cosmetic companions, for survivors and killers) ----------------
 export const SIDEKICKS = {
-  ted: { name: 'Ted', price: 4000, desc: 'A foul-mouthed teddy bear who came to life and never grew up. He follows you everywhere, cheers you on, panics when you get hurt, and if you die he pulls up a camping chair next to your body with a beer and his bong.' },
+  ted: { name: 'Ted', price: 4000, desc: 'A foul-mouthed teddy bear who came to life and never grew up. He follows you everywhere, cheers you on, panics when you get hurt, and whenever you repair a generator, get caged or die, he pulls up a camping chair next to you with a beer and his bong.' },
   rosy: { name: 'Rosy', price: 2500, desc: 'A loyal little rose-coloured dog. Trots at your heels, wags when things go well, runs in circles when they don\'t, and lies down beside you if you fall.' },
 };
 export const DEFAULT_SURV_PERKS = ['steady', 'shared', 'lastwind'];
@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.17.2';
+export const VERSION = '2.17.3';
 export const INBOX = [
+  {
+    id: 'v2.17.3', version: '2.17.3', date: 'Nov 2026', title: 'Ted Takes a Break', tag: 'Update',
+    body: ['Ted now pulls out his camping chair, beer and bong while you repair a generator or sit in a cage, not just when you die. He packs up when you get moving again. Rosy lies down beside you.'],
+  },
   {
     id: 'v2.17.2', version: '2.17.2', date: 'Nov 2026', title: 'Last Updated', tag: 'Update',
     body: ['The home screen now shows the game version and how long ago it was last updated (hover it for the exact date and time).'],
@@ -380,7 +384,7 @@ export const INBOX = [
     id: 'v2.17', version: '2.17.0', date: 'Nov 2026', title: 'Sidekicks', tag: 'Update',
     body: [
       'New in the Store: Sidekicks, companions that follow you through the match, for survivors and killers. Equip one for each in the Store or on the Loadout screen.',
-      'Ted (4,000 Embers): cheers when things go well, panics when you get hurt, and if you die he pulls up a camping chair next to your body with a beer and his bong.',
+      'Ted (4,000 Embers): cheers when things go well, panics when you get hurt, and whenever you repair a generator, get caged or die, he pulls up a camping chair next to you with a beer and his bong.',
       'Rosy (2,500 Embers): a loyal little dog who trots at your heels, wags, runs circles when you are in trouble and lies down beside you if you fall.',
       'Sidekicks can\'t be hurt and can\'t hurt anyone. Everyone in the match sees them.',
     ],
