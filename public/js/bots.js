@@ -1,7 +1,7 @@
 // Bot brains (host only). Bots act through the same channels as human players.
 import { findPath, cellPos, cellOf, losBlocked, barBox, moveCircle } from './map.js';
 import { stepMover, startVault } from './movement.js';
-import { dist, fwd, angDiff, killerOf, findSpace, findInteraction, vaultDuration, terrorRadius, playerById, canExecuteTarget, findExecute } from './rules.js';
+import { dist, fwd, angDiff, killerOf, killersOf, nearestKiller, modeOf, findSpace, findInteraction, vaultDuration, terrorRadius, playerById, canExecuteTarget, findExecute } from './rules.js';
 import { HALF } from './config.js';
 
 export class Bots {
@@ -35,6 +35,7 @@ export class Bots {
     return b;
   }
   onEvents(evs) {
+    for (const e of evs) if (e.k === 'infected') this.brains.delete(e.id); // a fresh (killer) brain
     for (const e of evs) if (e.k === 'noise') this.noises.push({ x: e.x, z: e.z, t: this.sim.S.t });
     this.noises = this.noises.filter(n => this.sim.S.t - n.t < 6);
   }
@@ -42,28 +43,32 @@ export class Bots {
   update(dt) {
     const S = this.sim.S;
     if (S.phase !== 'play') return;
+    for (const K of killersOf(S)) {
     // a bot killer with a torch in his eyes turns his face away (more often on higher difficulty)
-    const K = killerOf(S);
-    if (K && K.bot && K.glare > 0.35 && !K.atk) {
+    if (K.bot && K.glare > 0.35 && !K.atk) {
       const b = this.brain(K);
       if (b.lookAway == null) b.lookAway = Math.random() < this.sim.diff.react * -0.6 + 0.75 ? (Math.random() < 0.5 ? -1 : 1) : 0;
       if (b.lookAway) K.yaw += b.lookAway * dt * 4;
-    } else if (K && K.bot && K.glare <= 0) this.brain(K).lookAway = null;
+    } else if (K.bot && K.glare <= 0) this.brain(K).lookAway = null;
     // Slimer: spit at whoever he can see, phase through the wall between him and his prey
-    if (K && K.bot && K.char === 'slimer' && K.stun <= 0 && K.carry == null && !K.act) {
+    if (K.bot && K.char === 'slimer' && K.stun <= 0 && K.carry == null && !K.act) {
       const sim = this.sim, M = sim.M, p = K;
       if (p.abCd <= 0 && !p.atk) { const t = S.players.find(s => s.role === 'survivor' && s.st === 'ok' && !(s.slimed > 0) && Math.hypot(s.x - p.x, s.z - p.z) < 13 && Math.hypot(s.x - p.x, s.z - p.z) > 2 && !losBlocked(M, p.x, p.z, s.x, s.z, 1.2)); if (t) { p.yaw = Math.atan2(t.x - p.x, t.z - p.z); sim.onMsg(p.id, { t: 'act', a: 'ability' }); } }
       if (p.ab2Cd <= 0 && !(p.phase > 0)) { const t = S.players.find(s => s.role === 'survivor' && s.st === 'ok' && Math.hypot(s.x - p.x, s.z - p.z) < 9 && losBlocked(M, p.x, p.z, s.x, s.z)); if (t) sim.onMsg(p.id, { t: 'act', a: 'ability2' }); }
     }
+    }
     for (const p of S.players) {
       if (!p.bot) continue;
-      if (p.role === 'killer') this.killer(p, dt); else { this.survivor(p, dt); this.flashBot(p, dt); if (p.traps > 0 && p.st === 'ok' && K && dist(p, K) < 7 && K.mv && Math.random() < dt * 0.35) this.sim.onMsg(p.id, { t: 'act', a: 'trap' }); }
+      if (p.role === 'killer') { this.killer(p, dt); continue; }
+      this.survivor(p, dt); this.flashBot(p, dt);
+      const K = nearestKiller(S, p);
+      if (p.traps > 0 && p.st === 'ok' && K && dist(p, K) < 7 && K.mv && Math.random() < dt * 0.35) this.sim.onMsg(p.id, { t: 'act', a: 'trap' });
     }
   }
 
   // flashlight saves: blind the killer when he carries or picks up a teammate (sometimes mid-chase)
   flashBot(p, dt) {
-    const sim = this.sim, S = sim.S, K = killerOf(S), b = this.brain(p);
+    const sim = this.sim, S = sim.S, K = nearestKiller(S, p), b = this.brain(p);
     let want = false;
     if (K && p.st === 'ok' && !p.act && !p.vault && p.flash > 0 && K.blindImm <= 0 && K.stun <= 0) {
       const d = dist(p, K), kf = fwd(K.yaw);
@@ -201,7 +206,7 @@ export class Bots {
   // ---------- survivor ----------
   survivor(p, dt) {
     const sim = this.sim, S = sim.S, M = sim.M, b = this.brain(p), D = sim.diff;
-    const K = killerOf(S);
+    const K = nearestKiller(S, p);
     if (p.st === 'carried') {
       this.setE(p, b, false);
       b.wig -= dt;
@@ -473,7 +478,7 @@ export class Bots {
 
     // pick up downed survivors (if not mid-chase with someone close)
     let downed = null, dd = 1e9;
-    for (const s of S.players) if (s.role === 'survivor' && s.st === 'down') { const d = dist(p, s); if (d < dd) { dd = d; downed = s; } }
+    if (modeOf(S) !== 'infection') for (const s of S.players) if (s.role === 'survivor' && s.st === 'down') { const d = dist(p, s); if (d < dd) { dd = d; downed = s; } }
     if (downed && (!target || dd < 18 || dist(p, target) > 6)) {
       b.target = null;
       if (p.char === 'wisp' && p.ab === 1) sim.onMsg(p.id, { t: 'act', a: 'ability' });

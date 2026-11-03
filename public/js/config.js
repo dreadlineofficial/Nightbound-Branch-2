@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 3;
+export const NET_PROTOCOL = 4;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -38,6 +38,17 @@ export const RULES = {
   flashBattery: 12, flashRange: 9, flashTime: 1.0, flashStun: 1.6, blindTime: 2.4, blindImmune: 12, // survivor flashlights
   teleTime: 1.2, teleCd: 18, lanternRadius: 9, snuffTime: 2.5,           // length of a killer's execution finisher
 };
+
+// ---------------- Game modes ----------------
+export const MODES = {
+  classic: { name: 'Classic', short: '1 vs 4', desc: 'One killer, four survivors. Repair generators, power the gates and escape.' },
+  duo: { name: 'Two Killers', short: '2 vs 8', killers: 2, survivors: 8, desc: 'Two killers hunt eight survivors. Six generators power the gates.' },
+  dark: { name: 'Lights Out', short: 'Horror', desc: 'The lights never come on. Thick fog, no auras for survivors, half-charged flashlights.' },
+  rush: { name: 'Survivor Rush', short: '5 min', time: 300, desc: 'Five-minute matches. Generators and gates go twice as fast, and the killer gets a burst of speed after every hit. When the clock runs out, the gates power up and the night collapses fast.' },
+  infection: { name: 'Infection', short: 'Turned', desc: 'No cages. Downed survivors rise as killers a few seconds later. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
+};
+// killers an infected survivor can turn into
+export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer'];
 
 export const KILLERS = {
   butcher: {
@@ -228,8 +239,20 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.9.2';
+export const VERSION = '2.10.0';
 export const INBOX = [
+  {
+    id: 'v2.10', version: '2.10.0', date: 'Nov 2026', title: 'Game Modes', tag: 'Update',
+    gift: { embers: 1000, label: 'Gift: 1,000 Embers' },
+    body: [
+      'Pick a game mode in the bot match setup or the online lobby.',
+      'Two Killers (2 vs 8): two killers hunt eight survivors. Six generators power the gates.',
+      'Lights Out: the lights never come on. Thick fog, no auras for survivors and half-charged flashlights.',
+      'Survivor Rush: five-minute matches. Generators and gates go twice as fast and the killer gets a burst of speed after every hit. When the clock runs out, the gates power up and the night collapses in 40 seconds.',
+      'Infection: no cages. A downed survivor rises as a random killer 3 seconds later. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.',
+      'Online lobbies grow to 10 players for Two Killers.',
+    ],
+  },
   {
     id: 'v2.9.2', version: '2.9.2', date: 'Nov 2026', title: 'Smoother Online Matches', tag: 'Update',
     body: [

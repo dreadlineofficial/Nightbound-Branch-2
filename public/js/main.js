@@ -13,7 +13,7 @@ import { MAP_NAMES } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound } from './audio.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
 
 window.__nbBooted = true;
@@ -411,7 +411,13 @@ if (profile.lastVersion !== VERSION) {
 }
 
 // ---------- bot match ----------
-const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'random', diff: 'normal', map: 'random' };
+const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'random', diff: 'normal', map: 'random', gm: 'classic' };
+// game mode pickers (bot match and lobby)
+const gmOptions = () => Object.entries(MODES).map(([id, m]) => `<option value="${id}">${m.name} (${m.short})</option>`).join('');
+$('bots-gm').innerHTML = gmOptions(); $('lobby-gm').innerHTML = gmOptions();
+const gmDesc = gm => (MODES[gm] || MODES.classic).desc;
+$('bots-gm-desc').textContent = gmDesc('classic');
+$('bots-gm').addEventListener('change', e => { botsCfg.gm = e.target.value; $('bots-gm-desc').textContent = gmDesc(botsCfg.gm); renderBotsPanel(); });
 seg('bots-role', v => { botsCfg.role = v; setScene(v); $('panel-title').textContent = v === 'killer' ? 'Play as Killer' : 'Play as Survivor'; renderBotsPanel(); });
 seg('bots-team', v => { botsCfg.team = +v; });
 seg('bots-surv', v => { botsCfg.surv = +v; });
@@ -419,10 +425,10 @@ seg('bots-diff', v => { botsCfg.diff = v; });
 $('bots-map').addEventListener('change', e => { botsCfg.map = e.target.value; });
 $('bots-killer').addEventListener('change', e => { botsCfg.killer = e.target.value; });
 function renderBotsPanel() {
-  const k = botsCfg.role === 'killer';
-  $('bots-teammates-row').classList.toggle('hidden', k);
+  const k = botsCfg.role === 'killer', duo = botsCfg.gm === 'duo';
+  $('bots-teammates-row').classList.toggle('hidden', k || duo);
   $('bots-killer-row').classList.toggle('hidden', k);
-  $('bots-survivors-row').classList.toggle('hidden', !k);
+  $('bots-survivors-row').classList.toggle('hidden', !k || duo);
   renderLoadout($('bots-loadout'), botsCfg.role, true);
 }
 const randomPerks = (pool, n = 3) => Object.keys(pool).sort(() => Math.random() - 0.5).slice(0, n);
@@ -438,11 +444,11 @@ function botSurvivor(i, used) {
   const sk = SKINS[char]; const skin = Math.random() < 0.5 ? 'default' : sk[1 + Math.floor(Math.random() * (sk.length - 1))].id;
   return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS), item, bot: true };
 }
-function botKiller(char) {
-  const ks = Object.keys(KILLERS);
-  const c = char && char !== 'random' ? char : ks[Math.floor(Math.random() * ks.length)];
+function botKiller(char, n = 0, avoid = []) {
+  const ks = Object.keys(KILLERS).filter(k => !avoid.includes(k));
+  const c = char && char !== 'random' && !avoid.includes(char) ? char : ks[Math.floor(Math.random() * ks.length)];
   const sk = SKINS[c]; const skin = Math.random() < 0.5 ? 'default' : sk[1 + Math.floor(Math.random() * (sk.length - 1))].id;
-  return { id: 'botk', name: KILLERS[c].name, role: 'killer', char: c, skin, perks: randomPerks(KILLER_PERKS), bot: true };
+  return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin, perks: randomPerks(KILLER_PERKS), bot: true };
 }
 $('btn-bots-start').addEventListener('click', () => {
   sound.init(); sound.play('click');
@@ -451,11 +457,15 @@ $('btn-bots-start').addEventListener('click', () => {
   if (meRole === 'killer' && !ownsChar(profile.killer.char)) { toast(`${charName(profile.killer.char)} is part of a chapter. Get it in the Store, or pick another killer.`, 5000); openStore('chapters'); return; }
   roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: profile[meRole].perks, item: profile.survivor.item || 'flashlight', bot: false });
   const used = meRole === 'survivor' ? [profile.survivor.char] : [];
+  const gm = MODES[botsCfg.gm] ? botsCfg.gm : 'classic', nk = MODES[gm].killers || 1, ns = MODES[gm].survivors;
   if (meRole === 'survivor') {
-    for (let i = 0; i < botsCfg.team; i++) roster.push(botSurvivor(i + 1, used));
-    roster.push(botKiller(botsCfg.killer));
-  } else for (let i = 0; i < botsCfg.surv; i++) roster.push(botSurvivor(i + 1, used));
-  startHostMatch(roster, { myId: 'me', difficulty: botsCfg.diff, net: null, kind: 'bots', map: botsCfg.map });
+    for (let i = 0; i < (ns ? ns - 1 : botsCfg.team); i++) roster.push(botSurvivor(i + 1, used));
+    for (let i = 0; i < nk; i++) roster.push(botKiller(i ? 'random' : botsCfg.killer, i, roster.filter(r => r.role === 'killer').map(r => r.char)));
+  } else {
+    for (let i = 1; i < nk; i++) roster.push(botKiller('random', i, [profile.killer.char]));
+    for (let i = 0; i < (ns || botsCfg.surv); i++) roster.push(botSurvivor(i + 1, used));
+  }
+  startHostMatch(roster, { myId: 'me', difficulty: botsCfg.diff, net: null, kind: 'bots', map: botsCfg.map, mode: gm });
 });
 
 // ---------- sessions ----------
@@ -477,7 +487,7 @@ class HostSession {
     this.seed = Math.floor(Math.random() * 1e9);
     this.map = resolveMap(this.opts.map);
     this.M = buildMap(this.seed, this.map);
-    this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty });
+    this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty, mode: this.opts.mode });
     this.bots = new Bots(this.sim);
     if (this.net) this.net.broadcast({ t: 'start', seed: this.seed, map: this.map, roster: this.roster, difficulty: this.opts.difficulty });
     this.game = new Game({ renderer, M: this.M, myId: this.myId, isHost: true, session: this, settings, onEnd: (S, me) => onMatchEnd(S, me, this) });
@@ -667,7 +677,7 @@ $('btn-host').addEventListener('click', async () => {
   try {
     const mode = await resolveMode();
     const net = await hostRoom(mode);
-    lobby = { isHost: true, net, code: net.code, mode, myId: 'host', players: [], fill: true, diff: 'normal', inGame: false, chat: [] };
+    lobby = { isHost: true, net, code: net.code, mode, myId: 'host', players: [], fill: true, diff: 'normal', gm: 'classic', inGame: false, chat: [] };
     const lo = profile.survivor;
     lobby.players.push({ id: 'host', name: settings.name, role: 'survivor', char: lo.char, skin: skinId(lo.char), perks: lo.perks.slice(), host: true, loadouts: myLoadouts() });
     net.on('msg', (id, m) => hostMsg(id, m));
@@ -706,11 +716,12 @@ function hostMsg(id, m) {
         : `This room runs Nightbound ${VERSION}. Refresh the page (or download the latest copy) and join again.` });
       return;
     }
-    if (lobby.players.length >= 5) { lobby.net.send(id, { t: 'reject', reason: 'The lobby is full.' }); return; }
-    const killerTaken = lobby.players.some(p => p.role === 'killer');
+    const cap = lobbyCaps();
+    if (lobby.players.length >= cap.k + cap.s) { lobby.net.send(id, { t: 'reject', reason: 'The lobby is full.' }); return; }
+    const killerTaken = lobby.players.filter(p => p.role === 'killer').length >= cap.k;
     const survCount = lobby.players.filter(p => p.role === 'survivor').length;
     let role = m.role === 'killer' && !killerTaken ? 'killer' : 'survivor';
-    if (role === 'survivor' && survCount >= 4) role = 'killer';
+    if (role === 'survivor' && survCount >= cap.s) role = 'killer';
     const lo = sanitizeLoadout(role, m.loadouts?.[role]?.char, m.loadouts?.[role]?.perks);
     lobby.players.push({ id, name: String(m.name || 'Player').slice(0, 16), role, ...lo, skin: cleanSkin(lo.char, m.loadouts?.[role]?.skin), loadouts: m.loadouts || {} });
     lobby.net.send(id, { t: 'welcome', id });
@@ -726,10 +737,13 @@ function hostMsg(id, m) {
     if (p) { const text = String(m.text || '').slice(0, 120); lobby.net.broadcast({ t: 'chat', name: p.name, text }); addChat(p.name, text); }
   }
 }
+// player slots for the lobby's game mode
+function lobbyCaps() { const m = MODES[lobby && lobby.gm] || MODES.classic; return { k: m.killers || 1, s: m.survivors || 4 }; }
 function applyLoadout(p, m) {
   let role = m.role === 'killer' ? 'killer' : 'survivor';
-  if (role === 'killer' && lobby.players.some(x => x !== p && x.role === 'killer')) role = p.role;
-  if (role === 'survivor' && p.role !== 'survivor' && lobby.players.filter(x => x.role === 'survivor').length >= 4) role = p.role;
+  const cap = lobbyCaps();
+  if (role === 'killer' && p.role !== 'killer' && lobby.players.filter(x => x !== p && x.role === 'killer').length >= cap.k) role = p.role;
+  if (role === 'survivor' && p.role !== 'survivor' && lobby.players.filter(x => x.role === 'survivor').length >= cap.s) role = p.role;
   if (m.loadouts) p.loadouts = m.loadouts;
   const lo = sanitizeLoadout(role, m.char ?? p.loadouts?.[role]?.char, m.perks ?? p.loadouts?.[role]?.perks);
   p.item = (m.item ?? p.loadouts?.survivor?.item) === 'trap' ? 'trap' : 'flashlight';
@@ -737,7 +751,7 @@ function applyLoadout(p, m) {
 }
 function broadcastLobby() {
   if (!lobby || !lobby.isHost) return;
-  lobby.net.broadcast({ t: 'lobby', players: lobby.players.map(({ loadouts, ...p }) => p), fill: lobby.fill, diff: lobby.diff, map: lobby.map || 'random', code: lobby.code });
+  lobby.net.broadcast({ t: 'lobby', players: lobby.players.map(({ loadouts, ...p }) => p), fill: lobby.fill, diff: lobby.diff, map: lobby.map || 'random', gm: lobby.gm || 'classic', code: lobby.code });
   renderLobby();
 }
 
@@ -751,7 +765,7 @@ async function doJoin(code) {
   try {
     const mode = await resolveMode();
     const net = await joinRoom(mode, code);
-    lobby = { isHost: false, net, code, mode, myId: net.id, players: [], fill: true, diff: 'normal', inGame: false, chat: [] };
+    lobby = { isHost: false, net, code, mode, myId: net.id, players: [], fill: true, diff: 'normal', gm: 'classic', inGame: false, chat: [] };
     net.on('msg', m => clientMsg(m));
     net.on('closed', r => { toast(r); leaveOnline(true); });
     const role = 'survivor';
@@ -764,7 +778,7 @@ function clientMsg(m) {
   if (!m || typeof m !== 'object' || !lobby) return;
   switch (m.t) {
     case 'welcome': lobby.myId = m.id; break;
-    case 'lobby': lobby.players = m.players; lobby.fill = m.fill; lobby.diff = m.diff; lobby.map = m.map; renderLobby(); break;
+    case 'lobby': lobby.players = m.players; lobby.fill = m.fill; lobby.diff = m.diff; lobby.map = m.map; lobby.gm = MODES[m.gm] ? m.gm : 'classic'; renderLobby(); break;
     case 'reject': toast(m.reason); leaveOnline(true); break;
     case 'chat': addChat(m.name, m.text); break;
     case 'start': startClientMatch(m); break;
@@ -797,15 +811,18 @@ function showLobby() {
 function myLobbyPlayer() { return lobby && lobby.players.find(p => p.id === lobby.myId); }
 function renderLobby() {
   if (!lobby || $('p-lobby').classList.contains('hidden')) return;
-  const ps = lobby.players;
-  const killer = ps.find(p => p.role === 'killer');
+  const ps = lobby.players, cap = lobbyCaps();
+  const killers = ps.filter(p => p.role === 'killer');
   const survs = ps.filter(p => p.role === 'survivor');
+  $('lobby-gm').value = lobby.gm || 'classic'; $('lobby-gm').disabled = !lobby.isHost;
+  $('lobby-gm-desc').innerHTML = `<b>${esc(MODES[lobby.gm || 'classic'].name)}:</b> ${esc(gmDesc(lobby.gm))}`;
   const charName = p => (p.role === 'killer' ? KILLERS[p.char] : SURVIVORS[p.char])?.name || '';
   const slot = (p, role) => p
     ? `<div class="slot ${role}"><span class="si">${icon(role === 'killer' ? POWER_ICON[p.char] : 'healthy')}</span><span class="nm">${esc(p.name)}${p.host ? ' · Host' : ''}${p.id === lobby.myId ? ' (you)' : ''}</span><span class="ch">${esc(charName(p))}</span></div>`
     : `<div class="slot ${role} empty"><span class="si">${icon(role === 'killer' ? 'warrant' : 'healthy')}</span><span class="nm">${lobby.fill ? (role === 'killer' ? 'Bot killer' : 'Bot survivor') : 'Empty slot'}</span></div>`;
-  let html = slot(killer, 'killer');
-  for (let i = 0; i < 4; i++) html += slot(survs[i], 'survivor');
+  let html = '';
+  for (let i = 0; i < cap.k; i++) html += slot(killers[i], 'killer');
+  for (let i = 0; i < cap.s; i++) html += slot(survs[i], 'survivor');
   $('lobby-slots').innerHTML = html;
   const me = myLobbyPlayer();
   if (me) {
@@ -827,6 +844,15 @@ function sendMyLoadout(role) {
 seg('lobby-role', v => sendMyLoadout(v));
 seg('lobby-diff', v => { if (lobby && lobby.isHost) { lobby.diff = v; broadcastLobby(); } });
 $('lobby-map').addEventListener('change', e => { if (lobby && lobby.isHost) { lobby.map = e.target.value; broadcastLobby(); } });
+$('lobby-gm').addEventListener('change', e => {
+  if (!lobby || !lobby.isHost) return;
+  lobby.gm = MODES[e.target.value] ? e.target.value : 'classic';
+  // players beyond the new mode's slots move to the other side (or are told the lobby is full)
+  const cap = lobbyCaps();
+  const ks = lobby.players.filter(p => p.role === 'killer');
+  for (const p of ks.slice(cap.k)) if (lobby.players.filter(x => x.role === 'survivor').length < cap.s) { p.role = 'survivor'; Object.assign(p, sanitizeLoadout('survivor', p.loadouts?.survivor?.char, p.loadouts?.survivor?.perks)); p.skin = cleanSkin(p.char, p.loadouts?.survivor?.skin); }
+  broadcastLobby();
+});
 $('lobby-fill').addEventListener('change', e => { if (lobby && lobby.isHost) { lobby.fill = e.target.checked; broadcastLobby(); } });
 $('btn-copy').addEventListener('click', async () => {
   if (location.protocol === 'file:') {
@@ -855,15 +881,16 @@ $('btn-lobby-start').addEventListener('click', () => {
   const ps = lobby.players;
   const roster = ps.map(p => ({ id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, bot: false }));
   const used = roster.filter(r => r.role === 'survivor').map(r => r.char);
+  const cap = lobbyCaps();
   if (!roster.some(r => r.role === 'killer')) {
     if (!lobby.fill) { toast('Someone needs to be the killer (or enable bots).'); return; }
-    roster.push(botKiller('random'));
   }
+  for (let nk = roster.filter(r => r.role === 'killer').length, i = 0; nk < cap.k && (lobby.fill || nk === 0); nk++, i++) roster.push(botKiller('random', i, roster.filter(r => r.role === 'killer').map(r => r.char)));
   let ns = roster.filter(r => r.role === 'survivor').length;
-  if (lobby.fill) for (let i = 1; ns < 4; i++, ns++) roster.push(botSurvivor(i, used));
+  if (lobby.fill) for (let i = 1; ns < cap.s; i++, ns++) roster.push(botSurvivor(i, used));
   if (ns === 0) { toast('At least one survivor is needed (or enable bots).'); return; }
   lobby.inGame = true;
-  startHostMatch(roster, { myId: 'host', difficulty: lobby.diff, net: lobby.net, kind: 'online', map: lobby.map || 'random' });
+  startHostMatch(roster, { myId: 'host', difficulty: lobby.diff, net: lobby.net, kind: 'online', map: lobby.map || 'random', mode: lobby.gm || 'classic' });
 });
 function returnToLobby() {
   if (!lobby) { endSession(); show('p-main'); return; }

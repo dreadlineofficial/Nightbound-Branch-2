@@ -20,6 +20,7 @@ const PDEF = {
   stun: 0, ab: 0, abT: 0, abCd: 0, aim: false, reveal: 0, sixT: 0, chase: 0, mark: 0, charges: 0, chargeT: 0, ammo: 0,
   ammoT: 0, ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0, outcome: '',
   bump: false, bot: false, flash: 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, traps: 0, slimed: 0, phase: 0,
+  haste: 0, turn: 0,
 };
 
 const r3 = v => Math.round(v * 1000) / 1000;
@@ -35,7 +36,7 @@ const ALWAYS = new Set(['t', 'phase']);
 const HOT = 8; // snapshots a changed world field keeps being sent for
 
 export class SnapWriter {
-  constructor() { this.world = new Map(); this.q = 0; }
+  constructor() { this.world = new Map(); this.q = 0; this.stat = []; }
   pack(S, keyframe) {
     // q: sequence number; w: host wall clock (unlike the simulation clock it never slips after a
     // long frame), used by clients for playback timing and lag compensation
@@ -50,13 +51,20 @@ export class SnapWriter {
       if (keyframe || w.hot > 0) out[k] = v;
       w.hot--;
     }
-    out.players = S.players.map(p => {
+    out.players = S.players.map((p, i) => {
       const o = {};
       if (keyframe) o.id = p.id;
+      // static fields (role, character...) can change mid-match (Infection): resend them for a while
+      const sj = STATIC.map(k => JSON.stringify(p[k])).join('|');
+      let st = this.stat[i];
+      if (!st || st.j !== sj) this.stat[i] = st = { j: sj, hot: st ? HOT : 0 };
+      const sendStatic = keyframe || st.hot > 0;
+      if (st.hot > 0) st.hot--;
       for (const k in p) {
         const v = p[k];
         if (k === 'id') continue;
-        if (k === 'score' || STATIC.includes(k)) { if (keyframe) o[k] = pack(v); continue; }
+        if (k === 'score') { if (keyframe) o[k] = pack(v); continue; }
+        if (STATIC.includes(k)) { if (sendStatic) o[k] = pack(v); continue; }
         if (k in PDEF && v === PDEF[k]) continue;
         if (v === undefined || k === 'posT') continue;
         o[k] = pack(v);
@@ -126,6 +134,7 @@ export class SnapReader {
       if (p.id == null) p.id = this.order[i];
       const c = this.cache.get(p.id);
       if (!c) return null; // a player we have no keyframe for yet
+      if (!s.kf) for (const k of STATIC) if (k in p) c[k] = p[k]; // a mid-match change (Infection)
       for (const k in PDEF) if (!(k in p)) p[k] = PDEF[k];
       for (const k in c) if (!(k in p)) p[k] = c[k];
     }

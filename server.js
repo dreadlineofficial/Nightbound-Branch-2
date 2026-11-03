@@ -103,7 +103,7 @@ server.on('upgrade', (req, socket) => {
     } else if (m.op === 'join' && !room) {
       const r = rooms.get(String(m.code || '').toUpperCase().trim());
       if (!r) { ws.send({ op: 'error', msg: 'Room not found' }); return; }
-      if (r.peers.size >= 8) { ws.send({ op: 'error', msg: 'Room is full' }); return; }
+      if (r.peers.size >= 12) { ws.send({ op: 'error', msg: 'Room is full' }); return; }
       room = r; r.peers.set(ws.id, ws);
       ws.send({ op: 'joined', id: ws.id, code: r.code });
       r.host.send({ op: 'peer-join', id: ws.id });

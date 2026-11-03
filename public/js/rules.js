@@ -8,6 +8,15 @@ export const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 export const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
 
 export function killerOf(S) { return S.players.find(p => p.role === 'killer'); }
+// modes can have several killers (Two Killers, Infection)
+export function killersOf(S) { return S.players.filter(p => p.role === 'killer'); }
+export function nearestKiller(S, p) {
+  let best = null, bd = Infinity;
+  for (const k of S.players) if (k.role === 'killer') { const d = p ? Math.hypot(k.x - p.x, k.z - p.z) : 0; if (d < bd) { bd = d; best = k; } }
+  return best;
+}
+export const anyKillerHas = (S, perk) => S.players.some(k => k.role === 'killer' && has(k, perk));
+export const modeOf = S => (S && S.mode) || 'classic';
 export function survivorsOf(S) { return S.players.filter(p => p.role === 'survivor'); }
 export function playerById(S, id) { return S.players.find(p => p.id === id); }
 
@@ -41,6 +50,7 @@ export function speedOf(p, S, sprint, crouch) {
   let s = K.speed;
   if (p.carry != null) s = SPEED.carry;
   if (S.gatesPowered && has(p, 'fury')) s *= 1.08;
+  if (p.haste > 0) s *= 1.12;
   if (p.atk === 1) s *= RULES.lungeMul;
   else if (p.atk === 2) s *= p.atkHit ? 0.22 : 0.5;
   if (p.char === 'butcher' && p.ab === 1) s = 8.6;
@@ -88,7 +98,8 @@ export function findInteraction(M, S, p) {
     return best;
   }
   let best = null, bd = 1e9;
-  for (const o of S.players) if (o.role === 'survivor' && o.st === 'down') { const d = dist(p, o); if (d < 1.9 && d < bd) { bd = d; best = { k: 'pickup', id: o.id, label: 'Pick up ' + o.name }; } }
+  // Infection: the downed rise as killers, there is nothing to carry
+  if (modeOf(S) !== 'infection') for (const o of S.players) if (o.role === 'survivor' && o.st === 'down') { const d = dist(p, o); if (d < 1.9 && d < bd) { bd = d; best = { k: 'pickup', id: o.id, label: 'Pick up ' + o.name }; } }
   if (best) return best;
   for (const b of M.bars) if (S.bars[b.id] === 1) { const bb = barBox(b); const d = Math.hypot(Math.max(0, Math.abs(p.x - bb.x) - bb.hx), Math.max(0, Math.abs(p.z - bb.z) - bb.hz)); if (d < 1.2 && d < bd) { bd = d; best = { k: 'break', id: b.id, label: 'Break barricade' }; } }
   if (best) return best;
@@ -100,6 +111,7 @@ export function findInteraction(M, S, p) {
 // or the last survivor standing.
 export function canExecuteTarget(S, k, s) {
   if (s.role !== 'survivor' || s.st !== 'down') return false;
+  if (modeOf(S) === 'infection') return false;
   if (s.stage >= 2) return true;
   const alive = S.players.filter(o => o.role === 'survivor' && ['ok', 'down', 'carried', 'caged', 'exec'].includes(o.st));
   return alive.length === 1;
@@ -120,8 +132,8 @@ export function actionTime(k, p, S) {
     case 'cage': return RULES.cageTime;
     case 'kick': return RULES.kickTime * (has(p, 'brute') ? 0.65 : 1);
     case 'break': return RULES.breakTime * (has(p, 'brute') ? 0.65 : 1);
-    case 'rescue': { const k = S && killerOf(S); return RULES.rescueTime * (has(p, 'lockpick') ? 0.5 : 1) * (k && has(k, 'rust') ? 2 : 1); }
-    case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1);
+    case 'rescue': return RULES.rescueTime * (has(p, 'lockpick') ? 0.5 : 1) * (S && anyKillerHas(S, 'rust') ? 2 : 1);
+    case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1) * (modeOf(S) === 'rush' ? 0.5 : 1);
     default: return 0;
   }
 }

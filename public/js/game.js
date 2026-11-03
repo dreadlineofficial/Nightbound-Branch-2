@@ -5,11 +5,11 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, skinOf } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, auraMat } from './models.js';
 import { stepMover, startVault } from './movement.js';
-import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
+import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
 import { losBlocked } from './map.js';
 import { sound } from './audio.js';
 import { tex } from './textures.js';
@@ -226,7 +226,14 @@ export class Game {
     const me = playerById(S, this.myId);
     if (me) { this.camYaw = me.yaw; this.myTp = me.tp; }
     this.role = me ? me.role : 'survivor';
-    if (this.role === 'killer') {
+    if (this.role === 'killer') this.setupKillerView(me);
+    this.buildStaticHUD(S);
+    sound.ambience(true);
+    this.onResize();
+  }
+  // first-person weapon and swing trail for a killer
+  setupKillerView(me) {
+    {
       this.view = makeViewModel(me.char);
       this.view.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.userData.op = o.material.opacity; } });
       this.camera.add(this.view);
@@ -242,9 +249,15 @@ export class Game {
       this.trailPts = [];
       this.camera.add(this.trail);
     }
+  }
+  // Infection: a survivor who turns becomes a killer mid-match
+  switchRole(me, S) {
+    this.role = me.role;
+    if (this.view) { this.camera.remove(this.view); this.view = null; }
+    if (this.trail) { this.camera.remove(this.trail); this.trail = null; }
+    this.flashHeld = false; this.aimHeld = false; this.eHeld = false; this.skill = null; this.skillCanvas.classList.add('hidden');
+    if (me.role === 'killer') { this.setupKillerView(me); this.camYaw = me.yaw; }
     this.buildStaticHUD(S);
-    sound.ambience(true);
-    this.onResize();
   }
 
   // ---------------- input ----------------
@@ -407,6 +420,7 @@ export class Game {
     const S = this.syncState();
     if (!S) return;
     const me = this.mine();
+    if (me && me.role !== this.role) this.switchRole(me, S);
     this.handleLocal(dt, S, me);
     this.updateChars(dt, S, me);
     this.updateTorchLight();
@@ -541,10 +555,11 @@ export class Game {
     const K = killerOf(S);
     for (const p of S.players) {
       let c = this.chars.get(p.id);
+      if (c && (c.role !== p.role || c.char !== p.char)) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = p.role === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
-        c = { rig, x: p.x, z: p.z, yaw: p.yaw, spd: 0, step: 0, vaultT: 0, wasV: false };
+        c = { rig, x: p.x, z: p.z, yaw: p.yaw, spd: 0, step: 0, vaultT: 0, wasV: false, role: p.role, char: p.char };
         this.chars.set(p.id, c);
       }
       const R = c.rig, local = p.id === this.myId;
@@ -582,7 +597,7 @@ export class Game {
       if (c.downAt != null) st.fallF = (this.t - c.downAt) / 0.8;
       if (c.hitAt != null) st.hitF = (this.t - c.hitAt) / 0.5;
       if (p.role === 'survivor') {
-        if (p.st === 'exec') { anim = 'exec'; const kk = K && K.act && K.act.k === 'execute' ? K : null; st.exec = { f: kk ? kk.act.t / RULES.execTime : 1, char: K ? K.char : 'butcher', role: 'victim' }; }
+        if (p.st === 'exec') { anim = 'exec'; const EK = playerById(S, p.execBy) || K; const kk = EK && EK.act && EK.act.k === 'execute' ? EK : null; st.exec = { f: kk ? kk.act.t / RULES.execTime : 1, char: EK ? EK.char : 'butcher', role: 'victim' }; }
         else if (p.st === 'down') anim = 'down';
         else if (p.st === 'carried') anim = 'carried';
         else if (p.st === 'caged') anim = 'caged';
@@ -681,7 +696,9 @@ export class Game {
   updateDark(dt, S, me) {
     const W = this.W;
     if (W.base == null) W.base = { fog: this.scene.fog.density, hemi: W.hemi.intensity, amb: W.amb.intensity, moon: W.moon.intensity, fill: W.fill.intensity, exp: this.renderer.toneMappingExposure };
-    const target = S.dark > 0 ? (me && me.role === 'killer' ? 0.55 : 1) : 0;
+    // Lights Out mode keeps the map dark all match; the Foreman's power goes darker still
+    const modeDark = S.mode === 'dark' ? (me && me.role === 'killer' ? 0.4 : 0.72) : 0;
+    const target = Math.max(modeDark, S.dark > 0 ? (me && me.role === 'killer' ? 0.55 : 1) : 0);
     this.darkK = (this.darkK || 0) + (target - (this.darkK || 0)) * Math.min(1, dt * (target > (this.darkK || 0) ? 5 : 1.5));
     const k = this.darkK, B = W.base;
     this.scene.fog.density = B.fog * (1 + k * 1.6);
@@ -799,12 +816,12 @@ export class Game {
     if (me.role === 'survivor' && (me.st === 'dead' || me.st === 'out')) {
       if (!this.spectate || !['ok', 'down', 'carried', 'caged'].includes(this.spectate.st)) this.cycleSpectate(true);
       this.spectate = this.spectate ? playerById(S, this.spectate.id) : null;
-      target = this.spectate || killerOf(S) || me;
+      target = this.spectate || nearestKiller(S, me) || me;
     }
     this.camFocus = target;
     // cinematic camera for executions (killer and victim)
-    const K0 = killerOf(S);
-    const execVictim = K0 && K0.act && K0.act.k === 'execute' ? playerById(S, K0.act.id) : null;
+    const K0 = killersOf(S).find(k => k.act && k.act.k === 'execute' && (k.id === me.id || k.act.id === me.id || k.act.id === target.id));
+    const execVictim = K0 ? playerById(S, K0.act.id) : null;
     if (execVictim && (me.id === K0.id || me.id === execVictim.id || target.id === execVictim.id)) {
       const kc = this.chars.get(K0.id), f = K0.act.t / RULES.execTime;
       const mx = kc.x + Math.sin(kc.yaw) * 0.55, mz = kc.z + Math.cos(kc.yaw) * 0.55;
@@ -1012,7 +1029,7 @@ export class Game {
         } else if (p.role === 'killer' && ((has(me, 'sixth') && me.sixT < 4 && me.st !== 'dead') || me.st === 'dead' || me.st === 'out')) col = 0xff2020;
       }
       if (p.st === 'dead' || p.st === 'out') col = null;
-      if (S.dark > 0 && !killerView && p.role === 'survivor') col = null; // Lights Out: you lose track of each other
+      if ((S.dark > 0 || S.mode === 'dark') && !killerView && p.role === 'survivor') col = null; // Lights Out: you lose track of each other
       if (c.aura !== col) { c.rig.setAura(col); c.aura = col; }
     }
     // gens
@@ -1020,7 +1037,7 @@ export class Game {
       const gs = S.gens[i], a = this.W.gens[i].userData.aura, g = this.M.gens[i];
       let on = false, col = 0xffe8a0;
       if (killerView) { if (has(me, 'static') && gs.n > 0 && !gs.done) { on = true; col = 0xffd040; } }
-      else if (!gs.done && !S.gatesPowered && !(S.dark > 0)) { on = Math.hypot(g.x - me.x, g.z - me.z) > 6; col = gs.reg ? 0xff6040 : 0xffe8a0; }
+      else if (!gs.done && !S.gatesPowered && !(S.dark > 0) && S.mode !== 'dark') { on = Math.hypot(g.x - me.x, g.z - me.z) > 6; col = gs.reg ? 0xff6040 : 0xffe8a0; }
       a.visible = on; if (on) a.material = this.auraMatFor(col);
     }
     // cages for the killer while carrying
@@ -1040,7 +1057,7 @@ export class Game {
   // ---------------- audio ----------------
   updateAudio(dt, S, me) {
     if (!me) return;
-    const K = killerOf(S);
+    const K = nearestKiller(S, me);
     let intensity = 0, chase = 0;
     if (me.role === 'survivor' && K && (me.st === 'ok' || me.st === 'down' || me.st === 'caged')) {
       const tr = terrorRadius(K), d = dist(me, K);
@@ -1132,6 +1149,13 @@ export class Game {
         case 'powered': sound.play('powered'); this.feed('The exit gates are powered! Escape before the night closes in.', 'big'); break;
         case 'gateopen': { const g = this.M.gates[e.id]; sound.play('gateopen', g.x, g.z); this.feed('An exit gate has been opened!', 'big'); break; }
         case 'escaped': sound.play('escaped'); this.feed(name(e.id) + ' escaped.'); break;
+        case 'infected': {
+          this.sparks.spawn(e.x, 0.6, e.z, 60, 0x9aff3a, 3, 1.6, 0.4, 1.2); this.smoke.spawn(e.x, 0.8, e.z, 12, 0x1a3a10, 1, 2.5, 0.6, 0.8);
+          sound.play('caged', e.x, e.z);
+          if (e.id === this.myId) { this.feed('You have turned! Hunt down the survivors.', 'big'); this.flash = 0.8; this.shake = 1; }
+          break;
+        }
+        case 'laststand': if (e.id === this.myId) { this.feed('You are the last survivor! Survive 45 seconds.', 'big'); this.flash = 0.4; } sound.play('powered'); break;
         case 'drop': { const b = this.M.bars[e.id]; sound.play('drop', b.x, b.z); this.smoke.spawn(b.x, 0.3, b.z, 6, 0x5a5048, 1.2, 1.5, 0.3, 1.2); break; }
         case 'break': { const b = this.M.bars[e.id]; sound.play('break', b.x, b.z); this.blood.spawn(b.x, 0.6, b.z, 40, 0x6a4a30, 4, 1.2, -9, 1.5); break; }
         case 'stun': { const p = S && playerById(S, e.id); if (p) { sound.play('stun', p.x, p.z); this.sparks.spawn(p.x, 2.2, p.z, 12, 0xffffff, 1.5, 0.6, 0); } if (e.id === this.myId) this.shake = 0.8; this.feed(name(e.id) + ' was stunned!'); break; }
@@ -1208,7 +1232,7 @@ export class Game {
     $('item').classList.toggle('hidden', me.role !== 'survivor');
     $('item').innerHTML = me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl"><kbd>G</kbd> set a trap in front of you</div></div>`
       : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>RMB</kbd> hold to blind the killer</div></div>`;
-    $('team').innerHTML = S.players.filter(p => p.role === 'survivor').map(p =>
+    $('team').innerHTML = S.players.filter(p => p.role === 'survivor' || p.outcome === 'infected').map(p =>
       `<div class="tm ${p.id === this.myId ? 'me' : ''}" id="tm-${esc(p.id)}"><div class="tm-por">${icon('healthy')}</div><div class="tm-body"><div class="tm-name">${esc(p.name)}${p.bot ? '<small>BOT</small>' : ''}${p.id === this.myId ? '<small>YOU</small>' : ''}</div><div class="tm-stage"><i></i><i></i></div><div class="tm-bar"><div></div></div></div></div>`).join('');
     this.hudCache = {};
     const k = (x) => `<kbd>${x}</kbd>`;
@@ -1283,13 +1307,18 @@ export class Game {
     const obj = !S.gatesPowered
       ? `<div class="oi">${icon('gen')}</div><div><div class="on">${left}</div><div class="ol">Generator${left === 1 ? '' : 's'} left</div></div>`
       : `<div class="oi">${icon('gate')}</div><div><div class="ol" style="color:var(--gold)">Exit gates powered</div><div class="ol">The night falls in ${Math.ceil(S.collapse)}s</div><div class="collapse"><div style="width:${(S.collapse / RULES.collapse * 100).toFixed(1)}%"></div></div></div>`;
-    this.setText('objective', obj);
+    let clock = '';
+    const mm = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+    if (S.mode === 'rush' && S.timer > 0) clock = `<div class="mode-clock${S.timer < 30 ? ' low' : ''}">Survivor Rush · ${mm(S.timer)}</div>`;
+    else if (S.mode === 'infection' && S.lastStand && S.timer > 0) clock = `<div class="mode-clock low">Last stand · ${mm(S.timer)}</div>`;
+    else if (S.mode && S.mode !== 'classic' && MODES[S.mode]) clock = `<div class="mode-clock">${MODES[S.mode].name}</div>`;
+    this.setText('objective', obj.replace('class="collapse"><div style="width:', 'class="collapse"><div style="max-width:100%;width:') + clock);
     $('objective').classList.toggle('powered', !!S.gatesPowered);
     // team
     for (const p of S.players) {
-      if (p.role !== 'survivor') continue;
       const el = $('tm-' + p.id);
       if (!el) continue;
+      if (p.role !== 'survivor') { if (el.dataset.st !== 'infected') { el.dataset.st = 'infected'; el.className = 'tm dead infected' + (p.id === this.myId ? ' me' : ''); el.querySelector('.tm-por').innerHTML = icon(POWER_ICON[p.char] || 'warrant'); } continue; }
       const state = p.st === 'ok' ? (p.hp === 2 ? 'healthy' : 'injured') : p.st;
       if (el.dataset.st !== state) { el.dataset.st = state; el.className = 'tm ' + state + (p.id === this.myId ? ' me' : ''); el.querySelector('.tm-por').innerHTML = icon(STATE_ICON[state] || 'healthy'); }
       let f = 0;
@@ -1334,8 +1363,9 @@ export class Game {
         } else if (me.st === 'down') {
           status = me.healP > 0 ? 'Being helped up' : 'You are dying<small>Crawl to safety — a teammate can help you up</small>';
           if (me.healP > 0) { prog = me.healP; label = 'Recovering'; }
+          if (me.turn > 0) { status = `Turning…<small>You rise as a killer in ${Math.ceil(me.turn)}s</small>`; prog = 1 - me.turn / 3; label = 'Infection'; }
         } else if (me.st === 'exec') {
-          const K = killerOf(S);
+          const K = playerById(S, me.execBy) || killerOf(S);
           status = (K ? esc(KILLERS[K.char].exec.name) : 'Execution');
         } else if (me.st === 'carried') {
           status = `Struggle!<small>Alternate <kbd>A</kbd> <kbd>D</kbd> to break free</small>`; prog = me.wig; label = 'Wiggle';
@@ -1386,7 +1416,7 @@ export class Game {
       $('fx-vignette').style.opacity = '1';
     }
     // Wisp frost: survivors near a faded Wisp
-    const K = killerOf(S);
+    const K = nearestKiller(S, me);
     let frost = 0;
     if (K && K.char === 'wisp' && me.role === 'survivor' && ['ok', 'down', 'caged'].includes(me.st) && K.ab !== 0) {
       const d = dist(K, me); frost = Math.max(0, 1 - d / 14);
@@ -1412,7 +1442,7 @@ export class Game {
       m.el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%,-50%) scale(${1 + m.t * 0.15})`;
       m.el.style.opacity = String(Math.max(0, 1 - m.t / 3.5));
     }
-    const cine = K && K.act && K.act.k === 'execute' && (K.id === me.id || K.act.id === me.id);
+    const cine = killersOf(S).some(k => k.act && k.act.k === 'execute' && (k.id === me.id || k.act.id === me.id));
     $('hud').classList.toggle('dead', me.st === 'dead' || !!cine);
     $('hud').classList.toggle('cine', !!cine);
   }

@@ -51,6 +51,8 @@
       <div class="panel-body">
         <!-- bot match -->
         <section id="p-play" class="hidden">
+          <div class="field"><label>Game mode</label><select id="bots-gm"></select></div>
+          <p class="hint gm-desc" id="bots-gm-desc"></p>
           <div class="field"><label>Role</label>
             <div class="seg" id="bots-role"><button data-v="survivor" class="on">Survivor</button><button data-v="killer">Killer</button></div></div>
           <div class="field" id="bots-teammates-row"><label>Bot teammates</label>
@@ -88,10 +90,12 @@
         <section id="p-lobby" class="hidden">
           <div class="lobby-top"><div>Room code <span class="code" id="lobby-code"></span></div><button class="btn small" id="btn-copy">Copy invite link</button></div>
           <p class="hint" id="lobby-mode"></p>
+          <p class="hint gm-desc" id="lobby-gm-desc"></p>
           <div class="lobby-grid">
             <div>
               <div class="slots" id="lobby-slots"></div>
               <div class="host-opts" id="lobby-host-opts">
+                <div class="field"><label>Game mode</label><select id="lobby-gm"></select></div>
                 <label class="check"><input type="checkbox" id="lobby-fill" checked> Fill empty slots with bots</label>
                 <div class="field"><label>Map</label><select id="lobby-map"><option value="random">Random</option><option value="woods">Gravemoor Woods</option><option value="meatworks">Hollow Pines Meatworks</option><option value="marsh">Blackwater Marsh</option><option value="carnival">Hollowmere Carnival</option><option value="snow">Coldwater Pass</option></select></div>
                 <div class="field"><label>Bot difficulty</label><div class="seg" id="lobby-diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
