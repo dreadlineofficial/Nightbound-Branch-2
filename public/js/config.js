@@ -343,8 +343,14 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.15.2';
+export const VERSION = '2.15.3';
 export const INBOX = [
+  {
+    id: 'v2.15.3', version: '2.15.3', date: 'Nov 2026', title: 'Store Showroom', tag: 'Update',
+    body: [
+      'Previewing outfits in the Store now stands the character up on their own in a lit clearing, facing you, full body, between the character list and the outfit card. No more survivors sitting with their backs to you at the campfire.',
+    ],
+  },
   {
     id: 'v2.15.2', version: '2.15.2', date: 'Nov 2026', title: 'Character Lore', tag: 'Update',
     body: [

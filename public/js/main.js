@@ -298,7 +298,7 @@ function openStore(tab, char) {
 }
 function closeStore() {
   $('store').classList.add('hidden'); $('menu').classList.remove('store-open');
-  if (menu) { menu.setSurvivor(profile.survivor.char, skinId(profile.survivor.char)); menu.setKiller(profile.killer.char, skinId(profile.killer.char)); }
+  if (menu) { menu.setSurvivor(profile.survivor.char, skinId(profile.survivor.char)); menu.setKiller(profile.killer.char, skinId(profile.killer.char)); menu.setMode(menuMode); menu.showFor = null; }
   for (const b of $('mainnav').children) b.classList.remove('on');
   renderShowcase();
 }
@@ -315,6 +315,7 @@ function renderStore() {
   else if (storeTab === 'collections') body.innerHTML = collectionsHTML();
   else body.innerHTML = charactersHTML();
   bindStore(body);
+  if (menu) { if (storeTab === 'characters') { if (!menu.showRig || menu.showFor !== storeChar + ':' + (storePreview || skinId(storeChar))) { menu.showFor = storeChar + ':' + (storePreview || skinId(storeChar)); previewSkin(storePreview || skinId(storeChar)); } else menu.setMode('show'); } else menu.setMode(menuMode); }
 }
 function chaptersHTML() {
   const dlc = CHAPTERS.filter(c => !c.base), base = CHAPTERS.filter(c => c.base);
@@ -394,10 +395,11 @@ function bindStore(body) {
     saveProfile(); renderStore();
   });
 }
+// the Store shows the character standing on its own in the showroom clearing
 function previewSkin(id) {
   if (!menu || !storeChar) return;
-  if (KILLERS[storeChar]) { menu.setKiller(storeChar, id); setScene('killer'); }
-  else { menu.setSurvivor(storeChar, id); setScene('survivor'); }
+  menu.setShowcase(storeChar, id);
+  menu.setMode('show');
 }
 onForemanReady(() => { forgetArt('foreman'); if (!$('store').classList.contains('hidden')) renderStore(); });
 
