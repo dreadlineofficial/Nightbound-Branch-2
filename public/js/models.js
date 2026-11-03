@@ -581,8 +581,10 @@ export function animate(R, s, dt) {
   if (s.flash && R.kind !== 'killer') { P.shR = -1.45; P.elR = -0.12; P.shRz = -0.05; } // torch held out in front
   // hit reaction: jolt forward, arch back, arms flung out
   if (s.hitF != null && s.hitF < 1 && a !== 'down') {
-    const j = Math.sin(s.hitF * Math.PI);
-    P.spineX -= 0.55 * j; P.headX -= 0.6 * j; P.shLz += 0.9 * j; P.shRz -= 0.9 * j; P.shL -= 0.6 * j; P.shR -= 0.5 * j; P.elL -= 0.6 * j; P.elR -= 0.6 * j;
+    // the blow lands: snap forward and twist away, head whips back, arms fly, then a stumbling step
+    const j = Math.sin(Math.min(1, s.hitF * 1.6) * Math.PI), st = Math.sin(Math.max(0, s.hitF - 0.3) / 0.7 * Math.PI);
+    P.spineX -= 0.65 * j; P.spineY += 0.45 * j; P.headX -= 0.8 * j; P.shLz += 1.0 * j; P.shRz -= 1.0 * j; P.shL -= 0.7 * j; P.shR -= 0.6 * j; P.elL -= 0.8 * j; P.elR -= 0.7 * j;
+    P.lgL -= 0.55 * st; P.knL += 0.7 * st; P.lgR += 0.25 * st; P.spineX += 0.35 * st; P.tiltX -= 0.08 * j;
   }
   // collapsing to the ground
   if (a === 'down' && s.fallF != null && s.fallF < 1) {
@@ -677,7 +679,8 @@ export function animate(R, s, dt) {
     const f = s.exec.f;
     if (f >= 0.28) { P.tiltX = 0; P.hipsY = 0; P.headX = -0.9; P.spineX = -0.1; P.shL = 0.2 + Math.sin(t * 9) * (f < 0.5 ? 0.4 : 0.05); P.shR = 0.15; P.elL = -0.2; P.elR = -0.3; P.lgL = 0.1 + Math.sin(t * 11) * (f < 0.5 ? 0.5 : 0); P.lgR = -0.1; P.knL = 0.3; P.knR = 0.4; }
   }
-  const k = 1 - Math.exp(-dt * (a === 'vault' ? 20 : s.exec ? 16 : (a === 'down' && s.fallF < 1) ? 5 : (s.atk === 1 ? 24 : 12)));
+  // executions blend more slowly between their beats (no snapping between poses)
+  const k = 1 - Math.exp(-dt * (a === 'vault' ? 20 : s.exec ? 8 : (a === 'down' && s.fallF < 1) ? 5 : (s.atk === 1 ? 24 : 12)));
   for (const key in P) R.pose[key] = lerp(R.pose[key] ?? P[key], P[key], k);
   const q = R.pose, j = R.j;
   j.tilt.rotation.x = q.tiltX;

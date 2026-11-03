@@ -363,8 +363,15 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.17.3';
+export const VERSION = '2.18.0';
 export const INBOX = [
+  {
+    id: 'v2.18', version: '2.18.0', date: 'Nov 2026', title: 'Brutal Executions', tag: 'Update',
+    body: [
+      'Executions are smoother and far gorier. The victim glides into place instead of snapping, poses blend between beats, the wound pumps blood in time with a heartbeat, a pool spreads under the body, and the killing blow lands with a burst, flying chunks, blood across the screen and a beat of slow motion.',
+      'Hit reactions: survivors now snap forward, twist away from the blow, whip their head back and stumble.',
+    ],
+  },
   {
     id: 'v2.17.3', version: '2.17.3', date: 'Nov 2026', title: 'Ted Takes a Break', tag: 'Update',
     body: ['Ted now pulls out his camping chair, beer and bong while you repair a generator or sit in a cage, not just when you die. He packs up when you get moving again. Rosy lies down beside you.'],

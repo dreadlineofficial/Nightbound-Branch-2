@@ -690,13 +690,20 @@ export class Game {
           else if (ch === 'foreman') { const drag = sm(0.55, 0.92); d = 1.1 - sm(0.25, 0.35) * 0.25 - drag * 2.6; yy = sm(0.28, 0.4) * 1.05 - drag * 0.7; side = Math.sin(drag * Math.PI) * 0.9; }
           else { const up = sm(0.42, 0.62) - sm(0.86, 0.95); d = 1.25 - up * 0.3; yy = up * 1.75; side = sm(0.86, 1) * 1.2 + up * 0.95; }
           const rgt = { x: -Math.cos(kc.yaw), z: Math.sin(kc.yaw) };
-          R.root.position.set(kc.x + F.x * d + rgt.x * side, yy, kc.z + F.z * d + rgt.z * side);
+          // glide from where they were into the execution spot instead of snapping there
+          const ex = kc.x + F.x * d + rgt.x * side, ez = kc.z + F.z * d + rgt.z * side;
+          if (!c.execFrom) { c.execFrom = R.root.position.clone(); c.execBlend = 0; }
+          c.execBlend = Math.min(1, c.execBlend + dt * 3.5);
+          const eb = c.execBlend * c.execBlend * (3 - 2 * c.execBlend);
+          R.root.position.set(c.execFrom.x + (ex - c.execFrom.x) * eb, c.execFrom.y + (yy - c.execFrom.y) * eb, c.execFrom.z + (ez - c.execFrom.z) * eb);
           R.root.rotation.set(0, ch === 'harrower' && f > 0.42 && f < 0.86 ? kc.yaw + Math.PI / 2 : kc.yaw + Math.PI, 0);
           if (ch === 'wisp') R.setOpacity(f > 0.78 ? Math.max(0.02, 1 - (f - 0.78) / 0.2) : 1);
           if (ch === 'foreman') R.setOpacity(f > 0.72 ? Math.max(0.0, 1 - (f - 0.72) / 0.2) : 1);
           this.execFx(p, EK, f, ch, R.root.position);
         }
-      } else if (anim === 'caged') {
+      }
+      if (anim !== 'exec') c.execFrom = null;
+      if (anim === 'caged') {
         const cg = this.M.cages[p.cage];
         if (cg) { R.root.position.set(cg.x, 0.2, cg.z); }
       }
@@ -986,8 +993,9 @@ export class Game {
   }
   execFx(victim, K, f, ch, pos) {
     const key = victim.id + ':' + (victim.stage || 0);
-    if (!this.execFired || this.execFired.key !== key) this.execFired = { key, s: new Set() };
+    if (!this.execFired || this.execFired.key !== key) this.execFired = { key, s: new Set(), pool: 0 };
     const once = (k, at, fn) => { if (f >= at && !this.execFired.s.has(k)) { this.execFired.s.add(k); fn(); } };
+    this.execGore(victim, K, f, ch, pos, once);
     const pitch = ({ mara: 1.15, eli: 0.75, june: 1.3, tomas: 0.8 }[victim.char] || 1);
     const mine = victim.id === this.myId || K.id === this.myId;
     const bloodAt = (n, y = 1.1) => { this.blood.spawn(pos.x, pos.y + y, pos.z, n, 0x6a0303, 3.2, 1.4, -9.8, 1.4); this.blood.spawn(pos.x, pos.y + y, pos.z, Math.floor(n / 3), 0x3a0101, 1.2, 1.4, -9.8, 0.5); if (this.decals) this.decals.add(pos.x + (Math.random() - 0.5) * 0.6, pos.z + (Math.random() - 0.5) * 0.6, 0.9 + n / 80, Math.random() < 0.5 ? 0 : 2); };
@@ -1027,6 +1035,33 @@ export class Game {
       if (f > 0.42 && f < 0.86 && Math.random() < 0.3) this.blood.spawn(pos.x, pos.y + 0.9, pos.z, 2, 0x5a0404, 0.3, 1, -9, 0.2);
       once('toss', 0.88, () => { sound.play('drop', pos.x, pos.z); bloodAt(30, 0.2); });
     }
+  }
+
+  // the gore every execution shares: the wound opens, keeps pumping, a pool spreads under the body
+  // and the killing blow comes with a burst, flying chunks and a beat of slow motion
+  execGore(victim, K, f, ch, pos, once) {
+    const T = { butcher: [0.5, 0.72], bateman: [0.5, 0.72], chucky: [0.3, 0.75], foreman: [0.3, 0.55], harrower: [0.32, 0.5], lamplighter: [0.32, 0.5], wisp: [0.45, 0.8], slimer: [0.35, 0.75] }[ch] || [0.35, 0.7];
+    const [wound, kill] = T, mine = victim.id === this.myId || K.id === this.myId;
+    const y = ch === 'harrower' || ch === 'lamplighter' ? 1.2 : ch === 'chucky' ? 0.3 : 1.0;
+    if (ch === 'wisp' || ch === 'slimer') { /* no blade: their deaths are frost and slime */ }
+    else if (f > wound && f < 0.97) {
+      // arterial spurts in time with a heartbeat, plus a steady drip
+      const beat = Math.sin(this.t * 9) > 0.6;
+      if (beat && Math.random() < 0.8) { const a = Math.random() * 6.28; this.blood.spray(pos.x, pos.y + y, pos.z, 6, 0x8a0505, Math.cos(a), Math.sin(a), 2.6, 0.9); }
+      if (Math.random() < 0.5) this.blood.spawn(pos.x, pos.y + y - 0.2, pos.z, 2, 0x5a0303, 0.4, 0.3, -9.8, 0.25);
+      const F = this.execFired;
+      if (f - F.pool > 0.07 && this.decals) { F.pool = f; this.decals.add(pos.x + (Math.random() - 0.5) * 0.2, pos.z + (Math.random() - 0.5) * 0.2, 0.7 + (f - wound) * 2.4, 1); }
+    }
+    once('killblow', kill, () => {
+      if (ch !== 'wisp' && ch !== 'slimer') {
+        for (let i = 0; i < 4; i++) { const a = Math.random() * 6.28; this.blood.spray(pos.x, pos.y + y, pos.z, 45, 0x7a0404, Math.cos(a), Math.sin(a), 5, 1.6); }
+        this.blood.spawn(pos.x, pos.y + y, pos.z, 26, 0x2a0000, 3.4, 2.2, -12, 1.8); // chunks
+        if (this.decals) for (let i = 0; i < 5; i++) this.decals.add(pos.x + (Math.random() - 0.5) * 2.4, pos.z + (Math.random() - 0.5) * 2.4, 0.4 + Math.random() * 0.8, 2, Math.random() * 6.28);
+      }
+      if (mine) { this.hitStop = 0.3; this.shake = Math.max(this.shake, 1.1); this.flash = Math.max(this.flash, 0.6); }
+      if (victim.id === this.myId) this.splat(1);
+      if (K.id === this.myId && this.view) this.view.userData.bloody = 1;
+    });
   }
 
   // flashlight: a torch in the right hand with a soft volumetric beam (and a real spotlight on
