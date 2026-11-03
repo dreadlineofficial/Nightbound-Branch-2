@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.18.5';
+export const VERSION = '2.18.6';
 export const INBOX = [
+  {
+    id: 'v2.18.6', version: '2.18.6', date: 'Nov 2026', title: 'Axe Grip Fix', tag: 'Fix',
+    body: ['Patrick Bateman\'s fire axe no longer floats in front of the camera: the handle now sits in his fist, in first person and third person, with the blade leading every swing.'],
+  },
   {
     id: 'v2.18.5', version: '2.18.5', date: 'Nov 2026', title: 'Your Camera, Your Way', tag: 'Update',
     body: ['New camera options in Settings (and in the pause menu): left shoulder, centered or right shoulder, plus camera distance, height and orbit angle.', 'Press H during a match to swap shoulders instantly. Works for survivors and over-the-shoulder killers like Chucky.'],

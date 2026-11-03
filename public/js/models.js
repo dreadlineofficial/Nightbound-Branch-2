@@ -487,7 +487,7 @@ function makeBateman(sk) {
   R.root.scale.setScalar(1.07);
   R.finalize();
   // the real fire axe (model) in his right hand
-  if (!sk.saw) { const axe = cloneStatic('axe'); if (axe) { axe.position.set(0, -0.06, 0.18); axe.rotation.set(Math.PI / 2, 0, 0); R.j.handR.add(axe); fitAxe(axe); } }
+  if (!sk.saw) { const axe = cloneStatic('axe'); if (axe) { const fist = new THREE.Group(); fist.position.set(0, -0.05, 0.02); fist.add(gripAxe(axe, new THREE.Vector3(0, -0.5, 1), new THREE.Vector3(0, -1, 0), 0.14)); R.j.handR.add(fist); } }
   applySkinFx(R, sk);
   return R;
 }
@@ -506,12 +506,43 @@ function makeDoll(sk) {
   R.finalize();
   return R;
 }
-// the axe model's longest side is its handle: point it along +Z (forward from the fist), blade up
-function fitAxe(axe) {
-  const b = new THREE.Box3().setFromObject(axe), s = b.getSize(new THREE.Vector3());
-  const inner = axe.children[0];
-  if (s.y >= s.x && s.y >= s.z) { axe.rotation.set(Math.PI / 2, 0, 0); } else if (s.x >= s.z) { axe.rotation.set(0, Math.PI / 2, Math.PI / 2); }
-  return inner;
+// Put the axe model in a fist: works out which way its handle runs and which end is the head
+// (the end with the wider cross-section) and which way the blade's edge faces, then turns it so
+// the handle runs along `fwd` from the fist, the edge faces `edge`, and the grip (`grip` of the
+// way up from the butt) sits exactly at the fist's origin.
+const _axeInfo = { v: null };
+function axeInfo(axe) {
+  if (_axeInfo.v) return _axeInfo.v;
+  axe.updateMatrixWorld(true);
+  const pts = [], inv = new THREE.Matrix4().copy(axe.matrixWorld).invert(), m = new THREE.Matrix4(), v = new THREE.Vector3();
+  axe.traverse(o => { if (!o.isMesh) return; m.multiplyMatrices(inv, o.matrixWorld); const P = o.geometry.attributes.position; const step = Math.max(1, Math.floor(P.count / 4000)); for (let i = 0; i < P.count; i += step) pts.push(v.fromBufferAttribute(P, i).applyMatrix4(m).toArray()); });
+  const lo = [0, 1, 2].map(k => Math.min(...pts.map(p => p[k]))), hi = [0, 1, 2].map(k => Math.max(...pts.map(p => p[k])));
+  const a = [0, 1, 2].reduce((x, k) => hi[k] - lo[k] > hi[x] - lo[x] ? k : x, 0), len = hi[a] - lo[a];
+  const others = [0, 1, 2].filter(k => k !== a);
+  const band = (f0, f1) => pts.filter(p => p[a] >= lo[a] + f0 * len && p[a] <= lo[a] + f1 * len);
+  const spread = (P, k) => P.length ? Math.max(...P.map(p => p[k])) - Math.min(...P.map(p => p[k])) : 0;
+  const low = band(0, 0.2), high = band(0.8, 1), mid = band(0.3, 0.6);
+  const head = spread(high, others[0]) + spread(high, others[1]) > spread(low, others[0]) + spread(low, others[1]) ? 1 : -1;
+  const H = head > 0 ? high : low;
+  const bAx = spread(H, others[0]) >= spread(H, others[1]) ? others[0] : others[1], cAx = others.find(k => k !== bAx);
+  const med = k => { const s = mid.map(p => p[k]).sort((x, y) => x - y); return s[s.length >> 1] || 0; };
+  const cb = med(bAx), cc = med(cAx);
+  const edge = Math.max(...H.map(p => p[bAx])) - cb >= cb - Math.min(...H.map(p => p[bAx])) ? 1 : -1;
+  const unit = (k, sgn) => { const u = new THREE.Vector3(); u.setComponent(k, sgn); return u; };
+  _axeInfo.v = { along: unit(a, head), edge: unit(bAx, edge), butt: head > 0 ? lo[a] : hi[a], len, a, bAx, cAx, cb, cc };
+  return _axeInfo.v;
+}
+function gripAxe(axe, fwd, edge, grip = 0.12, scale = 1) {
+  const I = axeInfo(axe);
+  const f = fwd.clone().normalize(), e = edge.clone().addScaledVector(f, -edge.dot(f)).normalize();
+  const S = new THREE.Matrix4().makeBasis(I.along, I.edge, I.along.clone().cross(I.edge));
+  const T = new THREE.Matrix4().makeBasis(f, e, f.clone().cross(e));
+  axe.quaternion.setFromRotationMatrix(T.multiply(S.transpose()));
+  axe.scale.setScalar(scale);
+  const p = new THREE.Vector3(); p.setComponent(I.a, I.butt); p.setComponent(I.bAx, I.cb); p.setComponent(I.cAx, I.cc);
+  p.addScaledVector(I.along, grip * I.len);
+  axe.position.copy(p.applyQuaternion(axe.quaternion).multiplyScalar(-scale));
+  return axe;
 }
 // chainsaw parts as [geo, material, x, y, z, rx, ry, rz] (shared by the prop and the outfit)
 function chainsawParts() {
@@ -735,7 +766,7 @@ export function makeViewModel(id) {
   } else if (id === 'bateman') {
     add(arm, G.cyl(0.033, 0.032, 0.04, 10), mat(0xf4f2ee, { map: 'cloth' }), 0, -0.01, 0.03, -Math.PI / 2, 0, 0);
     const axe = cloneStatic('axe');
-    if (axe) { const holder = new THREE.Group(); holder.position.set(0, 0.02, -0.32); arm.add(holder); axe.rotation.set(-Math.PI / 2, 0, 0); holder.add(axe); fitAxe(axe); axe.rotation.x = -axe.rotation.x; axe.scale.setScalar(0.85); }
+    if (axe) { const fist = new THREE.Group(); fist.position.set(0, 0.0, -0.01); arm.add(fist); fist.add(gripAxe(axe, new THREE.Vector3(0, Math.sin(0.3), -Math.cos(0.3)), new THREE.Vector3(0, -Math.cos(0.3), -Math.sin(0.3)), 0.1, 0.8)); }
     else {
       add(arm, G.cyl(0.018, 0.022, 0.7, 8), mat(0x6a4a2a, { map: 'wood', rough: 0.6 }), 0, 0.02, -0.25, Math.PI / 2, 0, 0);
       add(arm, G.box(0.03, 0.2, 0.15), mat(0xb8bcc0, { map: 'metal', metal: 0.85, rough: 0.25 }), 0, 0.09, -0.56);
