@@ -111,12 +111,12 @@ export const KILLERS = {
     color: 0xd83a22,
   },
   bateman: {
-    id: 'bateman', name: 'Patrick Bateman', speed: 4.6, terror: 30, weapon: 'Axe', crossover: 'American Psycho (fan-made)',
+    id: 'bateman', name: 'Patrick Bateman', speed: 4.7, terror: 28, weapon: 'Axe', crossover: 'American Psycho (fan-made)',
     lore: 'Vice president at Pierce & Pierce. Impeccable taste, a flawless skincare routine, and an axe in his briefcase.',
     exec: { name: 'Hip to Be Square', desc: 'Puts on his raincoat, lectures the survivor about Huey Lewis, then swings the axe.' },
-    ability: { name: 'Chainsaw Toss', cooldown: 4, aim: 0.6, range: 22, desc: 'Hold to aim (slowed), release to hurl your chainsaw. A hit puts a survivor straight down. Then go and pick it up (it comes back by itself after 20s).' },
-    ability2: { name: 'Business Card', key: 'R', cooldown: 25, range: 14, desc: 'Show your card. Survivors within 14m in front of you are intimidated: revealed and slowed by 15% for 4s.' },
-    feature: { name: 'Morning Routine', desc: 'After every hit, a 3s burst of +12% speed.' },
+    ability: { name: 'Chainsaw Toss', cooldown: 2.5, aim: 0.35, range: 24, back: 8, desc: 'Hold to aim (slowed), release to hurl your chainsaw. A hit puts a survivor straight down. Walk over it to pick it up, or it flies back to your hand after 8s.' },
+    ability2: { name: 'Business Card', key: 'R', cooldown: 18, range: 16, desc: 'Show your card. Survivors within 16m in front of you are intimidated: revealed and slowed by 20% for 5s.' },
+    feature: { name: 'Morning Routine', desc: 'After every hit, a 4s burst of +12% speed. Survivors he has intimidated leave him a trail: they stay revealed while they run.' },
     color: 0xc01a1a,
   },
 };
@@ -270,8 +270,17 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.15.0';
+export const VERSION = '2.15.1';
 export const INBOX = [
+  {
+    id: 'v2.15.1', version: '2.15.1', date: 'Nov 2026', title: 'Patrick Bateman Buff', tag: 'Balance',
+    body: [
+      'Chainsaw Toss: half the wind-up (0.35s), a faster throw (26 m/s), a bigger hitbox, 24m range and a 2.5s cooldown. If you don\'t pick it up, it flies back to your hand after 8s (was 20s).',
+      'Business Card: 18s cooldown (was 25s), 16m range, slows by 20% for 5s, and intimidated survivors stay revealed while they run.',
+      'Morning Routine lasts 4s. Base speed 4.7 m/s, terror radius 28m.',
+      'His first-person chainsaw is smaller and sits in the lower corner instead of covering the screen.',
+    ],
+  },
   {
     id: 'v2.15', version: '2.15.0', date: 'Nov 2026', title: 'Chucky: Soul Split', tag: 'Balance',
     body: [

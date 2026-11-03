@@ -45,7 +45,7 @@ export function speedOf(p, S, sprint, crouch) {
     if (!crouch && sprint && p.hp === 1 && has(p, 'fleet')) s *= 1.07;
     if (p.boost > 0) s *= p.boostMul || SPEED.hitBoost;
     if (p.slimed > 0) s *= 0.7;
-    if (p.card > 0) s *= 0.85; // intimidated by a business card
+    if (p.card > 0) s *= 0.8; // intimidated by a business card
     return s;
   }
   const K = KILLERS[p.char];

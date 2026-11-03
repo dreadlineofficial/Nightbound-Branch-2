@@ -747,7 +747,7 @@ export function makeViewModel(id) {
   }
   if (id === 'bateman') {
     // the chainsaw rides in his left hand until he throws it
-    const saw = makeChainsaw(); saw.position.set(0.02, -0.08, -0.12); saw.rotation.set(0, Math.PI, 0); saw.scale.setScalar(0.9); left.add(saw);
+    const saw = makeChainsaw(); saw.position.set(0.0, -0.06, -0.1); saw.rotation.set(0, Math.PI, 0); saw.scale.setScalar(0.55); left.add(saw);
     g.userData.saw = saw;
   }
   g.userData = { ...g.userData, arm, left, tip, base, pose: null, id, bloodMesh };
@@ -768,7 +768,7 @@ const VP = {
   act:     [0.2, -0.5, -0.5, 0.6, 0.1, 0.2],
   tele:    [0.25, -0.55, -0.4, 0.4, 0.3, 0.3],
 };
-const LP = { saw: [-0.36, -0.42, -0.5, 0.15, -0.15, 0.1], sawAim: [-0.18, -0.12, -0.5, -0.35, 0.35, -0.3], idle: [-0.34, -0.44, -0.5, 0.2, -0.1, 0], carry: [-0.3, -0.25, -0.42, -0.4, -0.2, 0.3], wipe: [-0.12, -0.3, -0.38, 0.4, -0.6, 0], stun: [-0.18, -0.2, -0.28, -0.7, -0.2, -0.5], act: [-0.2, -0.5, -0.5, 0.6, -0.1, -0.2], lantern: [-0.3, -0.2, -0.52, 0.1, 0.15, 0], tele: [-0.1, -0.15, -0.45, -0.6, 0, 0] };
+const LP = { saw: [-0.4, -0.38, -0.6, 0.35, -0.35, 0.2], sawAim: [-0.34, -0.3, -0.8, 0.15, 0.45, -0.15], idle: [-0.34, -0.44, -0.5, 0.2, -0.1, 0], carry: [-0.3, -0.25, -0.42, -0.4, -0.2, 0.3], wipe: [-0.12, -0.3, -0.38, 0.4, -0.6, 0], stun: [-0.18, -0.2, -0.28, -0.7, -0.2, -0.5], act: [-0.2, -0.5, -0.5, 0.6, -0.1, -0.2], lantern: [-0.3, -0.2, -0.52, 0.1, 0.15, 0], tele: [-0.1, -0.15, -0.45, -0.6, 0, 0] };
 const mixP = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
 // s: { atk, atkF, atkHit, recF, aim, stun, rampage, carry, act, moving, speed, t, tele }
 export function animateView(v, s, dt) {

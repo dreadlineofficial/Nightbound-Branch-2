@@ -214,7 +214,7 @@ export class Sim {
         // Patrick Bateman hurls his chainsaw: it flies flat and fast, then lies where it lands
         if (p.role !== 'killer' || p.char !== 'bateman' || !p.aim || p.ammo <= 0 || p.stun > 0 || p.carry != null || p.act) return;
         if (p.abT < KILLERS.bateman.ability.aim) return; // he has to wind up
-        const yaw = num(m.yaw, p.yaw), pitch = Math.max(-0.4, Math.min(0.4, num(m.pitch, 0))), sp = 20, f = fwd(yaw);
+        const yaw = num(m.yaw, p.yaw), pitch = Math.max(-0.4, Math.min(0.4, num(m.pitch, 0))), sp = 26, f = fwd(yaw);
         S.saws.push({ id: ++S.lid, st: 'fly', x: p.x + f.x * 0.7, z: p.z + f.z * 0.7, y: 1.3, vx: f.x * sp * Math.cos(pitch), vz: f.z * sp * Math.cos(pitch), vy: 2.2 + sp * Math.sin(pitch), t: 0, by: p.id });
         p.ammo = 0; p.ammoT = 0; p.aim = false; p.abT = 0;
         this.ev({ k: 'sawthrow', id: p.id, x: p.x, z: p.z });
@@ -289,7 +289,7 @@ export class Sim {
             if (s.role !== 'survivor' || s.st !== 'ok') continue;
             const dx = s.x - p.x, dz = s.z - p.z, d = Math.hypot(dx, dz);
             if (d > D.range || (d > 1 && (dx * f.x + dz * f.z) / d < 0.5) || losBlocked(M, p.x, p.z, s.x, s.z, 1.2)) continue;
-            s.card = 4; s.reveal = Math.max(s.reveal, 5); ids.push(s.id);
+            s.card = 5; s.reveal = Math.max(s.reveal, 5); ids.push(s.id);
           }
           p.ab2Cd = D.cooldown; p.score.b += ids.length * 150;
           this.ev({ k: 'card', id: p.id, x: p.x, z: p.z, ids });
@@ -458,7 +458,7 @@ export class Sim {
       if (p.phase > 0) { p.phase = Math.max(0, p.phase - dt); if (p.phase === 0) this.endPhase(p); }
       if (p.ambush > 0) p.ambush = Math.max(0, p.ambush - dt);
       if (p.haste > 0) p.haste = Math.max(0, p.haste - dt);
-      if (p.card > 0) p.card = Math.max(0, p.card - dt);
+      if (p.card > 0) { p.card = Math.max(0, p.card - dt); if (p.mv === 2) p.reveal = Math.max(p.reveal, 0.4); }
       if (p.possCd > 0) p.possCd = Math.max(0, p.possCd - dt);
       if (p.mark > 0) p.mark = Math.max(0, p.mark - dt);
       if (p.char === 'butcher' && p.role === 'killer' && p.charges < KILLERS.butcher.ability.charges) { p.chargeT += dt; if (p.chargeT >= KILLERS.butcher.ability.cooldown) { p.chargeT = 0; p.charges++; } }
@@ -767,7 +767,7 @@ export class Sim {
     s.hp = instantDown ? 0 : s.hp - 1;
     K.score.a += 300;
     if (this.mode === 'rush') K.haste = Math.max(K.haste || 0, 2.5);
-    if (K.char === 'bateman') K.haste = Math.max(K.haste || 0, 3); // Morning Routine
+    if (K.char === 'bateman') K.haste = Math.max(K.haste || 0, 4); // Morning Routine
     if (s.hp <= 0) {
       s.hp = 0; s.st = 'down'; s.bleed = RULES.bleedout; s.healP = 0; s.boost = 0;
       if (this.mode === 'infection') s.turn = 3;
@@ -1149,9 +1149,9 @@ export class Sim {
       if (!K || K.role !== 'killer' || K.char !== 'bateman') { S.saws.splice(i, 1); continue; }
       if (sw.st === 'ground') {
         // he walks over to pick it back up (or it finds its own way back)
-        if (Math.hypot(K.x - sw.x, K.z - sw.z) < 1.4 || sw.t > 20) {
+        if (Math.hypot(K.x - sw.x, K.z - sw.z) < 1.6 || sw.t > KILLERS.bateman.ability.back) {
           S.saws.splice(i, 1); K.ammo = 1; K.abCd = KILLERS.bateman.ability.cooldown;
-          this.ev({ k: 'sawpickup', id: K.id, x: sw.x, z: sw.z, back: sw.t > 20 });
+          this.ev({ k: 'sawpickup', id: K.id, x: sw.x, z: sw.z, back: sw.t > KILLERS.bateman.ability.back });
         }
         continue;
       }
@@ -1163,7 +1163,7 @@ export class Sim {
         sw.x += sw.vx * h; sw.z += sw.vz * h; sw.y += sw.vy * h;
         for (const s of S.players) {
           if (s.role !== 'survivor' || s.st !== 'ok') continue;
-          if (sw.y < (s.cr ? 1.15 : 1.85) && Math.hypot(sw.x - s.x, sw.z - s.z) < 0.5) {
+          if (sw.y < (s.cr ? 1.15 : 1.85) && Math.hypot(sw.x - s.x, sw.z - s.z) < 0.65) {
             this.damage(s, K, true); K.score.b += 400;
             this.ev({ k: 'sawhit', id: s.id, by: K.id, x: s.x, z: s.z });
             land = true; break;

@@ -565,13 +565,13 @@ export class Bots {
       }
       if (p.char === 'chucky' && !p.harmless && !target && p.ab2Cd <= 0 && Math.random() < dt * 0.15) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
       if (p.char === 'bateman' && target && los && p.abCd <= 0 && p.ammo > 0 && d > 5 && d < 17 && !p.atk && this.clearLine(p.x, p.z, tx, tz)) {
-        if (!b.aim) { b.aim = true; b.aimT = 0.8 + D.react * 0.5; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
+        if (!b.aim) { b.aim = true; b.aimT = 0.45 + D.react * 0.4; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }
       if (p.char === 'bateman' && target && los && p.ab2Cd <= 0 && d < 11 && Math.abs(angDiff(p.yaw, ang)) < 0.5 && Math.random() < dt * 0.8) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
       if (b.aim) {
         b.aimT -= dt;
         // lead the target
-        const lead = d / (p.char === 'bateman' ? 20 : p.char === 'chucky' ? 14 : 32);
+        const lead = d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : 32);
         const vx = target ? (target.x - (b.prevTX ?? target.x)) / Math.max(dt, 1e-3) : 0, vz = target ? (target.z - (b.prevTZ ?? target.z)) / Math.max(dt, 1e-3) : 0;
         const ax = tx + vx * lead * D.aim, az = tz + vz * lead * D.aim;
         p.yaw = Math.atan2(ax - p.x, az - p.z) + (Math.random() - 0.5) * (1 - D.aim) * 0.25;
@@ -581,8 +581,8 @@ export class Bots {
             sim.onMsg(p.id, { t: 'act', a: 'pounce', yaw: p.yaw });
           } else if (target && p.char === 'bateman') {
             // flat, fast throw: aim low enough that the arc still crosses chest height at the target
-            const ft = Math.hypot(ax - p.x, az - p.z) / 20, vy = (1.1 - 1.3 + 4.5 * ft * ft) / Math.max(0.05, ft) - 2.2;
-            sim.onMsg(p.id, { t: 'act', a: 'sawthrow', yaw: p.yaw, pitch: Math.asin(Math.max(-0.4, Math.min(0.4, vy / 20))) });
+            const ft = Math.hypot(ax - p.x, az - p.z) / 26, vy = (1.1 - 1.3 + 4.5 * ft * ft) / Math.max(0.05, ft) - 2.2;
+            sim.onMsg(p.id, { t: 'act', a: 'sawthrow', yaw: p.yaw, pitch: Math.asin(Math.max(-0.4, Math.min(0.4, vy / 26))) });
           } else if (target) {
             const ft = Math.hypot(ax - p.x, az - p.z) / 32, vy = (1.1 - 1.75 + 3.5 * ft * ft) / Math.max(0.05, ft);
             sim.onMsg(p.id, { t: 'act', a: 'throw', yaw: p.yaw, pitch: Math.asin(Math.max(-0.5, Math.min(0.5, vy / 32))) });
