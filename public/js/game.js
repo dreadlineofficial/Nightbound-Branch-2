@@ -407,6 +407,8 @@ export class Game {
         if (e.code !== this.lastWigKey) { this.lastWigKey = e.code; this.send({ t: 'act', a: 'wig' }); this.wigFlash = 0.15; }
       }
       if (e.code === 'KeyF' || e.code === 'Digit1') this.cycleSpectate();
+      if (e.code === 'KeyB' && !e.repeat) this.toggleEmotes();
+      if (this.emoteBar && !this.emoteBar.classList.contains('hidden') && /^Digit[1-4]$/.test(e.code)) { this.playEmote(+e.code.slice(5)); return; }
       if (e.code === 'KeyH' && !e.repeat) { this.settings.camSide = (this.settings.camSide ?? 1) === 1 ? -1 : 1; window.dispatchEvent(new Event('nb-cam')); this.feed(this.settings.camSide === 1 ? 'Camera: right shoulder' : 'Camera: left shoulder'); }
       if (e.code === 'KeyT') { const b = this.takeoverTarget(); if (b) this.send({ t: 'act', a: 'takeover', id: b.id }); }
     } else this.keys.delete(e.code);
@@ -701,6 +703,8 @@ export class Game {
         else if (!local && (p.mv === 1 || p.mv === 2)) anim = p.mv === 2 ? 'run' : 'walk'; // what the player is doing, not network jitter
         else anim = c.spd > 3.0 ? 'run' : c.spd > (local ? 0.3 : 0.8) ? 'walk' : 'idle';
         st.struggle = p.st === 'carried';
+        if (p.emote !== c.emotePrev) { c.emoteAt = this.t; c.emotePrev = p.emote; }
+        if (p.emote && p.st === 'ok') { st.emote = p.emote; st.emoteT = this.t - c.emoteAt; }
       } else {
         anim = vaulting ? 'vault' : (c.spd > 0.3 || (!local && p.mv >= 1 && p.mv <= 2)) ? 'walk' : 'idle';
         if (vaulting) { const d = p.vault.d || 1.7; y = Math.sin(Math.min(1, c.vaultT / d) * Math.PI) * 0.5; }
@@ -1200,6 +1204,26 @@ export class Game {
     }
   }
 
+  // ---- emotes (survivors): B opens the bar, 1-4 or a click picks one; moving cancels ----
+  toggleEmotes(force) {
+    const me = this.mine();
+    if (!this.emoteBar) {
+      const bar = this.emoteBar = document.createElement('div'); bar.id = 'emote-bar'; bar.className = 'hidden';
+      bar.innerHTML = [['Dance', 1], ['Wave', 2], ['Cheer', 3], ['Bow', 4]].map(([n, i]) => `<button data-emote="${i}"><b>${i}</b>${n}</button>`).join('');
+      bar.addEventListener('mousedown', ev => { const b = ev.target.closest('[data-emote]'); if (b) { ev.stopPropagation(); this.playEmote(+b.dataset.emote); } });
+      this.hud.appendChild(bar);
+    }
+    const open = force ?? this.emoteBar.classList.contains('hidden');
+    if (open && (!me || me.role !== 'survivor' || me.st !== 'ok')) { if (me && me.role === 'killer') this.feed('Emotes are for survivors'); return; }
+    this.emoteBar.classList.toggle('hidden', !open);
+  }
+  playEmote(n) {
+    const me = this.mine();
+    this.emoteBar && this.emoteBar.classList.add('hidden');
+    if (!me || me.role !== 'survivor' || me.st !== 'ok') return;
+    this.send({ t: 'act', a: 'emote', n: me.emote === n ? 0 : n });
+  }
+
   // the bot this fallen player could take over: the one being watched, else the first alive
   takeoverTarget() {
     const S = this.S, me = this.mine();
@@ -1503,7 +1527,7 @@ export class Game {
       ? `${k('WASD')} move · ${k('E')} repair generators · nobody can see you`
       : me.role === 'killer'
       ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} ${me.char === 'chucky' ? 'jump' : 'vault'}${me.char === 'chucky' ? ` · ${k('G')} possess · ${k('V')} soul split` : ''} · ${k('Q')} drop · ${k('Tab')} status`
-      : `${k('WASD')} move · ${k('Shift')} run · ${k('Ctrl')} crouch · ${k('E')} interact · ${k('RMB')} flashlight · ${k('G')} ghost trap · ${k('Space')} vault / barricade / skill check · ${k('Tab')} status`;
+      : `${k('WASD')} move · ${k('Shift')} run · ${k('Ctrl')} crouch · ${k('E')} interact · ${k('RMB')} flashlight · ${k('G')} ghost trap · ${k('Space')} vault / barricade / skill check · ${k('B')} emotes · ${k('Tab')} status`;
     $('controls-hint').classList.remove('fade');
     clearTimeout(this.hintT); this.hintT = setTimeout(() => $('controls-hint').classList.add('fade'), 14000);
     $('fps').classList.toggle('hidden', !this.settings.showFps);

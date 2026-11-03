@@ -122,6 +122,8 @@ function poseTed(R, s) {
   let armR = qa(1, 0, 0, 1.25), armL = qa(1, 0, 0, -1.25); // arms down from the T-pose
   if (s.cheer) { const w = Math.sin(t * 14) * 0.25; armR = qa(1, 0, 0, -0.6 + w); armL = qa(1, 0, 0, 0.6 - w); }
   else if (s.panic) { armR = qa(1, 0, 0, -0.2 + Math.sin(t * 20) * 0.5); armL = qa(1, 0, 0, 0.2 - Math.sin(t * 20 + 1) * 0.5); }
+  else if (s.wave) { armR = qa(1, 0, 0, -1.3).multiply(qa(0, 0, 1, Math.sin(t * 11) * 0.4)); }
+  else if (s.bow) { armR = qa(0, 0, 1, 0.9 * s.bow).multiply(qa(1, 0, 0, 1.0)); }
   else if (s.dance) { const k = Math.sin(t * 6); armR = qa(0, 0, 1, 1.0 * k).multiply(qa(1, 0, 0, 0.4)); armL = qa(0, 0, 1, -1.0 * k).multiply(qa(1, 0, 0, -0.4)); }
   else if (sit > 0.5) { armR = qa(0, 0, 1, 0.5).multiply(qa(1, 0, 0, 1.0)); armL = qa(0, 0, 1, 0.5).multiply(qa(1, 0, 0, -1.0)); } // paws on the armrests
   else { armR = qa(0, 0, 1, -sw * 0.8).multiply(armR); armL = qa(0, 0, 1, sw * 0.8).multiply(armL); }
@@ -129,7 +131,7 @@ function poseTed(R, s) {
   for (const f of ['foreR', 'foreL']) d[f] && d[f](new THREE.Quaternion());
   d.thighR && d.thighR(qa(0, 0, 1, 1.45 * sit + sw * stand)); d.thighL && d.thighL(qa(0, 0, 1, 1.45 * sit - sw * stand));
   d.shinR && d.shinR(qa(0, 0, 1, -1.35 * sit - Math.max(0, -sw) * 0.9 * stand)); d.shinL && d.shinL(qa(0, 0, 1, -1.35 * sit - Math.max(0, sw) * 0.9 * stand));
-  d.chest && d.chest(qa(0, 0, 1, -0.12 * sit + (s.walk ? 0.12 * s.walk * stand : 0) + 0.45 * (s.bend || 0) + (s.breathe || 0)).multiply(qa(1, 0, 0, s.dance ? Math.sin(t * 6) * 0.15 : 0)));
+  d.chest && d.chest(qa(0, 0, 1, -0.12 * sit + (s.walk ? 0.12 * s.walk * stand : 0) + 0.45 * (s.bend || 0) + 0.7 * (s.bow || 0) + (s.breathe || 0)).multiply(qa(1, 0, 0, s.dance ? Math.sin(t * 6) * 0.15 : 0)));
   d.neck && d.neck(qa(0, 0, 1, s.nod != null ? -s.nod : Math.sin(t * 1.3) * 0.06).multiply(qa(0, 1, 0, s.look || 0)));
   R.holder.position.y = bob * stand + 0.09 * sit + (s.hop || 0);
 }
@@ -314,7 +316,10 @@ export class Sidekick {
     pose.walk = Math.min(1, speed / 3.5);
     pose.cheer = this.mood === 'cheer'; pose.panic = this.mood === 'panic'; pose.dance = this.mood === 'dance' || owner.emote === 1;
     pose.hop = this.mood === 'jump' ? Math.abs(Math.sin(this.moodT * 7)) * 0.18 : pose.cheer ? Math.abs(Math.sin(this.t * 9)) * 0.08 : 0;
-    if (owner.emote && owner.emote !== 1) pose.cheer = true;
+    if (owner.emote === 3) pose.cheer = true;
+    if (owner.emote === 2) pose.wave = true;
+    if (owner.emote === 4) pose.bow = Math.min(1, (this.bowT = (this.bowT || 0) + dt) / 0.6) * (this.bowT < 2.4 ? 1 : Math.max(0, 1 - (this.bowT - 2.4) / 0.6));
+    if (owner.emote !== 4) this.bowT = 0;
     R.root.position.set(this.x, 0, this.z); R.root.rotation.y = this.yaw;
     R.kind === 'ted' ? poseTed(R, pose) : poseRosy(R, pose);
   }

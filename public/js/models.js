@@ -629,6 +629,23 @@ export function animate(R, s, dt) {
   } else if (a === 'vault') {
     P.tiltX = 0.55; P.lgL = -1.5; P.lgR = -1.1; P.knL = 1.7; P.knR = 1.2; P.shL = -1.6; P.shR = -1.4; P.hipsY = 0;
   }
+  // ---- emotes (survivors) ----
+  if (s.emote && (a === 'idle' || a === 'walk')) {
+    const e = s.emoteT || 0, k = Math.min(1, e * 4), T = {};
+    if (s.emote === 1) { // dance: bounce on the beat, arms pumping, hips and shoulders swaying
+      const b = e * 6.5, sb = Math.sin(b), hb = Math.sin(b / 2);
+      Object.assign(T, { hipsY: -0.07 + Math.abs(sb) * 0.07, spineY: hb * 0.4, spineX: 0.05 + Math.abs(sb) * 0.08, headX: sb * 0.15, shL: -1.5 + sb * 1.1, shR: -1.5 - sb * 1.1, shLz: 0.35, shRz: -0.35, elL: -1.3, elR: -1.3, lgL: hb * 0.35, lgR: -hb * 0.35, knL: 0.15 + Math.max(0, sb) * 0.55, knR: 0.15 + Math.max(0, -sb) * 0.55, tiltY: hb * 0.12 });
+    } else if (s.emote === 2) { // wave: arm up and out, hand swinging
+      Object.assign(T, { shR: -2.5, shRz: -0.55, elR: -0.7 + Math.sin(e * 11) * 0.55, spineY: -0.15, headX: -0.08, shL: 0.1, elL: -0.2 });
+    } else if (s.emote === 3) { // cheer: both fists pumping overhead with a hop
+      const w = Math.sin(e * 9);
+      Object.assign(T, { shL: -2.85 + w * 0.3, shR: -2.85 - w * 0.3, shLz: 0.25, shRz: -0.25, elL: -0.25, elR: -0.25, hipsY: Math.max(0, w) * 0.09, headX: -0.25, knL: 0.15 + Math.max(0, -w) * 0.3, knR: 0.15 + Math.max(0, -w) * 0.3 });
+    } else if (s.emote === 4) { // bow: hand across the chest, deep bend, back up
+      const d = Math.sin(Math.min(1, e / 2.4) * Math.PI);
+      Object.assign(T, { spineX: (R.hunch || 0) + 0.95 * d, headX: 0.35 * d, shR: -0.85, shRz: 0.65, elR: -1.9, shL: 0.35 * d, shLz: 0.15, elL: -0.2, lgR: 0.2 * d, knL: 0.1 + 0.15 * d });
+    }
+    for (const key in T) P[key] = lerp(P[key] ?? 0, T[key], k);
+  }
   if (s.injured && (a === 'walk' || a === 'run' || a === 'idle')) { P.spineX += 0.12; P.shL = -0.55; P.elL = -1.7; P.shLz = -0.2; }
   if (s.flash && R.kind !== 'killer') { P.shR = -1.45; P.elR = -0.12; P.shRz = -0.05; } // torch held out in front
   // hit reaction: jolt forward, arch back, arms flung out

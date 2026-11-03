@@ -164,6 +164,15 @@ export class Sim {
         this.ev({ k: 'takeover', from: p.id, to: b.id, name: p.name, was });
         break;
       }
+      case 'emote': {
+        // survivors only: 1 dance, 2 wave, 3 cheer, 4 bow (0 stops). Moving or doing anything ends it.
+        const n = Math.max(0, Math.min(4, m.n | 0));
+        if (n && (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || p.disguise)) return;
+        p.emote = n;
+        (this.emoteAt ||= new Map()).set(p.id, { x: p.x, z: p.z, t: S.t });
+        if (n) this.ev({ k: 'emote', id: p.id, n });
+        break;
+      }
       case 'trap': {
         // Ghost Trap: set it down; the killer stepping on it is stunned
         if (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || !(p.traps > 0)) return;
@@ -449,6 +458,11 @@ export class Sim {
       while (h.length && h[0].t < S.t - 0.6) h.shift();
     }
 
+    // emotes end when the survivor moves, acts, gets hurt, or after a while (one-shot ones sooner)
+    for (const p of S.players) if (p.emote) {
+      const at = this.emoteAt && this.emoteAt.get(p.id);
+      if (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || p.flashOn || !at || Math.hypot(p.x - at.x, p.z - at.z) > 0.3 || S.t - at.t > (p.emote === 1 ? 30 : 4)) p.emote = 0;
+    }
     for (const p of S.players) {
       p.boost = Math.max(0, p.boost - dt);
       p.reveal = Math.max(0, p.reveal - dt);
