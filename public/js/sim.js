@@ -5,6 +5,8 @@ import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute,
 } from './rules.js';
 
+const POSSESSION = false; // switched on once the client side is finished
+
 export class Sim {
   constructor(M, roster, opts = {}) {
     this.M = M;
@@ -30,7 +32,20 @@ export class Sim {
       let sp = r.role === 'killer' ? M.spawns.killer : M.spawns.survivors[si % nsp];
       const extra = r.role === 'killer' ? ki++ : Math.floor(si++ / nsp);
       if (extra > 0) { const a = extra * 2.1 + (r.role === 'killer' ? 0 : si), d = 1.6 + extra * 0.4; sp = this.safeSpot(sp.x + Math.cos(a) * d, sp.z + Math.sin(a) * d, sp.x, sp.z); }
-      this.S.players.push({
+      this.S.players.push(this.makePlayer(r, sp, mode));
+    }
+    this.inputs = new Map();
+    for (const p of this.S.players) this.inputs.set(p.id, { e: false, latch: false });
+    this.events = [];
+    this.botSc = new Map();
+    this.possession = null; // Chucky's Possession (host only, never sent to clients)
+    this.possessionOn = POSSESSION;
+  }
+
+  makePlayer(r, sp, mode = this.mode) {
+    const M = this.M;
+    {
+      return ({
         id: r.id, name: r.name, role: r.role, char: r.char, skin: typeof r.skin === 'string' ? r.skin.slice(0, 24) : 'default', perks: (r.perks || []).slice(0, 3), bot: !!r.bot,
         x: sp.x, z: sp.z, yaw: r.role === 'killer' ? M.spawns.killerYaw : M.spawns.survivorYaw, pitch: 0, mv: 0, cr: 0, tp: 0,
         st: 'ok', hp: 2, act: null, prog: 0, healP: 0, bleed: 0, cage: -1, stage: 0, cageT: 0, cageMax: 1, esc: 0,
@@ -42,12 +57,9 @@ export class Sim {
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
         item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
+        possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0,
       });
     }
-    this.inputs = new Map();
-    for (const p of this.S.players) this.inputs.set(p.id, { e: false, latch: false });
-    this.events = [];
-    this.botSc = new Map();
   }
 
   ev(e) { this.events.push(e); }
@@ -61,7 +73,7 @@ export class Sim {
     switch (m.t) {
       case 'pos': {
         if (m.tp !== p.tp) return;
-        if (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down') return;
+        if (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') return;
         if (p.act || p.stun > 0 || p.leap || p.pull) { p.yaw = num(m.yaw, p.yaw); p.pitch = num(m.pitch, 0); return; }
         const nx = num(m.x, p.x), nz = num(m.z, p.z);
         // accept anything the player could have covered since their last update (lag spikes
@@ -192,6 +204,17 @@ export class Sim {
         S.saws.push({ id: ++S.lid, st: 'fly', x: p.x + f.x * 0.7, z: p.z + f.z * 0.7, y: 1.3, vx: f.x * sp * Math.cos(pitch), vz: f.z * sp * Math.cos(pitch), vy: 2.2 + sp * Math.sin(pitch), t: 0, by: p.id });
         p.ammo = 0; p.ammoT = 0; p.aim = false; p.abT = 0;
         this.ev({ k: 'sawthrow', id: p.id, x: p.x, z: p.z });
+        break;
+      }
+      case 'possess': {
+        // Chucky's Possession: take over a downed survivor (or let them go once the job is done)
+        if (!POSSESSION) return;
+        if (p.disguise) { if (this.possession && this.possession.X === p.id && p.pdowns >= 1 && p.pcages >= 1 && p.carry == null && !p.act) this.release(); return; }
+        if (p.role !== 'killer' || p.char !== 'chucky' || p.harmless || p.possCd > 0 || this.possession || this.mode === 'infection') return;
+        if (p.stun > 0 || p.act || p.carry != null || p.leap || p.atk) return;
+        let X = null, bd = 2.2;
+        for (const s of S.players) if (s.role === 'survivor' && s.st === 'down' && !(s.turn > 0)) { const d = dist(p, s); if (d < bd) { bd = d; X = s; } }
+        if (X) this.possess(p, X);
         break;
       }
       case 'pounce': {
@@ -415,6 +438,7 @@ export class Sim {
       if (p.ambush > 0) p.ambush = Math.max(0, p.ambush - dt);
       if (p.haste > 0) p.haste = Math.max(0, p.haste - dt);
       if (p.card > 0) p.card = Math.max(0, p.card - dt);
+      if (p.possCd > 0) p.possCd = Math.max(0, p.possCd - dt);
       if (p.mark > 0) p.mark = Math.max(0, p.mark - dt);
       if (p.char === 'butcher' && p.role === 'killer' && p.charges < KILLERS.butcher.ability.charges) { p.chargeT += dt; if (p.chargeT >= KILLERS.butcher.ability.cooldown) { p.chargeT = 0; p.charges++; } }
       if (p.char === 'harrower' && p.role === 'killer' && p.ammo < KILLERS.harrower.ability.ammo) { p.ammoT += dt; if (p.ammoT >= KILLERS.harrower.ability.reload) { p.ammoT = 0; p.ammo++; } }
@@ -427,7 +451,7 @@ export class Sim {
     }
     // ---- flashlights & ghost traps ----
     this.updateFlashlights(Ks, dt);
-    for (const K of Ks) if (S.traps.length && !K.vault && !(K.act && K.act.k === 'execute')) {
+    for (const K of Ks) if (S.traps.length && !K.vault && !K.disguise && !(K.act && K.act.k === 'execute')) {
       const hit = S.traps.find(t => Math.hypot(t.x - K.x, t.z - K.z) < 0.85);
       if (hit) { S.traps = S.traps.filter(t => t !== hit); this.stunKiller(K, 2.6, false); const by = this.P(hit.by); if (by) by.score.d += 500; this.ev({ k: 'trapped', id: K.id, by: hit.by, x: hit.x, z: hit.z }); }
     }
@@ -482,7 +506,7 @@ export class Sim {
         g.reg = false;
         let rate = 0;
         for (const p of S.players) if (p.act && p.act.k === 'repair' && p.act.id === i) {
-          let r = 1 / RULES.genCharges * (M.indoor ? 1.12 : 1) * (this.mode === 'rush' ? 2 : 1); // tighter indoor maps favour the killer
+          let r = 1 / RULES.genCharges * (M.indoor ? 1.12 : 1) * (this.mode === 'rush' ? 2 : 1) * (p.st === 'ghost' ? 0.9 : 1); // tighter indoor maps favour the killer
           if (has(p, 'shared')) r *= 1 + 0.15 * (g.n - 1);
           if (Ks.some(K => has(K, 'dread') && dist(K, p) < terrorRadius(K))) r *= 0.9;
           rate += r;
@@ -714,6 +738,8 @@ export class Sim {
   }
 
   damage(s, K, instantDown) {
+    if (K && K.harmless) return; // Chucky's empty doll can chase, but not hurt
+    if (s.st === 'ghost') return;
     if (K && K.char === 'foreman' && K.ab === 1 && !this.chainDmg) instantDown = true;
     // (slimed survivors are slowed and revealed, not one-shot: that made him unbeatable) // one strike from the hook, in the dark
     s.act = null; s.prog = 0;
@@ -725,6 +751,7 @@ export class Sim {
       s.hp = 0; s.st = 'down'; s.bleed = RULES.bleedout; s.healP = 0; s.boost = 0;
       if (this.mode === 'infection') s.turn = 3;
       K.score.c += 500;
+      if (K.disguise) K.pdowns++;
       this.ev({ k: 'hit', id: s.id, by: K.id, x: s.x, z: s.z, down: true });
       this.ev({ k: 'msg', text: s.name + ' is down!' });
     } else {
@@ -899,6 +926,7 @@ export class Sim {
         s.cage = a.id; S.cages[a.id] = s.id;
         s.st = 'caged'; s.esc = 0; s.tp++;
         p.score.d += 500;
+        if (p.disguise) p.pcages++;
         if (s.stage >= 3) { this.ev({ k: 'caged', id: s.id, cage: a.id, stage: s.stage }); this.kill(s, 'sacrificed'); }
         else {
           s.cageMax = s.cageT = RULES.cageStage[s.stage - 1];
@@ -989,6 +1017,52 @@ export class Sim {
     }
   }
 
+  // ---- Chucky's Possession ----
+  // The downed survivor gets up with Chucky inside; nobody is told. Chucky's player now controls that
+  // body (it can strike, pick up and cage), his doll is left behind as a harmless bot that only chases,
+  // and the survivor's player wanders the map as a ghost nobody else can see.
+  possess(C, X) {
+    const S = this.S;
+    for (const o of S.players) if (o.act && (o.act.k === 'heal' || o.act.k === 'pickup') && o.act.id === X.id) this.cancelAct(o);
+    const orig = { char: X.char, skin: X.skin, perks: X.perks, item: X.item, flash: X.flash, traps: X.traps, bot: X.bot };
+    const gid = X.id + '~ghost';
+    const G = this.makePlayer({ id: gid, name: X.name, role: 'survivor', char: X.char, skin: X.skin, perks: X.perks, item: X.item, bot: X.bot }, { x: X.x, z: X.z });
+    Object.assign(G, { st: 'ghost', yaw: X.yaw, stage: X.stage, flash: 0, traps: 0, score: X.score });
+    X.score = { a: 0, b: 0, c: 0, d: 0 };
+    S.players.push(G); this.inputs.set(gid, { e: false, latch: false });
+    Object.assign(X, {
+      role: 'killer', disguise: true, perks: [], st: 'ok', hp: 2, act: null, prog: 0, healP: 0, bleed: 0, turn: 0, boost: 0, flashOn: false,
+      atk: 0, atkT: 0, atkHit: false, stun: 0, carry: null, aim: false, pdowns: 0, pcages: 0, bot: C.bot, reveal: 0, mark: 0, slimed: 0, card: 0,
+    });
+    X.tp++;
+    const cBot = C.bot;
+    Object.assign(C, { bot: true, harmless: true, act: null, aim: false, leap: null, possCd: 600 });
+    if (this.inputs.get(C.id)) Object.assign(this.inputs.get(C.id), { e: false, latch: false });
+    if (this.inputs.get(X.id)) Object.assign(this.inputs.get(X.id), { e: false, latch: false });
+    this.possession = { C: C.id, X: X.id, G: gid, orig, cBot };
+    // control moves silently: the survivor's player to the ghost, Chucky's player into the body
+    this.ev({ k: 'swap', from: X.id, to: gid });
+    this.ev({ k: 'swap', from: C.id, to: X.id });
+    this.ev({ k: 'possessed', id: X.id, by: C.id, ghost: gid });
+  }
+  release() {
+    const S = this.S, P = this.possession;
+    if (!P) return;
+    this.possession = null;
+    const X = this.P(P.X), C = this.P(P.C), G = this.P(P.G);
+    if (X) {
+      if (X.carry != null) this.releaseCarry(X, false);
+      Object.assign(X, { role: 'survivor', disguise: false, ...P.orig, bot: G ? G.bot : P.orig.bot, st: 'ok', hp: 1, act: null, prog: 0, atk: 0, atkT: 0, stun: 0, aim: false, pdowns: 0, pcages: 0 });
+      if (G) for (const k in G.score) X.score[k] = (X.score[k] || 0) + G.score[k];
+      X.tp++;
+    }
+    if (C) Object.assign(C, { bot: P.cBot, harmless: false, act: null });
+    if (G) { S.players.splice(S.players.indexOf(G), 1); this.inputs.delete(G.id); }
+    if (C) this.ev({ k: 'swap', from: P.X, to: P.C });
+    this.ev({ k: 'swap', from: P.G, to: P.X });
+    this.ev({ k: 'depossessed', id: P.X, by: P.C });
+  }
+
   // Chucky's pounce: fly along the leap, strike the first survivor in reach, bounce off walls
   updateLeap(K, dt) {
     const L = K.leap, S = this.S, M = this.M, D = KILLERS.chucky.ability;
@@ -1003,7 +1077,7 @@ export class Sim {
     K.x = r.x; K.z = r.z;
     for (const s of S.players) {
       if (s.role !== 'survivor' || s.st !== 'ok') continue;
-      if (Math.hypot(s.x - K.x, s.z - K.z) < 1.2) {
+      if (Math.hypot(s.x - K.x, s.z - K.z) < 1.2 && !K.harmless) {
         this.damage(s, K, false); K.score.b += 300;
         K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = true; K.atkT = RULES.hitCooldown * 0.8;
         this.ev({ k: 'pounce-hit', id: s.id, by: K.id, x: s.x, z: s.z });
@@ -1109,6 +1183,7 @@ export class Sim {
   endMatch() {
     const S = this.S;
     if (S.phase === 'end') return;
+    if (this.possession) this.release();
     S.phase = 'end';
     for (const p of S.players) if (p.role === 'survivor' && !p.outcome) p.outcome = p.st === 'out' ? 'escaped' : 'sacrificed';
     const victims = S.players.filter(p => p.role === 'survivor' || p.outcome === 'infected');

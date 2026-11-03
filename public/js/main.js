@@ -8,7 +8,7 @@ import { QUALITY } from './world.js';
 import { setDetail } from './models.js';
 import { MenuScene } from './menu.js';
 import { loadForeman, onForemanReady } from './foremanGlb.js';
-import { loadChucky, onChuckyReady } from './chuckyGlb.js';
+import { loadChucky, onChuckyReady, chuckyReady } from './chuckyGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
@@ -112,7 +112,20 @@ function startBG() {
 }
 loadForeman();
 loadChucky();
-onChuckyReady(() => { forgetArt('chucky'); if (menu && menu.killerChar === 'chucky') menu.setKiller('chucky', menu.killerSkin); });
+// Chucky's model is 5MB: once it arrives, redraw every place that may have drawn the stand-in doll
+onChuckyReady(() => {
+  forgetArt('chucky');
+  if (menu && menu.killerChar === 'chucky') menu.setKiller('chucky', menu.killerSkin);
+  if (!$('store').classList.contains('hidden')) renderStore();
+  renderShowcase();
+});
+loadChucky().then(g => { if (!g) toast("Chucky's 3D model couldn't load, so a simple stand-in doll is used. Check your connection and refresh.", 8000); });
+// a match with Chucky in it waits (on the loading screen) for his real model, up to 20s
+async function waitForModels(need) {
+  if (!need || chuckyReady()) return;
+  loading(true, "Waking Chucky up…");
+  await Promise.race([loadChucky(), new Promise(r => setTimeout(r, 20000))]);
+}
 onForemanReady(() => { if (menu && menu.killerChar === 'foreman') menu.setKiller('foreman', menu.killerSkin); });
 function stopBG() { if (menu) { menu.dispose(); menu = null; } }
 function setScene(mode) { menuMode = mode; if (menu) menu.setMode(mode); renderShowcase(); }
@@ -497,7 +510,7 @@ class HostSession {
     this.M = buildMap(this.seed, this.map);
     this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty, mode: this.opts.mode });
     this.bots = new Bots(this.sim);
-    if (this.net) this.net.broadcast({ t: 'start', seed: this.seed, map: this.map, roster: this.roster, difficulty: this.opts.difficulty });
+    if (this.net) this.net.broadcast({ t: 'start', seed: this.seed, map: this.map, roster: this.roster, difficulty: this.opts.difficulty, mode: this.opts.mode });
     this.game = new Game({ renderer, M: this.M, myId: this.myId, isHost: true, session: this, settings, onEnd: (S, me) => onMatchEnd(S, me, this) });
     this.game.start();
   }
@@ -545,7 +558,11 @@ class HostSession {
     // at most one snapshot per tick: after a slow frame, send the newest state, not a burst of old ones
     if (this.net && this.snapDue) {
       this.snapDue = false;
-      const kf = this.kfT <= 0 || this.sim.S.phase !== 'play';
+      // a full keyframe every second, while the match isn't in play, and whenever someone joins or
+      // leaves the field mid-match (a ghost appears or vanishes)
+      const n = this.sim.S.players.length;
+      const kf = this.kfT <= 0 || this.sim.S.phase !== 'play' || n !== this.lastN;
+      this.lastN = n;
       if (kf) this.kfT = 1;
       // events must not be lost: they go on the reliable channel; the snapshot may be dropped
       if (this.pending.length) { this.net.broadcast({ t: 'ev', e: this.pending }); this.pending = []; }
@@ -557,11 +574,13 @@ class HostSession {
     this.sim.update(dt);
     const ev = this.sim.takeEvents();
     if (ev.length) {
-      for (const e of ev) if (e.k === 'takeover') {
+      // a player moves to another body: taking over a bot, or Chucky's Possession (silent 'swap')
+      for (const e of ev) if (e.k === 'takeover' || e.k === 'swap') {
         this.ctrl ||= new Map();
         let peer = e.from;
         for (const [k, v] of this.ctrl) if (v === e.from) peer = k;
         this.ctrl.set(peer, e.to);
+        this.tracks.delete(e.from); this.tracks.delete(e.to);
       }
       this.bots.onEvents(ev); this.game.onEvents(ev);
     }
@@ -616,6 +635,9 @@ class ClientSession {
 async function startHostMatch(roster, opts) {
   loading(true, 'Entering the fog…');
   await nextFrame();
+  // Chucky can appear in any match (picked, random bot killer, or an Infection turn)
+  await waitForModels(roster.some(r => r.char === 'chucky') || opts.mode === 'infection');
+  loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
   $('panel').classList.add('hidden'); $('menu').classList.remove('panel-open');
@@ -797,6 +819,8 @@ function clientMsg(m) {
 async function startClientMatch(m) {
   loading(true, 'Entering the fog…');
   await nextFrame();
+  await waitForModels((m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection');
+  loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
   lobby.inGame = true;

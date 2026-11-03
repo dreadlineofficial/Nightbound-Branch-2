@@ -36,6 +36,7 @@ export class Bots {
   }
   onEvents(evs) {
     for (const e of evs) if (e.k === 'infected') this.brains.delete(e.id); // a fresh (killer) brain
+    for (const e of evs) if (e.k === 'swap') { this.brains.delete(e.from); this.brains.delete(e.to); }
     for (const e of evs) if (e.k === 'noise') this.noises.push({ x: e.x, z: e.z, t: this.sim.S.t });
     this.noises = this.noises.filter(n => this.sim.S.t - n.t < 6);
   }
@@ -60,6 +61,7 @@ export class Bots {
     for (const p of S.players) {
       if (!p.bot) continue;
       if (p.role === 'killer') { this.killer(p, dt); continue; }
+      if (p.st === 'ghost') { this.ghost(p, dt); continue; }
       this.survivor(p, dt); this.flashBot(p, dt);
       const K = nearestKiller(S, p);
       if (p.traps > 0 && p.st === 'ok' && K && dist(p, K) < 7 && K.mv && Math.random() < dt * 0.35) this.sim.onMsg(p.id, { t: 'act', a: 'trap' });
@@ -421,9 +423,23 @@ export class Bots {
   }
 
   // ---------- killer ----------
+  // a possessed survivor's ghost: nobody can see or touch it, so it just keeps the generators going
+  ghost(p, dt) {
+    const sim = this.sim, S = sim.S, M = sim.M, b = this.brain(p);
+    const it = findInteraction(M, S, p);
+    if (it && it.k === 'repair') { const g = M.gens[it.id]; p.yaw = Math.atan2(g.x - p.x, g.z - p.z); this.setE(p, b, true); this.move(p, b, 0, 0, dt, false); return; }
+    this.setE(p, b, false);
+    let best = null, bd = 1e9;
+    for (const g of M.gens) { if (S.gens[g.id].done || S.gatesPowered) continue; const d = Math.hypot(g.x - p.x, g.z - p.z); if (d < bd) { bd = d; best = g; } }
+    if (best) this.goTo(p, b, best.x, best.z, 'ggen' + best.id, dt, false, 2);
+    else this.move(p, b, 0, 0, dt, false);
+  }
+
   killer(p, dt) {
     const sim = this.sim, S = sim.S, M = sim.M, b = this.brain(p), D = sim.diff;
     if (p.stun > 0) { this.setE(p, b, false); return; }
+    // Chucky in a survivor's body: let them go once someone has been downed and caged
+    if (p.disguise && p.pdowns >= 1 && p.pcages >= 1 && p.carry == null && !p.act) { sim.onMsg(p.id, { t: 'act', a: 'possess' }); return; }
     if (p.act) {
       // keep holding while the action continues
       this.move(p, b, 0, 0, dt, false);
@@ -479,7 +495,13 @@ export class Bots {
 
     // pick up downed survivors (if not mid-chase with someone close)
     let downed = null, dd = 1e9;
-    if (modeOf(S) !== 'infection') for (const s of S.players) if (s.role === 'survivor' && s.st === 'down') { const d = dist(p, s); if (d < dd) { dd = d; downed = s; } }
+    if (modeOf(S) !== 'infection' && !p.harmless) for (const s of S.players) if (s.role === 'survivor' && s.st === 'down') { const d = dist(p, s); if (d < dd) { dd = d; downed = s; } }
+    // Chucky: sometimes possess the survivor he just put down instead of carrying them
+    if (downed && sim.possessionOn && p.char === 'chucky' && !p.disguise && p.possCd <= 0 && dd < 2 && !sim.possession) {
+      b.possPlan ||= {}; const key = downed.id + ':' + downed.stage;
+      b.possPlan[key] ??= Math.random() < 0.6;
+      if (b.possPlan[key] && S.players.filter(o => o.role === 'survivor' && o.st === 'ok').length >= 2) { sim.onMsg(p.id, { t: 'act', a: 'possess' }); return; }
+    }
     if (downed && (!target || dd < 18 || dist(p, target) > 6)) {
       b.target = null;
       if (p.char === 'wisp' && p.ab === 1) sim.onMsg(p.id, { t: 'act', a: 'ability' });
@@ -534,12 +556,12 @@ export class Bots {
       if (p.char === 'harrower' && target && los && p.abCd <= 0 && p.ammo > 0 && d > 4.5 && d < 22 && !p.atk) {
         if (!b.aim) { b.aim = true; b.aimT = 0.35 + D.react * 0.4; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }
-      if (p.char === 'chucky' && target && los && p.abCd <= 0 && !p.leap && d > 3 && d < 7.5 && !p.atk && this.clearLine(p.x, p.z, tx, tz)) {
+      if (p.char === 'chucky' && !p.harmless && target && los && p.abCd <= 0 && !p.leap && d > 3 && d < 7.5 && !p.atk && this.clearLine(p.x, p.z, tx, tz)) {
         // coil just long enough to reach where they will be
         const A = KILLERS.chucky.ability, lead = Math.min(d + 2.4, A.max);
         if (!b.aim) { b.aim = true; b.aimT = 0.1 + Math.max(0, (lead - A.min) / (A.max - A.min)) * A.coil + D.react * 0.2; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }
-      if (p.char === 'chucky' && !target && p.ab2Cd <= 0 && Math.random() < dt * 0.15) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
+      if (p.char === 'chucky' && !p.harmless && !target && p.ab2Cd <= 0 && Math.random() < dt * 0.15) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
       if (p.char === 'bateman' && target && los && p.abCd <= 0 && p.ammo > 0 && d > 5 && d < 17 && !p.atk && this.clearLine(p.x, p.z, tx, tz)) {
         if (!b.aim) { b.aim = true; b.aimT = 0.8 + D.react * 0.5; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }

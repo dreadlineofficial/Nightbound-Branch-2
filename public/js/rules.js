@@ -10,9 +10,10 @@ export const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 2 * M
 export function killerOf(S) { return S.players.find(p => p.role === 'killer'); }
 // modes can have several killers (Two Killers, Infection)
 export function killersOf(S) { return S.players.filter(p => p.role === 'killer'); }
+// (a survivor body possessed by Chucky is not something anyone can tell apart)
 export function nearestKiller(S, p) {
   let best = null, bd = Infinity;
-  for (const k of S.players) if (k.role === 'killer') { const d = p ? Math.hypot(k.x - p.x, k.z - p.z) : 0; if (d < bd) { bd = d; best = k; } }
+  for (const k of S.players) if (k.role === 'killer' && !k.disguise) { const d = p ? Math.hypot(k.x - p.x, k.z - p.z) : 0; if (d < bd) { bd = d; best = k; } }
   return best;
 }
 export const anyKillerHas = (S, perk) => S.players.some(k => k.role === 'killer' && has(k, perk));
@@ -21,7 +22,7 @@ export function survivorsOf(S) { return S.players.filter(p => p.role === 'surviv
 export function playerById(S, id) { return S.players.find(p => p.id === id); }
 
 export function terrorRadius(p) {
-  if (!p || p.role !== 'killer') return 0;
+  if (!p || p.role !== 'killer' || p.disguise) return 0;
   if (p.char === 'wisp' && p.ab === 1) return 0;
   if (p.char === 'foreman' && p.ab === 1) return 0;
   let r = KILLERS[p.char].terror;
@@ -39,7 +40,7 @@ export function speedOf(p, S, sprint, crouch) {
       if (S && S.players.some(o => o.act && (o.act.k === 'pickup' || o.act.k === 'heal') && o.act.id === p.id)) return 0;
       return SPEED.crawl * (has(p, 'resolve') ? 1.3 : 1);
     }
-    if (p.st !== 'ok') return 0;
+    if (p.st !== 'ok' && p.st !== 'ghost') return 0;
     let s = crouch ? SPEED.crouch * (has(p, 'hushed') ? 1.25 : 1) : sprint ? SPEED.run : SPEED.walk;
     if (!crouch && sprint && p.hp === 1 && has(p, 'fleet')) s *= 1.07;
     if (p.boost > 0) s *= p.boostMul || SPEED.hitBoost;
@@ -48,7 +49,8 @@ export function speedOf(p, S, sprint, crouch) {
     return s;
   }
   const K = KILLERS[p.char];
-  let s = K.speed;
+  // Chucky in a survivor's body: a survivor's legs, but he never tires of running
+  let s = p.disguise ? SPEED.run * 1.04 : K.speed;
   if (p.carry != null) s = SPEED.carry;
   if (S.gatesPowered && has(p, 'fury')) s *= 1.08;
   if (p.haste > 0) s *= 1.12;
@@ -63,6 +65,13 @@ export function speedOf(p, S, sprint, crouch) {
 
 // What can this player interact with (hold E)?
 export function findInteraction(M, S, p) {
+  if (p.role === 'survivor' && p.st === 'ghost') {
+    // a ghost can only repair generators
+    if (p.vault) return null;
+    let best = null, bd = 1.75;
+    for (const g of M.gens) { const d = dist(p, g); if (!S.gens[g.id].done && !S.gatesPowered && d < bd) { bd = d; best = { k: 'repair', id: g.id, label: 'Repair generator (as a ghost)' }; } }
+    return best;
+  }
   if (p.role === 'survivor') {
     if (p.st !== 'ok' || p.vault) return null;
     let best = null, bp = -1, bd = 1e9;
@@ -92,6 +101,7 @@ export function findInteraction(M, S, p) {
     return best;
   }
   // killer
+  if (p.harmless) return null; // Chucky's empty doll only chases
   if (p.stun > 0 || p.atk || p.vault || p.tele || (p.char === 'butcher' && p.ab === 1)) return null;
   if (p.carry != null) {
     let best = null, bd = 2.4;
@@ -118,7 +128,7 @@ export function canExecuteTarget(S, k, s) {
   return alive.length === 1;
 }
 export function findExecute(M, S, p) {
-  if (p.role !== 'killer' || p.act || p.stun > 0 || p.atk || p.vault || p.tele || p.carry != null) return null;
+  if (p.role !== 'killer' || p.act || p.stun > 0 || p.atk || p.vault || p.tele || p.carry != null || p.disguise || p.harmless) return null;
   if ((p.char === 'butcher' && p.ab === 1) || (p.char === 'wisp' && p.ab !== 0)) return null;
   let best = null, bd = 2.0;
   for (const o of S.players) if (canExecuteTarget(S, p, o)) { const d = dist(p, o); if (d < bd) { bd = d; best = { id: o.id, label: 'Execute ' + o.name }; } }
@@ -179,7 +189,7 @@ export function findSpace(M, S, p) {
 }
 
 export function vaultDuration(p, kind, running) {
-  if (p.role === 'killer') return p.char === 'chucky' ? 0.5 : 1.7; // Chucky just jumps over
+  if (p.role === 'killer' && !p.disguise) return p.char === 'chucky' ? 0.5 : 1.7; // Chucky just jumps over
   let d = running ? 0.62 : 1.15;
   if (kind === 'bar') d = running ? 0.7 : 1.2;
   if (has(p, 'acrobat')) d *= 0.7;

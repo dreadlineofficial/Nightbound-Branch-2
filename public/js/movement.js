@@ -21,7 +21,7 @@ export function stepMover(M, S, p, intent, dt) {
     if (f >= 1) p.vault = null;
     return;
   }
-  if (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down') { p.mv = 0; return; }
+  if (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') { p.mv = 0; return; }
   // Chucky's jump: half a second in the air, clearing anything low
   let low = 0;
   if (p.hop) { p.hop.t += dt; low = 1.25; if (p.hop.t >= p.hop.d) p.hop = null; }
@@ -36,7 +36,7 @@ export function stepMover(M, S, p, intent, dt) {
   const res = p.phase > 0 ? { x: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.x + dx * 1.1)), z: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.z + dz * 1.1)) } : moveCircle(M, S, p.x, p.z, dx, dz, r, low);
   // soft body-blocking between characters
   for (const o of S.players) {
-    if (o === p || o.vault) continue;
+    if (o === p || o.vault || p.st === 'ghost' || o.st === 'ghost') continue;
     if (o.role === 'survivor' && o.st !== 'ok' && o.st !== 'down') continue;
     if (p.role === 'survivor' && o.role === 'survivor') continue;
     const ox = res.x - o.x, oz = res.z - o.z, d = Math.hypot(ox, oz), min = r + 0.34;
