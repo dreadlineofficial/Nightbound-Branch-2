@@ -5,7 +5,7 @@ import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute,
 } from './rules.js';
 
-const POSSESSION = false; // switched on once the client side is finished
+const POSSESSION = true;
 
 export class Sim {
   constructor(M, roster, opts = {}) {

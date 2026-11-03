@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 7;
+export const NET_PROTOCOL = 8;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -107,7 +107,7 @@ export const KILLERS = {
     exec: { name: 'Friends Till the End', desc: 'Leaps onto the survivor\'s chest and stabs, and stabs, and stabs.' },
     ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (slowed), release to leap up to 10m: the longer you coil, the farther you fly. He sails over fences, pallets and other low obstacles. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
     ability2: { name: "Chucky's Laugh", key: 'R', cooldown: 35, radius: 28, reveal: 5, desc: 'Laugh. Every survivor within 28m hears it and is revealed to you for 5s.' },
-    feature: { name: 'Tiny Terror', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump: he hops straight over windows, dropped pallets and rocks. You play him in third person.' },
+    feature: { name: 'Tiny Terror & Possession', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump over windows, pallets and rocks. Possession (G, once every 10 minutes): take over a downed survivor in secret. They wander as an invisible ghost, your doll is left as a harmless decoy, and you can let go once you have downed and caged someone. Played in third person.' },
     color: 0xd83a22,
   },
   bateman: {
@@ -270,8 +270,18 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.13.3';
+export const VERSION = '2.14.0';
 export const INBOX = [
+  {
+    id: 'v2.14', version: '2.14.0', date: 'Nov 2026', title: 'Chucky: Possession', tag: 'Balance',
+    body: [
+      'New for Chucky, Possession (G, once every 10 minutes): stand over a downed survivor and take over their body. Nobody is told.',
+      'The body gets back up looking exactly like that survivor, but you are in control: strike, pick up and cage like a killer.',
+      'Your doll is left behind as a bot decoy that chases survivors but cannot hurt them.',
+      'The possessed player becomes a ghost nobody else can see. Ghosts can only repair generators, 10% slower.',
+      'Once you have downed and caged a survivor in that body, press G to let go: you return to your doll and the survivor gets their body back, injured.',
+    ],
+  },
   {
     id: 'v2.13.3', version: '2.13.3', date: 'Nov 2026', title: 'Chucky Fix', tag: 'Update',
     body: [

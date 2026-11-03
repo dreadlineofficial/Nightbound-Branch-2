@@ -159,6 +159,10 @@ class BloodDecals {
   }
 }
 
+// how a player looks to everyone else: a body possessed by Chucky still looks like its survivor
+const lookRole = p => p.disguise ? 'survivor' : p.role;
+// killers played over the shoulder: Chucky, and Chucky inside a survivor's body
+const isTpv = p => !!p && (p.disguise || !!(KILLERS[p.char] && KILLERS[p.char].tpv));
 // Chucky's pounce arc
 function leapLift(p) {
   const L = p.leap; if (L) return Math.sin(Math.min(1, L.t / L.d) * Math.PI) * (L.h || 0.6);
@@ -242,7 +246,7 @@ export class Game {
     const me = playerById(S, this.myId);
     if (me) { this.camYaw = me.yaw; this.myTp = me.tp; }
     this.role = me ? me.role : 'survivor';
-    if (this.role === 'killer' && !KILLERS[me.char].tpv) this.setupKillerView(me);
+    if (this.role === 'killer' && !isTpv(me)) this.setupKillerView(me);
     this.buildStaticHUD(S);
     sound.ambience(true);
     this.onResize();
@@ -272,7 +276,7 @@ export class Game {
     if (this.view) { this.camera.remove(this.view); this.view = null; }
     if (this.trail) { this.camera.remove(this.trail); this.trail = null; }
     this.flashHeld = false; this.aimHeld = false; this.eHeld = false; this.skill = null; this.skillCanvas.classList.add('hidden');
-    if (me.role === 'killer') { if (!KILLERS[me.char].tpv) this.setupKillerView(me); this.camYaw = me.yaw; }
+    if (me.role === 'killer') { if (!isTpv(me)) this.setupKillerView(me); this.camYaw = me.yaw; }
     this.buildStaticHUD(S);
   }
 
@@ -342,6 +346,7 @@ export class Game {
       if (e.code === 'KeyG') this.send({ t: 'act', a: 'trap' });
       if (e.code === 'KeyR' && this.mine() && this.mine().char === 'lamplighter') this.send({ t: 'act', a: 'teleport', yaw: this.mine().yaw });
       if (e.code === 'KeyR' && this.mine() && this.mine().role === 'killer' && KILLERS[this.mine().char].ability2) this.send({ t: 'act', a: 'ability2' });
+      if (e.code === 'KeyG' && this.mine() && this.mine().role === 'killer' && (this.mine().char === 'chucky' || this.mine().disguise)) this.send({ t: 'act', a: 'possess' });
       if (e.code === 'KeyF' && this.mine() && this.mine().role === 'killer') { const ex = findExecute(this.M, this.S, this.mine()); if (ex) this.send({ t: 'act', a: 'execute', id: ex.id }); }
       if ((e.code === 'KeyA' || e.code === 'KeyD') && this.mine() && this.mine().st === 'carried') {
         if (e.code !== this.lastWigKey) { this.lastWigKey = e.code; this.send({ t: 'act', a: 'wig' }); this.wigFlash = 0.15; }
@@ -422,7 +427,7 @@ export class Game {
       this.lastSnap = S;
       const p = playerById(S, this.myId);
       if (p) {
-        const forced = (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down') || !!p.reel || !!p.pull || !!p.leap;
+        const forced = (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') || !!p.reel || !!p.pull || !!p.leap;
         if (!this.me || p.tp !== this.myTp || forced) {
           this.myTp = p.tp;
           this.me = { x: p.x, z: p.z, yaw: this.me ? this.me.yaw : p.yaw, pitch: this.me ? this.me.pitch : 0, vault: null, mv: 0, cr: 0 };
@@ -579,20 +584,21 @@ export class Game {
   // ---------------- characters ----------------
   updateChars(dt, S, me) {
     const viewerKiller = me && me.role === 'killer';
+    if (this.chars.size > S.players.length) for (const [id, c] of this.chars) if (!S.players.some(p => p.id === id)) { this.scene.remove(c.rig.root); this.chars.delete(id); }
     const K = killerOf(S);
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== p.role || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
-        const rig = p.role === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
+        const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
-        c = { rig, x: p.x, z: p.z, yaw: p.yaw, spd: 0, step: 0, vaultT: 0, wasV: false, role: p.role, char: p.char };
+        c = { rig, x: p.x, z: p.z, yaw: p.yaw, spd: 0, step: 0, vaultT: 0, wasV: false, role: lookRole(p), char: p.char };
         this.chars.set(p.id, c);
       }
       const R = c.rig, local = p.id === this.myId;
       const execing = p.role === 'killer' && p.act && p.act.k === 'execute';
-      const hidden = p.st === 'dead' || p.st === 'out' || (local && p.role === 'killer' && !execing && !(KILLERS[p.char] && KILLERS[p.char].tpv));
+      const hidden = p.st === 'dead' || p.st === 'out' || (p.st === 'ghost' && !local) || (local && p.role === 'killer' && !execing && !isTpv(p));
       R.root.visible = !hidden;
       // smoothing. Other players are already interpolated between network updates (clients:
       // snapshots; host: the remote player's own position stream), so only a light filter is
@@ -626,7 +632,7 @@ export class Game {
       c.prevSt = p.st;
       if (c.downAt != null) st.fallF = (this.t - c.downAt) / 0.8;
       if (c.hitAt != null) st.hitF = (this.t - c.hitAt) / 0.5;
-      if (p.role === 'survivor') {
+      if (lookRole(p) === 'survivor') {
         if (p.st === 'exec') { anim = 'exec'; const EK = playerById(S, p.execBy) || K; const kk = EK && EK.act && EK.act.k === 'execute' ? EK : null; st.exec = { f: kk ? kk.act.t / RULES.execTime : 1, char: EK ? EK.char : 'butcher', role: 'victim' }; }
         else if (p.st === 'down') anim = 'down';
         else if (p.st === 'carried') anim = 'carried';
@@ -691,6 +697,7 @@ export class Game {
         if (cg) { R.root.position.set(cg.x, 0.2, cg.z); }
       }
       if (p.role === 'survivor') this.placeTorch(c, R, p, flashOn && R.root.visible);
+      if (p.role === 'survivor' && local && (p.st === 'ghost') !== !!c.ghostFx) { c.ghostFx = p.st === 'ghost'; R.setOpacity(c.ghostFx ? 0.35 : 1); } // you, as a ghost
       if (p.role === 'killer' && p.char === 'slimer') R.setOpacity(p.phase > 0 ? (viewerKiller ? 0.4 : 0.25 + Math.sin(this.t * 12) * 0.08) : 1);
       // wisp fade
       if (p.role === 'killer' && p.char === 'wisp') {
@@ -892,7 +899,7 @@ export class Game {
     const shake = this.shake > 0 ? this.shake : 0;
     this.shake = Math.max(0, this.shake - dt * 1.5);
     const sx = (Math.random() - 0.5) * shake * 0.15, sy = (Math.random() - 0.5) * shake * 0.15;
-    const tpv = me.role === 'killer' && KILLERS[me.char] && KILLERS[me.char].tpv;
+    const tpv = me.role === 'killer' && isTpv(me);
     if (me.role === 'killer' && !tpv) {
       const c = this.chars.get(me.id);
       const eye = me.char === 'butcher' ? 2.15 : me.char === 'wisp' ? 2.1 + Math.sin(this.t * 2) * 0.04 : 2.0;
@@ -913,9 +920,10 @@ export class Game {
     let fx = tc ? tc.rig.root.position.x : target.x, fz = tc ? tc.rig.root.position.z : target.z;
     let h = 1.5;
     if (target.st === 'down') h = 0.75; else if (target.cr) h = 1.05; else if (target.st === 'carried') h = 1.9; else if (target.st === 'caged') h = 1.8;
-    if (target.role === 'killer') h = KILLERS[target.char] && KILLERS[target.char].tpv ? 1.05 : 2.2;
+    if (lookRole(target) === 'killer') h = isTpv(target) ? 1.05 : 2.2;
+    if (target.disguise) h = 1.5;
     // Chucky is played over the shoulder: the camera follows his facing, mouse pitch tilts it
-    if (tpv) h = 1.05 + (tc && tc.lift || 0);
+    if (tpv) h = (me.disguise ? 1.5 : 1.05) + (tc && tc.lift || 0);
     const yaw = tpv ? me.yaw : this.camYaw, pitch = tpv ? Math.max(-0.35, Math.min(1.0, 0.28 - me.pitch * 0.8)) : this.camPitch;
     const dist = tpv ? 2.5 : target.st === 'caged' ? 3.6 : 3.1;
     const back = { x: -Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) };
@@ -1093,10 +1101,10 @@ export class Game {
         if (p.st === 'ok' && (p.reveal > 0 || (has(me, 'scent') && p.hp === 1 && dist(p, me) < 24) || (has(me, 'static') && p.act && p.act.k === 'repair'))) col = 0xff3030;
         else if (p.st === 'caged') col = 0xff8a2a; // caged survivors stay in sight until they are freed
       } else if (!killerView) {
-        if (p.role === 'survivor') {
+        if (lookRole(p) === 'survivor') {
           const far = dist(p, me) > 6 || me.st === 'dead' || me.st === 'out';
           col = !far ? null : p.st === 'caged' || p.st === 'exec' ? 0xff4a3a : p.st === 'down' ? 0xffa030 : p.st === 'carried' ? 0xff7030 : p.st === 'ok' ? 0xe8d8a0 : null;
-        } else if (p.role === 'killer' && ((has(me, 'sixth') && me.sixT < 4 && me.st !== 'dead') || me.st === 'dead' || me.st === 'out')) col = 0xff2020;
+        } else if (lookRole(p) === 'killer' && ((has(me, 'sixth') && me.sixT < 4 && me.st !== 'dead') || me.st === 'dead' || me.st === 'out')) col = 0xff2020;
       }
       if (p.st === 'dead' || p.st === 'out') col = null;
       if ((S.dark > 0 || S.mode === 'dark') && !killerView && p.role === 'survivor') col = null; // Lights Out: you lose track of each other
@@ -1167,6 +1175,15 @@ export class Game {
           break;
         }
         case 'flashdead': if (e.id === this.myId) { this.feed('Your flashlight battery is dead.'); this.flashHeld = false; } break;
+        case 'swap': if (e.from === this.myId) this.switchTo(e.to); break; // silent (Possession)
+        case 'possessed':
+          if (e.id === this.myId) { this.feed(`You are inside ${name(e.id)}. Nobody knows. Down a survivor and cage them, then press G to let go.`, 'big'); this.flash = 0.5; }
+          if (e.ghost === this.myId) { this.feed('You have been possessed! You are a ghost now: nobody can see you. Keep repairing generators (10% slower).', 'big'); this.flash = 0.6; this.shake = 0.6; }
+          break;
+        case 'depossessed':
+          if (e.by === this.myId) this.feed('You leave the body and return to your doll.', 'big');
+          if (e.id === this.myId) { this.feed('You are back in your own body.', 'big'); this.flash = 0.4; }
+          break;
         case 'takeover':
           if (e.from === this.myId) this.switchTo(e.to);
           this.feed(`${e.name} took over ${e.was}.`, e.to === this.myId ? 'big' : '');
@@ -1323,16 +1340,21 @@ export class Game {
     $('perks').innerHTML = me.perks.map(k => perkDefs[k] ? `<div class="diamond ${me.role === 'killer' ? 'k' : ''}" title="${esc(perkDefs[k].name)}: ${esc(perkDefs[k].desc)}">${icon(k)}</div>` : '').join('');
     $('power').classList.toggle('hidden', me.role !== 'killer');
     $('crosshair').classList.toggle('hidden', me.role !== 'killer');
-    $('item').classList.toggle('hidden', me.role !== 'survivor');
+    $('item').classList.toggle('hidden', me.role !== 'survivor' || me.st === 'ghost');
     $('item').innerHTML = me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl"><kbd>G</kbd> set a trap in front of you</div></div>`
       : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>RMB</kbd> hold to blind the killer</div></div>`;
-    $('team').classList.toggle('compact', S.players.filter(p => p.role === 'survivor' || p.outcome === 'infected').length > 5);
-    $('team').innerHTML = S.players.filter(p => p.role === 'survivor' || p.outcome === 'infected').map(p =>
+    const teamOf = p => (p.role === 'survivor' && (p.st !== 'ghost' || p.id === this.myId)) || p.disguise || p.outcome === 'infected';
+    $('team').classList.toggle('compact', S.players.filter(teamOf).length > 5);
+    $('team').innerHTML = S.players.filter(teamOf).map(p =>
       `<div class="tm ${p.id === this.myId ? 'me' : ''}" id="tm-${esc(p.id)}"><div class="tm-por">${icon('healthy')}</div><div class="tm-body"><div class="tm-name">${esc(p.name)}${p.bot ? '<small>BOT</small>' : ''}${p.id === this.myId ? '<small>YOU</small>' : ''}</div><div class="tm-stage"><i></i><i></i></div><div class="tm-bar"><div></div></div></div></div>`).join('');
     this.hudCache = {};
     const k = (x) => `<kbd>${x}</kbd>`;
-    $('controls-hint').innerHTML = me.role === 'killer'
-      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} ${me.char === 'chucky' ? 'jump' : 'vault'} · ${k('Q')} drop · ${k('Tab')} status`
+    $('controls-hint').innerHTML = me.disguise
+      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('E')} pick up / cage · ${k('Space')} vault · ${k('G')} let go (after a down and a cage) · ${k('Tab')} status`
+      : me.st === 'ghost'
+      ? `${k('WASD')} move · ${k('E')} repair generators · nobody can see you`
+      : me.role === 'killer'
+      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} ${me.char === 'chucky' ? 'jump' : 'vault'}${me.char === 'chucky' ? ` · ${k('G')} possess a downed survivor` : ''} · ${k('Q')} drop · ${k('Tab')} status`
       : `${k('WASD')} move · ${k('Shift')} run · ${k('Ctrl')} crouch · ${k('E')} interact · ${k('RMB')} flashlight · ${k('G')} ghost trap · ${k('Space')} vault / barricade / skill check · ${k('Tab')} status`;
     $('controls-hint').classList.remove('fade');
     clearTimeout(this.hintT); this.hintT = setTimeout(() => $('controls-hint').classList.add('fade'), 14000);
@@ -1341,6 +1363,10 @@ export class Game {
   setText(id, v) { if (this.hudCache[id] !== v) { this.hudCache[id] = v; $(id).innerHTML = v; } }
 
   powerHTML(me) {
+    if (me.disguise) {
+      const done = me.pdowns >= 1 && me.pcages >= 1;
+      return { ready: done, active: true, pct: 0, html: `<div class="pwt"><div class="pwn">Possession</div><div class="pws">Down ${Math.min(1, me.pdowns)}/1 · Cage ${Math.min(1, me.pcages)}/1</div><div class="keyl">${done ? '<kbd>G</kbd> let go of the body' : 'Nobody knows it\'s you'}</div></div><div class="pwi">${icon('knife')}<div class="cd"></div></div>` };
+    }
     const K = KILLERS[me.char], def = K.ability;
     let ready = false, pct = 0, sub = '', pips = '', extra = '';
     if (me.char === 'butcher') {
@@ -1370,7 +1396,8 @@ export class Game {
       const coil = me.aim ? Math.min(1, Math.max(0, (me.abT || 0) - 0.1) / def.coil) : 0;
       ready = me.abCd <= 0 && !me.leap; pct = me.aim ? 1 - coil : me.abCd / def.cooldown;
       sub = me.leap ? 'Pouncing!' : me.aim ? `Coiling… ${Math.round(def.min + (def.max - def.min) * coil)}m` : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
-      extra = me.ab2Cd > 0 ? `<kbd>R</kbd> Chucky's Laugh ${Math.ceil(me.ab2Cd)}s` : "<kbd>R</kbd> Chucky's Laugh ready";
+      const mm = t => Math.floor(t / 60) + ':' + String(Math.ceil(t % 60)).padStart(2, '0');
+      extra = (me.ab2Cd > 0 ? `<kbd>R</kbd> Laugh ${Math.ceil(me.ab2Cd)}s` : "<kbd>R</kbd> Laugh ready") + ' · ' + (me.harmless ? 'Possessing…' : me.possCd > 0 ? `<kbd>G</kbd> Possess ${mm(me.possCd)}` : '<kbd>G</kbd> Possess ready');
     } else if (me.char === 'bateman') {
       const d2 = K.ability2, held = me.ammo > 0;
       ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1;
@@ -1423,7 +1450,7 @@ export class Game {
     for (const p of S.players) {
       const el = $('tm-' + p.id);
       if (!el) continue;
-      if (p.role !== 'survivor') { if (el.dataset.st !== 'infected') { el.dataset.st = 'infected'; el.className = 'tm dead infected' + (p.id === this.myId ? ' me' : ''); el.querySelector('.tm-por').innerHTML = icon(POWER_ICON[p.char] || 'warrant'); } continue; }
+      if (p.role !== 'survivor' && !p.disguise) { if (el.dataset.st !== 'infected') { el.dataset.st = 'infected'; el.className = 'tm dead infected' + (p.id === this.myId ? ' me' : ''); el.querySelector('.tm-por').innerHTML = icon(POWER_ICON[p.char] || 'warrant'); } continue; }
       const state = p.st === 'ok' ? (p.hp === 2 ? 'healthy' : 'injured') : p.st;
       if (el.dataset.st !== state) { el.dataset.st = state; el.className = 'tm ' + state + (p.id === this.myId ? ' me' : ''); el.querySelector('.tm-por').innerHTML = icon(STATE_ICON[state] || 'healthy'); }
       let f = 0;
@@ -1466,6 +1493,10 @@ export class Game {
           if (me.healP > 0 && me.hp === 1 && !me.act) { label = 'Being healed'; prog = me.healP; }
           if (me.mark > 0) status = `Marked <small>The Harrower can see you · ${Math.ceil(me.mark)}s</small>`;
           if (me.card > 0) status = `Intimidated <small>Slowed and revealed · ${Math.ceil(me.card)}s</small>`;
+        } else if (me.st === 'ghost') {
+          if (me.act) { prog = me.prog; label = 'Repairing (as a ghost)'; }
+          else { const it = findInteraction(this.M, S, me); if (it) kp('E', it.label); }
+          status = 'You are a ghost<small>Chucky took your body. Nobody can see you. Repair generators (10% slower) until he lets go.</small>';
         } else if (me.st === 'down') {
           status = me.healP > 0 ? 'Being helped up' : 'You are dying<small>Crawl to safety — a teammate can help you up</small>';
           if (me.healP > 0) { prog = me.healP; label = 'Recovering'; }
@@ -1484,7 +1515,7 @@ export class Game {
             + (tb ? `<small class="takeover"><kbd>T</kbd> Take over ${esc(tb.name.replace(/ \(bot\)$/, ''))} and keep playing</small>` : '');
         }
       } else {
-        if (me.act) { prog = me.prog; label = { pickup: 'Picking up', cage: 'Caging', kick: 'Damaging generator', break: 'Breaking barricade', execute: KILLERS[me.char].exec.name }[me.act.k] || ''; }
+        if (me.act) { prog = me.prog; label = { pickup: 'Picking up', cage: 'Caging', kick: 'Damaging generator', break: 'Breaking barricade', execute: KILLERS[me.char] ? KILLERS[me.char].exec.name : 'Execution' }[me.act.k] || ''; }
         else if (me.stun > 0) status = 'Stunned';
         else if (me.tele) { status = 'Shadow Step'; prog = me.tele.t / RULES.teleTime; label = 'Stepping'; }
         else {
@@ -1556,9 +1587,10 @@ export class Game {
   renderScoreboard() {
     const S = this.S;
     if (!S) return;
-    const rows = S.players.map(p => {
+    const rows = S.players.filter(p => p.st !== 'ghost' || p.id === this.myId).map(p => {
+      if (p.disguise) p = { ...p, role: 'survivor' };
       const state = p.role === 'killer' ? null : p.st === 'ok' ? (p.hp === 2 ? 'healthy' : 'injured') : p.st;
-      const st = p.role === 'killer' ? 'Killer' : { healthy: 'Healthy', injured: 'Injured', exec: 'Being executed', down: 'Dying', carried: 'Carried', caged: 'Caged', dead: 'Dead', out: 'Escaped' }[state];
+      const st = p.role === 'killer' ? 'Killer' : { healthy: 'Healthy', injured: 'Injured', exec: 'Being executed', down: 'Dying', carried: 'Carried', caged: 'Caged', dead: 'Dead', out: 'Escaped', ghost: 'Ghost' }[state];
       const sc = Math.round(p.score.a + p.score.b + p.score.c + p.score.d);
       const cname = p.role === 'killer' ? KILLERS[p.char].name : SURVIVORS[p.char].name;
       return `<tr class="${p.id === this.myId ? 'me' : ''}"><td>${icon(p.role === 'killer' ? POWER_ICON[p.char] : STATE_ICON[state])}</td><td>${esc(p.name)}${p.bot ? ' <small>BOT</small>' : ''}</td><td>${esc(cname)}</td><td>${st}</td><td>${sc}</td></tr>`;
