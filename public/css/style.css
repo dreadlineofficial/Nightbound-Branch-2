@@ -500,3 +500,10 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .gm-desc { margin: -4px 0 10px; font-size: 13px; line-height: 1.4; }
 .tm.infected .tm-por { color: #9aff3a; }
 .tm.infected .tm-name { text-decoration: line-through; opacity: .6; }
+/* big teams (Two Killers, Infection): two compact columns */
+#team.compact { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 14px; }
+#team.compact .tm { min-width: 0; gap: 6px; }
+#team.compact .tm-por { width: 28px; height: 28px; border-width: 1.5px; }
+#team.compact .tm-name { font-size: 12px; }
+#team.compact .tm-name small { display: none; }
+#team.compact .tm-bar { width: 90px; }

@@ -45,7 +45,7 @@ export const MODES = {
   duo: { name: 'Two Killers', short: '2 vs 8', killers: 2, survivors: 8, desc: 'Two killers hunt eight survivors. Six generators power the gates.' },
   dark: { name: 'Lights Out', short: 'Horror', desc: 'The lights never come on. Thick fog, no auras for survivors, half-charged flashlights.' },
   rush: { name: 'Survivor Rush', short: '5 min', time: 300, desc: 'Five-minute matches. Generators and gates go twice as fast, and the killer gets a burst of speed after every hit. When the clock runs out, the gates power up and the night collapses fast.' },
-  infection: { name: 'Infection', short: 'Turned', desc: 'No cages. Downed survivors rise as killers a few seconds later. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
+  infection: { name: 'Infection', short: '2 vs 10', killers: 2, survivors: 10, bigMap: true, desc: 'No cages. Two killers, ten survivors, on big maps built for it. Downed survivors rise as killers a few seconds later, and every 60s the infected sense every survivor. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
 };
 // killers an infected survivor can turn into
 export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman'];
@@ -255,8 +255,18 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.11.1';
+export const VERSION = '2.12.0';
 export const INBOX = [
+  {
+    id: 'v2.12', version: '2.12.0', date: 'Nov 2026', title: 'Infection Grows', tag: 'New Maps',
+    body: [
+      'Infection is now 2 killers vs 10 survivors (12 players online).',
+      'Two new maps built for Infection, twice the size of the others: Quarantine Woods and Outbreak Fairground. Eleven generators (eight needed), survivors start spread around the edges.',
+      'Every 60 seconds the infected sense every survivor for a moment, so nobody can hide forever.',
+      'Big teams get a compact two-column team list.',
+      'Bot pathfinding is much faster, which smooths out hosting on big maps.',
+    ],
+  },
   {
     id: 'v2.11.1', version: '2.11.1', date: 'Nov 2026', title: 'The Killer Knows', tag: 'Update',
     body: [

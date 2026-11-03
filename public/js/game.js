@@ -1210,6 +1210,7 @@ export class Game {
           break;
         }
         case 'chainland': sound.play('thud', e.x, e.z); this.smoke.spawn(e.x, 0.3, e.z, 10, 0x2a2622, 1.4, 1.2, 0.3, 0.6); if (e.id === this.myId) this.shake = 0.8; break;
+        case 'pulse': if (me && me.role === 'survivor' && me.st === 'ok') { this.feed('The infected can sense you…', 'big'); this.flash = 0.2; } else if (me && me.role === 'killer') this.feed('You sense the living.'); break;
         case 'laststand': if (e.id === this.myId) { this.feed('You are the last survivor! Survive 45 seconds.', 'big'); this.flash = 0.4; } sound.play('powered'); break;
         case 'drop': { const b = this.M.bars[e.id]; sound.play('drop', b.x, b.z); this.smoke.spawn(b.x, 0.3, b.z, 6, 0x5a5048, 1.2, 1.5, 0.3, 1.2); break; }
         case 'break': { const b = this.M.bars[e.id]; sound.play('break', b.x, b.z); this.blood.spawn(b.x, 0.6, b.z, 40, 0x6a4a30, 4, 1.2, -9, 1.5); break; }
@@ -1287,6 +1288,7 @@ export class Game {
     $('item').classList.toggle('hidden', me.role !== 'survivor');
     $('item').innerHTML = me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl"><kbd>G</kbd> set a trap in front of you</div></div>`
       : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>RMB</kbd> hold to blind the killer</div></div>`;
+    $('team').classList.toggle('compact', S.players.filter(p => p.role === 'survivor' || p.outcome === 'infected').length > 5);
     $('team').innerHTML = S.players.filter(p => p.role === 'survivor' || p.outcome === 'infected').map(p =>
       `<div class="tm ${p.id === this.myId ? 'me' : ''}" id="tm-${esc(p.id)}"><div class="tm-por">${icon('healthy')}</div><div class="tm-body"><div class="tm-name">${esc(p.name)}${p.bot ? '<small>BOT</small>' : ''}${p.id === this.myId ? '<small>YOU</small>' : ''}</div><div class="tm-stage"><i></i><i></i></div><div class="tm-bar"><div></div></div></div></div>`).join('');
     this.hudCache = {};

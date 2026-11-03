@@ -388,7 +388,7 @@ export class Bots {
           const c = Math.cos(rot), sn = Math.sin(rot);
           const vx = ux * c - uz * sn, vz = ux * sn + uz * c;
           const tx = A.x + vx * (A.r + 1.3), tz = A.z + vz * (A.r + 1.3);
-          if (Math.abs(tx) > HALF - 1.5 || Math.abs(tz) > HALF - 1.5 || !free(tx, tz)) continue;
+          if (Math.abs(tx) > (M.half || HALF) - 1.5 || Math.abs(tz) > (M.half || HALF) - 1.5 || !free(tx, tz)) continue;
           const dm = Math.hypot(tx - p.x, tz - p.z), dk = Math.hypot(tx - K.x, tz - K.z);
           if (dk < dm + 0.5) continue; // never run toward the killer
           let sc = dk - dm * 0.6 + (losBlocked(M, K.x, K.z, tx, tz) ? 7 : 0) + (A.win ? 3 : 0) + (A.bar != null ? (S.bars[A.bar] === 0 ? 9 : 4) : 0) + Math.random() * 1.5;
@@ -403,7 +403,7 @@ export class Bots {
         for (let i = 0; i < 14; i++) {
           const a = Math.atan2(away.x, away.z) + (Math.random() - 0.5) * 2.2, r = 9 + Math.random() * 14;
           const cx = p.x + Math.sin(a) * r, cz = p.z + Math.cos(a) * r;
-          if (Math.abs(cx) > HALF - 2 || Math.abs(cz) > HALF - 2 || !free(cx, cz)) continue;
+          if (Math.abs(cx) > (M.half || HALF) - 2 || Math.abs(cz) > (M.half || HALF) - 2 || !free(cx, cz)) continue;
           const dk = Math.hypot(cx - K.x, cz - K.z);
           const sc = dk - r * 0.4 + (losBlocked(M, K.x, K.z, cx, cz) ? 5 : 0) + Math.random() * 2 - (best && kd <= 14 ? 6 : 0);
           if (sc > bs) { bs = sc; best = { x: cx, z: cz, A: null }; }

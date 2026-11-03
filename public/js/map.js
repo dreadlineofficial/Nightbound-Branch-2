@@ -2,7 +2,7 @@
 // The same seed produces the exact same map on host and every client.
 import { HALF } from './config.js';
 import { buildMeatworks } from './meatworks.js';
-import { THEMES } from './themes.js';
+import { THEMES, BIG_MAPS } from './themes.js';
 
 export function rng(seed) {
   let a = seed >>> 0;
@@ -95,9 +95,12 @@ export function makeCtx(M, R, cx, cz, rot) {
 export function buildMap(seed, map = 'woods') {
   if (map === 'meatworks') return buildMeatworks(seed);
   const R = rng(seed);
-  const TH = THEMES[map] || null; // outdoor themes (marsh, carnival, snow); woods when null
+  const BIG = BIG_MAPS[map] || null; // Infection maps reuse a theme on a bigger grid
+  const base = BIG ? BIG.base : map;
+  const TH = THEMES[base] || null; // outdoor themes (marsh, carnival, snow); woods when null
+  const N = BIG ? BIG.N : 5, half = N * 10 + 6, off = (N - 1) * 10, mid = (N - 1) / 2;
   const M = {
-    seed, map: TH ? map : 'woods', props: [], pools: [], lights: [], boxes: [], circles: [], windows: [], bars: [], gens: [], cages: [], gates: [],
+    seed, map: TH ? base : 'woods', mapId: map, half, props: [], pools: [], lights: [], boxes: [], circles: [], windows: [], bars: [], gens: [], cages: [], gates: [],
     visual: [], trees: [], rocks: [], spawns: { survivors: [], killer: null },
   };
   const theme = TH ? TH.style : R.pick(['brick', 'wood', 'stone']);
@@ -178,14 +181,14 @@ export function buildMap(seed, map = 'woods') {
   const cells = [];
   const tnames = TH ? TH.names : ['shack', 'lwall', 'jungle', 'stones', 'barn', 'grove', 'open', 'shack', 'lwall', 'jungle', 'stones', 'grove'];
   const centre = TH ? TH.center : 'chapel';
-  for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
-    const cx = -40 + i * 20, cz = -40 + j * 20;
-    if (i === 2 && j === 2) { cells.push({ i, j, cx, cz, t: centre, rot: R.int(0, 1) * 2 }); continue; }
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const cx = -off + i * 20, cz = -off + j * 20;
+    if (i === mid && j === mid) { cells.push({ i, j, cx, cz, t: centre, rot: R.int(0, 1) * 2 }); continue; }
     cells.push({ i, j, cx: cx + R.range(-1, 1), cz: cz + R.range(-1, 1), t: R.pick(tnames), rot: R.int(0, 3) });
   }
   // survivors spawn in one corner, killer in the opposite one: keep those corner cells open
   const corner = R.int(0, 3);
-  const corners = [[0, 0], [4, 4], [4, 0], [0, 4]];
+  const corners = [[0, 0], [N - 1, N - 1], [N - 1, 0], [0, N - 1]];
   const sc = corners[corner], kc = corners[corner ^ 1];
   for (const c of cells) if ((c.i === sc[0] && c.j === sc[1]) || (c.i === kc[0] && c.j === kc[1])) c.t = 'open';
 
@@ -204,9 +207,10 @@ export function buildMap(seed, map = 'woods') {
   const genCells = [chapel];
   const isCorner = c => (c.i === sc[0] && c.j === sc[1]) || (c.i === kc[0] && c.j === kc[1]);
   const pool = R.shuffle(cells.filter(c => c !== chapel && !isCorner(c)));
-  for (let minD = 30; genCells.length < 7 && minD > 0; minD -= 4)
+  const nGens = BIG ? BIG.gens : 7, nCages = BIG ? BIG.cages : 7;
+  for (let minD = 30; genCells.length < nGens && minD > 0; minD -= 4)
     for (const c of pool) {
-      if (genCells.length >= 7) break;
+      if (genCells.length >= nGens) break;
       if (genCells.includes(c)) continue;
       if (genCells.every(g => Math.hypot(g.cx - c.cx, g.cz - c.cz) >= minD)) genCells.push(c);
     }
@@ -219,9 +223,9 @@ export function buildMap(seed, map = 'woods') {
   const cagePool = R.shuffle(cells.filter(c => c.C));
   cagePool.sort((a, b) => (genCells.includes(a) ? 1 : 0) - (genCells.includes(b) ? 1 : 0));
   const cageCells = [];
-  for (let minD = 34; cageCells.length < 7 && minD > 0; minD -= 4)
+  for (let minD = 34; cageCells.length < nCages && minD > 0; minD -= 4)
     for (const c of cagePool) {
-      if (cageCells.length >= 7) break;
+      if (cageCells.length >= nCages) break;
       if (cageCells.includes(c)) continue;
       if (cageCells.every(g => Math.hypot(g.cx - c.cx, g.cz - c.cz) >= minD)) cageCells.push(c);
     }
@@ -232,7 +236,8 @@ export function buildMap(seed, map = 'woods') {
   }
 
   // ---------- boundary + exit gates ----------
-  const gx1 = Math.round(R.range(-30, 30)), gx2 = Math.round(R.range(-30, 30));
+  const HALF = half, gr = half - 26;
+  const gx1 = Math.round(R.range(-gr, gr)), gx2 = Math.round(R.range(-gr, gr));
   const gateDefs = [{ x: gx1, z: -HALF, dir: -1 }, { x: gx2, z: HALF, dir: 1 }];
   const BW = 0.5, BH = 4.2;
   const bound = (x1, x2, z) => { if (x2 - x1 > 0.1) M.boxes.push({ x: (x1 + x2) / 2, z, hx: (x2 - x1) / 2, hz: BW, h: BH, kind: 'boundary', style: TH ? TH.boundary : 'stone' }); };
@@ -243,9 +248,15 @@ export function buildMap(seed, map = 'woods') {
   addGates(M, gateDefs, TH ? TH.boundary : 'stone');
 
   // ---------- spawns ----------
-  const ccx = -40 + sc[0] * 20, ccz = -40 + sc[1] * 20;
-  const kcx = -40 + kc[0] * 20, kcz = -40 + kc[1] * 20;
+  const ccx = -off + sc[0] * 20, ccz = -off + sc[1] * 20;
+  const kcx = -off + kc[0] * 20, kcz = -off + kc[1] * 20;
   for (let i = 0; i < 4; i++) M.spawns.survivors.push(freePoint(M, ccx + (i % 2) * 2.4 - 1.2, ccz + Math.floor(i / 2) * 2.4 - 1.2, 0.6));
+  // big maps: survivor groups start spread around the edges (first group in the corner above)
+  if (BIG) for (const [a, b] of [[mid, 0], [0, mid], [N - 1, mid], [mid, N - 1], [sc[0], N - 1 - sc[1]]]) {
+    if ((a === kc[0] && b === kc[1]) || Math.hypot(a - kc[0], b - kc[1]) < 2) continue;
+    const x = -off + a * 20, z = -off + b * 20, p = freePoint(M, x, z, 0.6);
+    M.spawns.survivors.push(p);
+  }
   M.spawns.killer = freePoint(M, kcx, kcz, 0.8);
   M.spawns.killerYaw = Math.atan2(-(ccx - kcx), -(ccz - kcz));
   M.spawns.survivorYaw = Math.atan2(-(kcx - ccx), -(kcz - ccz));
@@ -262,8 +273,8 @@ export function buildMap(seed, map = 'woods') {
     for (const s of [...M.spawns.survivors, M.spawns.killer]) if (Math.hypot(x - s.x, z - s.z) < 4) return true;
     return false;
   };
-  const SC = TH ? TH.scatter : { n: 110, tree: 0.8 };
-  for (let n = 0, placed = 0; n < 900 && placed < SC.n; n++) {
+  const SC0 = TH ? TH.scatter : { n: 110, tree: 0.8 }, SC = { ...SC0, n: Math.round(SC0.n * N * N / 25) };
+  for (let n = 0, placed = 0; n < 900 * N * N / 25 && placed < SC.n; n++) {
     const x = R.range(-HALF + 2, HALF - 2), z = R.range(-HALF + 2, HALF - 2);
     if (near(x, z, 1.6)) continue;
     if (SC.prop && R() < SC.prop.p) { const pr = R.pick(SC.prop.kinds); const c = push(M, { x, z, r: pr.r, h: pr.h, kind: 'prop', prop: pr.id, s: R.range(0.85, 1.15), rot: R.range(0, 6.28) }); M.props.push(c); placed++; continue; }
@@ -333,7 +344,7 @@ export function moveCircle(M, st, x, z, dx, dz, r = 0.38) {
   let hit = false;
   for (let it = 0; it < 3; it++) {
     let any = false;
-    const g = M.hash, gx = Math.floor((p.x + HALF + 12) / 8), gz = Math.floor((p.z + HALF + 12) / 8);
+    const g = M.hash, hh = (M.half || HALF) + 12, gx = Math.floor((p.x + hh) / 8), gz = Math.floor((p.z + hh) / 8);
     for (let a = gx - 1; a <= gx + 1; a++) for (let b = gz - 1; b <= gz + 1; b++) {
       const bucket = g.get(a * 1000 + b);
       if (!bucket) continue;
@@ -348,7 +359,7 @@ export function moveCircle(M, st, x, z, dx, dz, r = 0.38) {
     if (!any) break;
     hit = true;
   }
-  const lim = HALF + 11;
+  const lim = (M.half || HALF) + 11;
   p.x = Math.max(-lim, Math.min(lim, p.x)); p.z = Math.max(-lim, Math.min(lim, p.z));
   p.hit = hit;
   return p;
@@ -357,8 +368,9 @@ export function moveCircle(M, st, x, z, dx, dz, r = 0.38) {
 function buildHash(M) {
   const h = new Map();
   const add = (o, x0, z0, x1, z1) => {
-    const a0 = Math.floor((x0 + HALF + 12) / 8), a1 = Math.floor((x1 + HALF + 12) / 8);
-    const b0 = Math.floor((z0 + HALF + 12) / 8), b1 = Math.floor((z1 + HALF + 12) / 8);
+    const hh = (M.half || HALF) + 12;
+    const a0 = Math.floor((x0 + hh) / 8), a1 = Math.floor((x1 + hh) / 8);
+    const b0 = Math.floor((z0 + hh) / 8), b1 = Math.floor((z1 + hh) / 8);
     for (let a = a0; a <= a1; a++) for (let b = b0; b <= b1; b++) {
       const k = a * 1000 + b; if (!h.has(k)) h.set(k, []); h.get(k).push(o);
     }
@@ -416,20 +428,20 @@ export function losBlocked(M, x1, z1, x2, z2, minH = 1.7) {
 export const CELL = 0.5;
 export function buildGrid(M) {
   buildHash(M);
-  const ext = HALF + 11;
+  const ext = (M.half || HALF) + 11, HF = (M.half || HALF);
   const N = Math.ceil(ext * 2 / CELL);
   const type = new Uint8Array(N * N);   // 0 free, 1 solid, 2 window, 3 barricade, 4 gate
   const ref = new Int16Array(N * N).fill(-1);
   const r = 0.42;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = -ext + (i + 0.5) * CELL, z = -ext + (j + 0.5) * CELL, k = j * N + i;
-    if (Math.abs(x) > HALF + 0.2 || Math.abs(z) > HALF + 0.2) {
+    if (Math.abs(x) > HF + 0.2 || Math.abs(z) > HF + 0.2) {
       // outside the walls: only the gate corridors are walkable
       let inCorr = false;
       for (const g of M.gates) if (Math.abs(x - g.x) < 2.2 && (z - g.z) * g.dir > 0 && (z - g.z) * g.dir < 9.4) inCorr = true;
       if (!inCorr) { type[k] = 1; continue; }
     }
-    const bucket = M.hash.get(Math.floor((x + HALF + 12) / 8) * 1000 + Math.floor((z + HALF + 12) / 8)) || [];
+    const bucket = M.hash.get(Math.floor((x + HF + 12) / 8) * 1000 + Math.floor((z + HF + 12) / 8)) || [];
     for (const b of bucket) {
       if (b.r !== undefined) continue;
       if (Math.abs(x - b.x) < b.hx + r && Math.abs(z - b.z) < b.hz + r) {
@@ -464,36 +476,40 @@ export function findPath(M, sx, sz, tx, tz, costFn, maxIter = 40000) {
   const passable = k => costFn(g.type[k], g.ref[k]) < Infinity;
   if (!passable(goal)) { const alt = nearestPassable(M, goal, passable); if (alt < 0) return null; goal = alt; }
   if (!passable(start)) { const alt = nearestPassable(M, start, passable); if (alt >= 0) start = alt; }
-  const gs = new Float32Array(N * N).fill(Infinity);
-  const from = new Int32Array(N * N).fill(-1);
-  const closed = new Uint8Array(N * N);
+  // search buffers are kept per map and reset by a stamp (no 120k-cell allocations per search)
+  let P = M._pf;
+  if (!P || P.n !== N * N) P = M._pf = { n: N * N, gs: new Float32Array(N * N), from: new Int32Array(N * N), seen: new Uint32Array(N * N), shut: new Uint32Array(N * N), st: 0 };
+  const st = ++P.st, G = P.gs, F = P.from, seen = P.seen, shut = P.shut;
+  const gsOf = k => seen[k] === st ? G[k] : Infinity;
   const heap = new Heap();
   const gi = goal % N, gj = (goal / N) | 0;
-  const h = k => { const di = Math.abs((k % N) - gi), dj = Math.abs(((k / N) | 0) - gj); return (Math.max(di, dj) + 0.414 * Math.min(di, dj)); };
-  gs[start] = 0; heap.push(start, h(start));
+  // slightly greedy heuristic: near-optimal paths for a fraction of the search on big maps
+  const hw = N > 260 ? 1.25 : 1;
+  const h = k => { const di = Math.abs((k % N) - gi), dj = Math.abs(((k / N) | 0) - gj); return (Math.max(di, dj) + 0.414 * Math.min(di, dj)) * hw; };
+  seen[start] = st; G[start] = 0; F[start] = -1; heap.push(start, h(start));
   let it = 0;
   while (heap.size && it++ < maxIter) {
     const k = heap.pop();
     if (k === goal) break;
-    if (closed[k]) continue;
-    closed[k] = 1;
+    if (shut[k] === st) continue;
+    shut[k] = st;
     const i = k % N, j = (k / N) | 0;
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
       if (!di && !dj) continue;
       const ni = i + di, nj = j + dj;
       if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
       const nk = nj * N + ni;
-      if (closed[nk]) continue;
+      if (shut[nk] === st) continue;
       const c = costFn(g.type[nk], g.ref[nk]);
       if (c === Infinity) continue;
       if (di && dj && (costFn(g.type[j * N + ni], g.ref[j * N + ni]) === Infinity || costFn(g.type[nj * N + i], g.ref[nj * N + i]) === Infinity)) continue;
-      const ng = gs[k] + (di && dj ? 1.414 : 1) * c;
-      if (ng < gs[nk]) { gs[nk] = ng; from[nk] = k; heap.push(nk, ng + h(nk)); }
+      const ng = G[k] + (di && dj ? 1.414 : 1) * c;
+      if (ng < gsOf(nk)) { seen[nk] = st; G[nk] = ng; F[nk] = k; heap.push(nk, ng + h(nk)); }
     }
   }
-  if (from[goal] < 0 && goal !== start) return null;
+  if ((seen[goal] !== st || F[goal] < 0) && goal !== start) return null;
   const path = [];
-  for (let k = goal; k >= 0 && k !== start; k = from[k]) path.push(k);
+  for (let k = goal; k >= 0 && k !== start; k = F[k]) path.push(k);
   path.reverse();
   return path;
 }

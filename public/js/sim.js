@@ -15,7 +15,7 @@ export class Sim {
     this.mode = mode;
     this.S = {
       t: 0, phase: 'play', endT: 0, mode, timer: MODES[mode].time || 0, infStart: nSurv, lastStand: false,
-      gensNeeded: Math.max(2, Math.min(mode === 'duo' ? Math.min(6, M.gens.length - 1) : 5, nSurv + 1)), gensDone: 0, gatesPowered: false, collapse: -1,
+      gensNeeded: Math.max(2, Math.min(mode === 'duo' ? Math.min(6, M.gens.length - 1) : (M.half || HALF) > 60 ? Math.min(8, M.gens.length - 2) : 5, nSurv + 1)), gensDone: 0, gatesPowered: false, collapse: -1,
       players: [],
       gens: M.gens.map(() => ({ p: 0, done: false, reg: false, n: 0 })),
       bars: M.bars.map(() => 0),
@@ -26,8 +26,9 @@ export class Sim {
     let si = 0, ki = 0;
     for (const r of roster) {
       // extra killers / survivors (Two Killers) spawn beside the regular spawn points
-      let sp = r.role === 'killer' ? M.spawns.killer : M.spawns.survivors[si % 4];
-      const extra = r.role === 'killer' ? ki++ : Math.floor(si++ / 4);
+      const nsp = M.spawns.survivors.length;
+      let sp = r.role === 'killer' ? M.spawns.killer : M.spawns.survivors[si % nsp];
+      const extra = r.role === 'killer' ? ki++ : Math.floor(si++ / nsp);
       if (extra > 0) { const a = extra * 2.1 + (r.role === 'killer' ? 0 : si), d = 1.6 + extra * 0.4; sp = this.safeSpot(sp.x + Math.cos(a) * d, sp.z + Math.sin(a) * d, sp.x, sp.z); }
       this.S.players.push({
         id: r.id, name: r.name, role: r.role, char: r.char, skin: typeof r.skin === 'string' ? r.skin.slice(0, 24) : 'default', perks: (r.perks || []).slice(0, 3), bot: !!r.bot,
@@ -500,6 +501,15 @@ export class Sim {
   // ---- mode rules that tick: the Survivor Rush clock ----
   updateMode(dt) {
     const S = this.S;
+    // Infection: every 60s the infected sense every survivor for a moment (no endless hide-and-seek)
+    if (this.mode === 'infection') {
+      this.pulseT = (this.pulseT || 0) + dt;
+      if (this.pulseT >= 60) {
+        this.pulseT = 0;
+        for (const p of S.players) if (p.role === 'survivor' && p.st === 'ok') p.reveal = Math.max(p.reveal, 4);
+        this.ev({ k: 'pulse' });
+      }
+    }
     if (this.mode === 'infection' && S.lastStand && S.timer > 0) {
       S.timer = Math.max(0, S.timer - dt);
       if (S.timer === 0) {
@@ -1035,7 +1045,7 @@ export class Sim {
           }
         }
         if (dead) break;
-        const bucket = M.hash.get(Math.floor((sp.x + HALF + 12) / 8) * 1000 + Math.floor((sp.z + HALF + 12) / 8)) || [];
+        const bucket = M.hash.get(Math.floor((sp.x + (M.half || HALF) + 12) / 8) * 1000 + Math.floor((sp.z + (M.half || HALF) + 12) / 8)) || [];
         for (const o of bucket) {
           if (o.r !== undefined) { if (sp.y < o.h && Math.hypot(sp.x - o.x, sp.z - o.z) < o.r) { dead = true; break; } }
           else if (sp.y < o.h && Math.abs(sp.x - o.x) < o.hx && Math.abs(sp.z - o.z) < o.hz) { dead = true; break; }

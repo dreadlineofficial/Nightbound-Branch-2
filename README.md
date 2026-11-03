@@ -44,7 +44,7 @@ Pick one in the bot match setup or the online lobby (the host chooses).
 | **Two Killers** | 2 killers vs 8 survivors; 6 generators power the gates. Online lobbies hold up to 10 players. |
 | **Lights Out** | The map stays dark: thick fog, no auras for survivors, flashlights at half charge. |
 | **Survivor Rush** | 5-minute matches: generators and gates twice as fast, killer speed burst after every hit. When time runs out the gates power up and the night collapses in 40s. |
-| **Infection** | No cages: downed survivors rise as a random killer 3s later. Escape, or be the last survivor standing and survive a 45s last stand. |
+| **Infection** | 2 killers vs 10 survivors on big Infection maps (Quarantine Woods, Outbreak Fairground). No cages: downed survivors rise as a random killer 3s later; every 60s the infected sense all survivors. Escape, or be the last survivor standing and survive a 45s last stand. |
 
 ## Killers
 

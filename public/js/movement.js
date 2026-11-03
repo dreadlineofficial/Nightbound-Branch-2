@@ -30,7 +30,7 @@ export function stepMover(M, S, p, intent, dt) {
   const r = p.role === 'killer' ? 0.45 : 0.36;
   const dx = mx * sp * dt, dz = mz * sp * dt;
   // Slimer's Ghost Phase: float straight through walls (still kept inside the map)
-  const res = p.phase > 0 ? { x: Math.max(-HALF + 0.6, Math.min(HALF - 0.6, p.x + dx * 1.1)), z: Math.max(-HALF + 0.6, Math.min(HALF - 0.6, p.z + dz * 1.1)) } : moveCircle(M, S, p.x, p.z, dx, dz, r);
+  const res = p.phase > 0 ? { x: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.x + dx * 1.1)), z: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.z + dz * 1.1)) } : moveCircle(M, S, p.x, p.z, dx, dz, r);
   // soft body-blocking between characters
   for (const o of S.players) {
     if (o === p || o.vault) continue;
@@ -40,7 +40,7 @@ export function stepMover(M, S, p, intent, dt) {
     if (d < min && d > 1e-4) { res.x = o.x + ox / d * min; res.z = o.z + oz / d * min; }
   }
   if (p.role === 'killer') { // the killer can't walk out through the exit gates
-    res.z = Math.max(-HALF + 0.4, Math.min(HALF - 0.4, res.z));
+    res.z = Math.max(-(M.half || HALF) + 0.4, Math.min((M.half || HALF) - 0.4, res.z));
   }
   const moved = Math.hypot(res.x - p.x, res.z - p.z);
   p.bump = sp > 6 && dt > 0 && moved < sp * dt * 0.3;

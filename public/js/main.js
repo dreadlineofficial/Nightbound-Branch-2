@@ -9,7 +9,7 @@ import { setDetail } from './models.js';
 import { MenuScene } from './menu.js';
 import { loadForeman, onForemanReady } from './foremanGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
-import { MAP_NAMES } from './themes.js';
+import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound } from './audio.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
@@ -473,7 +473,12 @@ let session = null;
 
 // map ids: 'woods' (Gravemoor Woods), 'meatworks' (Hollow Pines Meatworks), 'random'
 const MAPS = MAP_NAMES;
-function resolveMap(m) { const ids = Object.keys(MAPS); return MAPS[m] ? m : ids[Math.floor(Math.random() * ids.length)]; }
+// Infection is played on its own big maps; the other modes on the regular ones (unless picked by name)
+function resolveMap(m, mode) {
+  const pick = ids => ids[Math.floor(Math.random() * ids.length)];
+  if (MODES[mode] && MODES[mode].bigMap) return BIG_MAPS[m] ? m : pick(Object.keys(BIG_MAPS));
+  return MAPS[m] ? m : pick(REGULAR_MAPS);
+}
 
 class HostSession {
   constructor(roster, opts) {
@@ -485,7 +490,7 @@ class HostSession {
   }
   start() {
     this.seed = Math.floor(Math.random() * 1e9);
-    this.map = resolveMap(this.opts.map);
+    this.map = resolveMap(this.opts.map, this.opts.mode);
     this.M = buildMap(this.seed, this.map);
     this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty, mode: this.opts.mode });
     this.bots = new Bots(this.sim);
