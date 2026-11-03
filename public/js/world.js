@@ -1,6 +1,7 @@
 // Builds the 3D scene for a generated map.
 import * as THREE from 'three';
 import { HALF } from './config.js';
+import { realistic } from './gfx.js';
 import { rng, barBox } from './map.js';
 import { tex } from './textures.js';
 import { buildMeatWorld, updateMeatLights } from './meatworld.js';
@@ -47,7 +48,8 @@ export function buildWorld(M, quality = 'medium') {
   moon.position.set(30, 60, 20);
   if (q.shadow) {
     moon.castShadow = true;
-    moon.shadow.mapSize.set(q.shadow, q.shadow);
+    const sm = realistic() ? q.shadow * 2 : q.shadow; // crisper shadows in the realistic look
+    moon.shadow.mapSize.set(sm, sm);
     const s = moon.shadow.camera; s.left = -38; s.right = 38; s.top = 38; s.bottom = -38; s.near = 5; s.far = 160;
     moon.shadow.bias = -0.0006; moon.shadow.normalBias = 0.04;
   }

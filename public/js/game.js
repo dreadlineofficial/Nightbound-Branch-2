@@ -5,6 +5,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
@@ -265,9 +267,22 @@ export class Game {
     r.shadowMap.enabled = !!q.shadow;
     r.setPixelRatio(q.pixel);
     r.setSize(innerWidth, innerHeight);
+    const real = realistic() && !!q.post;
+    // realistic look: faint night-sky reflections on every lit surface
+    if (realistic() && q.shadow && !this.M.indoor) { const LK = this.W.look; this.scene.environment = nightEnv(r, LK && LK.sky ? LK.sky[0] : 0x1a2436, LK && LK.fog != null ? LK.fog : 0x0c1018); }
+    else if (realistic() && q.shadow) this.scene.environment = nightEnv(r, 0x2a1a14, 0x100806);
     if (q.post) {
-      this.composer = new EffectComposer(r);
+      // multisampled render target: the post-processing chain otherwise loses anti-aliasing
+      const rt = real ? new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 }) : undefined;
+      this.composer = new EffectComposer(r, rt);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
+      if (real && this.settings.quality === 'high') {
+        // contact shadows where things meet: feet on the ground, folds in clothes, corners of rooms
+        this.ao = new GTAOPass(this.scene, this.camera, innerWidth, innerHeight);
+        this.ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 2, thickness: 0.6, scale: 1, samples: 12 });
+        this.ao.blendIntensity = 0.55;
+        this.composer.addPass(this.ao);
+      }
       if (q.bloom) { this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.5, 0.8); this.composer.addPass(this.bloom); }
       this.post = new ShaderPass(PostShader); this.composer.addPass(this.post);
       this.composer.addPass(new OutputPass());

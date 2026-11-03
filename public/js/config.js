@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.18.7';
+export const VERSION = '2.19.0';
 export const INBOX = [
+  {
+    id: 'v2.19.0', version: '2.19.0', date: 'Nov 2026', title: 'Realistic Look', tag: 'Graphics',
+    body: ['New Realistic look, on by default: textures painted at twice the resolution with deeper surface relief and full anisotropic filtering, a soft sheen on skin and fabric, rounder and smoother characters, faint night-sky reflections on metal, glass and blood, proper anti-aliasing, crisper moon shadows, and ambient occlusion on High.', 'Running on an older laptop? Settings > Visual style > Classic brings back the original look, and it combines with any graphics quality.'],
+  },
   {
     id: 'v2.18.7', version: '2.18.7', date: 'Nov 2026', title: 'The Real Ghost Trap', tag: 'Update',
     body: ['Ghost traps set by Raghuvir and Abeer now use a detailed trap model, with the hazard stripes, side panel and foot pedal handle, still glowing so you can spot them.'],

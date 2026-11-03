@@ -7,6 +7,7 @@ import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
 import { makeRealism } from './realism.js';
 import { makeStaticKiller, animateStaticKiller, cloneStatic } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
+import { GFX, realistic, surface } from './gfx.js';
 
 // ---------- aura material ----------
 const auraMats = new Map();
@@ -30,8 +31,11 @@ const stdCache = new Map();
 export const DETAIL = { lite: false, seg: 1 };
 export function setDetail(quality) {
   const lite = quality === 'potato' || quality === 'low';
-  if (lite !== DETAIL.lite) stdCache.clear();
-  DETAIL.lite = lite; DETAIL.seg = quality === 'potato' ? 0.5 : quality === 'low' ? 0.7 : 1;
+  // the realistic look rounds characters out with more polygons
+  const seg = realistic() ? ({ potato: 0.5, low: 0.8, medium: 1.35, high: 1.7 }[quality] ?? 1) : quality === 'potato' ? 0.5 : quality === 'low' ? 0.7 : 1;
+  const style = GFX.style;
+  if (lite !== DETAIL.lite || style !== DETAIL.style) stdCache.clear();
+  DETAIL.lite = lite; DETAIL.seg = seg; DETAIL.style = style;
 }
 export function mat(color, opts = {}) {
   const key = color + JSON.stringify(opts);
@@ -41,7 +45,12 @@ export function mat(color, opts = {}) {
     stdCache.set(key, m);
     return m;
   }
-  const m = new THREE.MeshStandardMaterial({ color, roughness: opts.rough ?? 0.85, metalness: opts.metal ?? 0, ...(opts.emissive ? { emissive: opts.emissive, emissiveIntensity: opts.ei ?? 1 } : {}), ...(opts.map ? { map: tex(opts.map).map, normalMap: tex(opts.map).normalMap } : {}), ...(opts.transparent ? { transparent: true, opacity: opts.opacity } : {}), ...(opts.side ? { side: opts.side } : {}) });
+  const base = { color, roughness: opts.rough ?? 0.85, metalness: opts.metal ?? 0, ...(opts.emissive ? { emissive: opts.emissive, emissiveIntensity: opts.ei ?? 1 } : {}), ...(opts.map ? { map: tex(opts.map).map, normalMap: tex(opts.map).normalMap } : {}), ...(opts.transparent ? { transparent: true, opacity: opts.opacity } : {}), ...(opts.side ? { side: opts.side } : {}) };
+  const m = (opts.map && surface(opts.map, base)) || new THREE.MeshStandardMaterial(base);
+  if (realistic()) {
+    if (m.normalMap) m.normalScale.set(1.6, 1.6);
+    m.envMapIntensity = (opts.metal ?? 0) > 0.4 ? 1.2 : 0.55;
+  }
   stdCache.set(key, m);
   return m;
 }

@@ -6,6 +6,7 @@ import { Bots } from './bots.js';
 import { Game } from './game.js';
 import { QUALITY } from './world.js';
 import { setDetail } from './models.js';
+import { setStyle, realistic, nightEnv } from './gfx.js';
 import { MenuScene } from './menu.js';
 import { loadForeman, onForemanReady } from './foremanGlb.js';
 import { loadChucky, onChuckyReady, chuckyReady } from './chuckyGlb.js';
@@ -95,6 +96,7 @@ function makeRenderer() {
   renderer.setPixelRatio(Math.min(1.5, q.pixel));
   renderer.setSize(innerWidth, innerHeight);
   $('game').appendChild(renderer.domElement);
+  setStyle(settings.style, renderer);
   setDetail(settings.quality);
 }
 makeRenderer();
@@ -113,6 +115,7 @@ function startBG() {
   if (menu) return;
   setDetail(settings.quality);
   menu = new MenuScene(settings.quality);
+  if (realistic() && settings.quality !== 'potato' && settings.quality !== 'low') menu.scene.environment = nightEnv(renderer, 0x1c2438, 0x0a0b10);
   renderer.shadowMap.enabled = settings.quality === 'high';
   renderer.setPixelRatio(Math.min(1.5, QUALITY[settings.quality].pixel));
   renderer.setSize(innerWidth, innerHeight);
@@ -324,6 +327,7 @@ const QHINT = {
 function renderSettings() {
   $('set-name').value = settings.name;
   setSeg('set-quality', settings.quality); $('set-quality-hint').textContent = QHINT[settings.quality];
+  setSeg('set-style', settings.style === 'classic' ? 'classic' : 'realistic'); $('set-style-hint').textContent = SHINT[settings.style === 'classic' ? 'classic' : 'realistic'];
   $('set-dynres').checked = settings.dynres !== false; $('set-fps').checked = !!settings.showFps;
   $('set-bright').value = settings.brightness || 1; $('set-bright-v').textContent = Math.round((settings.brightness || 1) * 100) + '%';
   $('set-sens').value = settings.sens; $('set-sens-v').textContent = (+settings.sens).toFixed(2);
@@ -334,6 +338,11 @@ function renderSettings() {
   renderCam();
 }
 $('set-name').addEventListener('input', e => { settings.name = e.target.value.trim().slice(0, 16) || 'Player'; saveSettings(); renderShowcase(); });
+const SHINT = {
+  realistic: 'Realistic: sharper high-resolution textures, soft sheen on skin and fabric, smoother characters, night-sky reflections, anti-aliasing, and ambient occlusion on High.',
+  classic: 'Classic: the original Nightbound look. Lighter on older laptops.',
+};
+seg('set-style', v => { settings.style = v; saveSettings(); $('set-style-hint').textContent = SHINT[v]; stopBG(); makeRenderer(); startBG(); });
 seg('set-quality', v => { settings.quality = v; saveSettings(); $('set-quality-hint').textContent = QHINT[v]; stopBG(); makeRenderer(); startBG(); });
 $('set-dynres').addEventListener('change', e => { settings.dynres = e.target.checked; saveSettings(); });
 $('set-fps').addEventListener('change', e => { settings.showFps = e.target.checked; saveSettings(); });
