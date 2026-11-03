@@ -347,6 +347,7 @@ export class Game {
       if (e.code === 'KeyR' && this.mine() && this.mine().char === 'lamplighter') this.send({ t: 'act', a: 'teleport', yaw: this.mine().yaw });
       if (e.code === 'KeyR' && this.mine() && this.mine().role === 'killer' && KILLERS[this.mine().char].ability2) this.send({ t: 'act', a: 'ability2' });
       if (e.code === 'KeyG' && this.mine() && this.mine().role === 'killer' && (this.mine().char === 'chucky' || this.mine().disguise)) this.send({ t: 'act', a: 'possess' });
+      if (e.code === 'KeyV' && this.mine() && this.mine().role === 'killer' && this.mine().char === 'chucky') this.send({ t: 'act', a: 'split' });
       if (e.code === 'KeyF' && this.mine() && this.mine().role === 'killer') { const ex = findExecute(this.M, this.S, this.mine()); if (ex) this.send({ t: 'act', a: 'execute', id: ex.id }); }
       if ((e.code === 'KeyA' || e.code === 'KeyD') && this.mine() && this.mine().st === 'carried') {
         if (e.code !== this.lastWigKey) { this.lastWigKey = e.code; this.send({ t: 'act', a: 'wig' }); this.wigFlash = 0.15; }
@@ -459,6 +460,7 @@ export class Game {
     this.updateSlime(S);
     this.updateSpears(dt, S);
     this.updateSaws(dt, S);
+    this.updateDolls(S);
     this.updateChains(S);
     this.updateLanterns(dt, S, me);
     this.updateGore(dt, S, me);
@@ -849,6 +851,27 @@ export class Game {
     });
   }
 
+  // Chucky's spare dolls (Soul Split), lying where they were dropped
+  updateDolls(S) {
+    this.dolls ||= new Map();
+    const seen = new Set();
+    for (const d of S.dolls || []) {
+      seen.add(d.id);
+      let o = this.dolls.get(d.id);
+      // swap the stand-in for the real model once it has loaded
+      if (o && !o.userData.real && chuckyReady()) { this.scene.remove(o); o = null; }
+      if (!o) {
+        const R = makeKiller('chucky', {});
+        o = R.root; o.userData.real = !!R.chucky;
+        o.rotation.set(-Math.PI / 2, 0, d.yaw, 'YXZ'); o.rotation.order = 'YXZ'; o.rotation.set(-Math.PI / 2 + 0.05, d.yaw, 0);
+        o.position.set(d.x, 0.14, d.z);
+        if (R.mixer) R.mixer.update(0);
+        this.scene.add(o); this.dolls.set(d.id, o);
+      }
+    }
+    for (const [id, o] of this.dolls) if (!seen.has(id)) { this.scene.remove(o); this.dolls.delete(id); }
+  }
+
   // Patrick Bateman's thrown chainsaw: spinning in flight, idling on the ground until he fetches it
   updateSaws(dt, S) {
     this.saws ||= new Map();
@@ -1175,7 +1198,12 @@ export class Game {
           break;
         }
         case 'flashdead': if (e.id === this.myId) { this.feed('Your flashlight battery is dead.'); this.flashHeld = false; } break;
-        case 'swap': if (e.from === this.myId) this.switchTo(e.to); break; // silent (Possession)
+        case 'swap': if (e.from === this.myId) this.switchTo(e.to); break; // silent (Possession, Soul Split)
+        case 'split':
+          this.sparks.spawn(e.x, 0.5, e.z, 90, 0xff3a1a, 3, 1.5, 0.4, 1.4); this.smoke.spawn(e.x, 0.6, e.z, 14, 0x200808, 1.2, 2.2, 0.5, 0.8);
+          sound.play('laugh', e.x, e.z);
+          if (e.to === this.myId) { this.feed('Your soul jumps into another doll! Your old body keeps hunting: it can put survivors down, but not cage them.', 'big'); this.flash = 0.6; }
+          break;
         case 'possessed':
           if (e.id === this.myId) { this.feed(`You are inside ${name(e.id)}. Nobody knows. Down a survivor and cage them, then press G to let go.`, 'big'); this.flash = 0.5; }
           if (e.ghost === this.myId) { this.feed('You have been possessed! You are a ghost now: nobody can see you. Keep repairing generators (10% slower).', 'big'); this.flash = 0.6; this.shake = 0.6; }
@@ -1354,7 +1382,7 @@ export class Game {
       : me.st === 'ghost'
       ? `${k('WASD')} move · ${k('E')} repair generators · nobody can see you`
       : me.role === 'killer'
-      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} ${me.char === 'chucky' ? 'jump' : 'vault'}${me.char === 'chucky' ? ` · ${k('G')} possess a downed survivor` : ''} · ${k('Q')} drop · ${k('Tab')} status`
+      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} ${me.char === 'chucky' ? 'jump' : 'vault'}${me.char === 'chucky' ? ` · ${k('G')} possess · ${k('V')} soul split` : ''} · ${k('Q')} drop · ${k('Tab')} status`
       : `${k('WASD')} move · ${k('Shift')} run · ${k('Ctrl')} crouch · ${k('E')} interact · ${k('RMB')} flashlight · ${k('G')} ghost trap · ${k('Space')} vault / barricade / skill check · ${k('Tab')} status`;
     $('controls-hint').classList.remove('fade');
     clearTimeout(this.hintT); this.hintT = setTimeout(() => $('controls-hint').classList.add('fade'), 14000);
@@ -1398,6 +1426,8 @@ export class Game {
       sub = me.leap ? 'Pouncing!' : me.aim ? `Coiling… ${Math.round(def.min + (def.max - def.min) * coil)}m` : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       const mm = t => Math.floor(t / 60) + ':' + String(Math.ceil(t % 60)).padStart(2, '0');
       extra = (me.ab2Cd > 0 ? `<kbd>R</kbd> Laugh ${Math.ceil(me.ab2Cd)}s` : "<kbd>R</kbd> Laugh ready") + ' · ' + (me.harmless ? 'Possessing…' : me.possCd > 0 ? `<kbd>G</kbd> Possess ${mm(me.possCd)}` : '<kbd>G</kbd> Possess ready');
+      const S = this.S, oneLeft = S && !S.gatesPowered && S.gensNeeded - S.gensDone === 1 && (S.dolls || []).length;
+      if (!me.split) extra += oneLeft ? ' · <kbd>V</kbd> <b>Soul Split ready</b>' : ' · Soul Split: last generator';
     } else if (me.char === 'bateman') {
       const d2 = K.ability2, held = me.ammo > 0;
       ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1;

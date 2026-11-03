@@ -1,6 +1,6 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
 import { RULES, KILLERS, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL } from './config.js';
-import { barBox, losBlocked, moveCircle } from './map.js';
+import { barBox, losBlocked, moveCircle, findPath } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute,
 } from './rules.js';
@@ -39,6 +39,20 @@ export class Sim {
     this.events = [];
     this.botSc = new Map();
     this.possession = null; // Chucky's Possession (host only, never sent to clients)
+    // Chucky's Soul Split: spare Good Guy dolls lying around the map
+    this.S.dolls = [];
+    if (this.S.players.some(p => p.char === 'chucky')) {
+      const spots = [...M.gens, ...M.cages].sort(() => Math.random() - 0.5);
+      for (const g of spots) {
+        if (this.S.dolls.length >= 4) break;
+        const a = Math.random() * 6.28, sp = this.safeSpot(g.x + Math.cos(a) * 2.6, g.z + Math.sin(a) * 2.6, g.x, g.z);
+        if (this.S.dolls.some(d => Math.hypot(d.x - sp.x, d.z - sp.z) < 18)) continue;
+        // only where Chucky can actually walk out from (no dolls sealed in a corner)
+        const walk = (t, r) => t === 1 || t === 4 ? Infinity : 1;
+        if (!findPath(M, sp.x, sp.z, M.spawns.killer.x, M.spawns.killer.z, walk, 60000)) continue;
+        this.S.dolls.push({ id: this.S.dolls.length, x: +sp.x.toFixed(2), z: +sp.z.toFixed(2), yaw: +(Math.random() * 6.28).toFixed(2) });
+      }
+    }
     this.possessionOn = POSSESSION;
   }
 
@@ -57,7 +71,7 @@ export class Sim {
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
         item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
-        possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0,
+        possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
       });
     }
   }
@@ -215,6 +229,13 @@ export class Sim {
         let X = null, bd = 2.2;
         for (const s of S.players) if (s.role === 'survivor' && s.st === 'down' && !(s.turn > 0)) { const d = dist(p, s); if (d < bd) { bd = d; X = s; } }
         if (X) this.possess(p, X);
+        break;
+      }
+      case 'split': {
+        // Chucky's Soul Split: with one generator to go, jump into a spare doll; the old body fights on
+        if (p.role !== 'killer' || p.char !== 'chucky' || p.split || p.disguise || p.harmless || this.possession) return;
+        if (S.gatesPowered || S.gensNeeded - S.gensDone !== 1 || !S.dolls.length || p.carry != null || p.act) return;
+        this.soulSplit(p);
         break;
       }
       case 'pounce': {
@@ -1015,6 +1036,21 @@ export class Sim {
         c.x += (K.x - c.x) / dd * step; c.z += (K.z - c.z) / dd * step; c.y = (c.y ?? 1.55) + (1.55 - (c.y ?? 1.55)) * Math.min(1, dt * 8);
       }
     }
+  }
+
+  soulSplit(C) {
+    const S = this.S;
+    const D = S.dolls.splice(Math.floor(Math.random() * S.dolls.length), 1)[0];
+    const nid = C.id + '~soul';
+    const N = this.makePlayer({ id: nid, name: C.name, role: 'killer', char: 'chucky', skin: C.skin, perks: C.perks, bot: C.bot }, { x: D.x, z: D.z });
+    Object.assign(N, { yaw: D.yaw, split: true, possCd: C.possCd, stun: 0.8, score: { a: 0, b: 0, c: 0, d: 0 } });
+    S.players.push(N); this.inputs.set(nid, { e: false, latch: false });
+    // the body he leaves keeps hunting on its own: it can put survivors down, but never cage them
+    Object.assign(C, { split: true, bot: true, noCage: true, aim: false, act: null, name: 'Chucky (bot)' });
+    if (this.inputs.get(C.id)) Object.assign(this.inputs.get(C.id), { e: false, latch: false });
+    this.ev({ k: 'swap', from: C.id, to: nid });
+    this.ev({ k: 'split', id: C.id, to: nid, x: D.x, z: D.z, doll: D.id });
+    this.ev({ k: 'msg', text: "Chucky's soul has split into another doll!" });
   }
 
   // ---- Chucky's Possession ----

@@ -55,7 +55,7 @@ Pick one in the bot match setup or the online lobby (the host chooses).
 | **The Harrower** | *Bone Spear*: 3 regrowing spears | *Trophy Mark*: speared survivors are revealed | Trophy Hunt |
 | **The Lamplighter** | *Cursed Lanterns* reveal nearby survivors | *Shadow Step* (R): teleport to a lantern | Last Light |
 | **The Foreman** *(OFFAL crossover chapter)* | *Lights Out*: the whole map goes dark, fog closes in, he goes silent | *Hunts by Sound*: runners near him are revealed in the dark, and one hook hit downs | Reassignment |
-| **Chucky** *(Child's Play fan-made, third person)* | *Pounce*: coil and leap up to 10m; landing on a survivor strikes them | *Chucky's Laugh* (R): reveals survivors within 28m; tiny, silent, 20m terror radius | Friends Till the End |
+| **Chucky** *(Child's Play fan-made, third person)* | *Pounce*: coil and leap up to 10m over fences and pallets; landing on a survivor strikes them | *Laugh* (R) reveals survivors within 28m. *Jump* (Space) over windows and pallets. *Possession* (G, every 10 min): secretly take over a downed survivor; they become an invisible ghost. *Soul Split* (V, one generator left): jump into a spare doll, the old body hunts on but can't cage | Friends Till the End |
 | **Patrick Bateman** *(American Psycho fan-made)* | *Chainsaw Toss*: a thrown chainsaw that downs on hit; go and pick it up | *Business Card* (R): intimidates (reveals + slows) survivors in front of him; speed burst after hits | Hip to Be Square |
 | **The Slimer** *(Ghostbusters fan-made)* | *Slime Spit*: puddles that slow and reveal survivors | *Ectoplasmic*: floats silently with a small terror radius | Slimed |
 

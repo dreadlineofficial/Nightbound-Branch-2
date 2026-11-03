@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 8;
+export const NET_PROTOCOL = 9;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -107,7 +107,7 @@ export const KILLERS = {
     exec: { name: 'Friends Till the End', desc: 'Leaps onto the survivor\'s chest and stabs, and stabs, and stabs.' },
     ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (slowed), release to leap up to 10m: the longer you coil, the farther you fly. He sails over fences, pallets and other low obstacles. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
     ability2: { name: "Chucky's Laugh", key: 'R', cooldown: 35, radius: 28, reveal: 5, desc: 'Laugh. Every survivor within 28m hears it and is revealed to you for 5s.' },
-    feature: { name: 'Tiny Terror & Possession', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump over windows, pallets and rocks. Possession (G, once every 10 minutes): take over a downed survivor in secret. They wander as an invisible ghost, your doll is left as a harmless decoy, and you can let go once you have downed and caged someone. Played in third person.' },
+    feature: { name: 'Tiny Terror & Possession', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump over windows, pallets and rocks. Possession (G, once every 10 minutes): take over a downed survivor in secret. They wander as an invisible ghost, your doll is left as a harmless decoy, and you can let go once you have downed and caged someone. Soul Split (V, once, with one generator left): jump into a spare doll lying on the map; your old body keeps hunting as a bot that can down survivors but not cage them. Played in third person.' },
     color: 0xd83a22,
   },
   bateman: {
@@ -270,8 +270,15 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.14.0';
+export const VERSION = '2.15.0';
 export const INBOX = [
+  {
+    id: 'v2.15', version: '2.15.0', date: 'Nov 2026', title: 'Chucky: Soul Split', tag: 'Balance',
+    body: [
+      'New for Chucky, Soul Split (V, once per match): spare Good Guy dolls now lie around the map. When only one generator is left, his soul jumps into one of them at random.',
+      'His old body keeps hunting on its own as a bot. It can put survivors down, but it can never pick them up or cage them.',
+    ],
+  },
   {
     id: 'v2.14', version: '2.14.0', date: 'Nov 2026', title: 'Chucky: Possession', tag: 'Balance',
     body: [

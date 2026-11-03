@@ -438,6 +438,8 @@ export class Bots {
   killer(p, dt) {
     const sim = this.sim, S = sim.S, M = sim.M, b = this.brain(p), D = sim.diff;
     if (p.stun > 0) { this.setE(p, b, false); return; }
+    // Chucky: split his soul into a spare doll when one generator is left
+    if (p.char === 'chucky' && !p.split && !p.disguise && !p.harmless && !sim.possession && !S.gatesPowered && S.gensNeeded - S.gensDone === 1 && S.dolls.length && p.carry == null && !p.act && Math.random() < dt * 0.4) { sim.onMsg(p.id, { t: 'act', a: 'split' }); return; }
     // Chucky in a survivor's body: let them go once someone has been downed and caged
     if (p.disguise && p.pdowns >= 1 && p.pcages >= 1 && p.carry == null && !p.act) { sim.onMsg(p.id, { t: 'act', a: 'possess' }); return; }
     if (p.act) {
@@ -495,7 +497,7 @@ export class Bots {
 
     // pick up downed survivors (if not mid-chase with someone close)
     let downed = null, dd = 1e9;
-    if (modeOf(S) !== 'infection' && !p.harmless) for (const s of S.players) if (s.role === 'survivor' && s.st === 'down') { const d = dist(p, s); if (d < dd) { dd = d; downed = s; } }
+    if (modeOf(S) !== 'infection' && !p.harmless && !p.noCage) for (const s of S.players) if (s.role === 'survivor' && s.st === 'down') { const d = dist(p, s); if (d < dd) { dd = d; downed = s; } }
     // Chucky: sometimes possess the survivor he just put down instead of carrying them
     if (downed && sim.possessionOn && p.char === 'chucky' && !p.disguise && p.possCd <= 0 && dd < 2 && !sim.possession) {
       b.possPlan ||= {}; const key = downed.id + ':' + downed.stage;

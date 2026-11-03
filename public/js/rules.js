@@ -110,7 +110,7 @@ export function findInteraction(M, S, p) {
   }
   let best = null, bd = 1e9;
   // Infection: the downed rise as killers, there is nothing to carry
-  if (modeOf(S) !== 'infection') for (const o of S.players) if (o.role === 'survivor' && o.st === 'down') { const d = dist(p, o); if (d < 1.9 && d < bd) { bd = d; best = { k: 'pickup', id: o.id, label: 'Pick up ' + o.name }; } }
+  if (modeOf(S) !== 'infection' && !p.noCage) for (const o of S.players) if (o.role === 'survivor' && o.st === 'down') { const d = dist(p, o); if (d < 1.9 && d < bd) { bd = d; best = { k: 'pickup', id: o.id, label: 'Pick up ' + o.name }; } }
   if (best) return best;
   for (const b of M.bars) if (S.bars[b.id] === 1) { const bb = barBox(b); const d = Math.hypot(Math.max(0, Math.abs(p.x - bb.x) - bb.hx), Math.max(0, Math.abs(p.z - bb.z) - bb.hz)); if (d < 1.2 && d < bd) { bd = d; best = { k: 'break', id: b.id, label: 'Break barricade' }; } }
   if (best) return best;
