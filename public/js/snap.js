@@ -20,7 +20,7 @@ const PDEF = {
   stun: 0, ab: 0, abT: 0, abCd: 0, aim: false, reveal: 0, sixT: 0, chase: 0, mark: 0, charges: 0, chargeT: 0, ammo: 0,
   ammoT: 0, ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0, outcome: '',
   bump: false, bot: false, flash: 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, traps: 0, slimed: 0, phase: 0,
-  haste: 0, turn: 0, card: 0,
+  haste: 0, turn: 0, card: 0, leap: null,
 };
 
 const r3 = v => Math.round(v * 1000) / 1000;

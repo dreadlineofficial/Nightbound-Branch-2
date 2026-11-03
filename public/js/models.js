@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
+import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
 import { applySkinFx } from './skinfx.js';
 
 // ---------- aura material ----------
@@ -279,6 +280,7 @@ export function makeKiller(id, sk = {}) {
     return R;
   }
   if (id === 'bateman') return makeBateman(sk);
+  if (id === 'chucky') return makeChuckyGlb(sk, DETAIL.lite) || makeDoll(sk);
   if (id === 'foreman') { const g = makeForemanGlb(sk, DETAIL.lite); if (g) { applySkinFx(g, sk); return g; } }
   const R = new Rig();
   if (id === 'foreman') {
@@ -482,6 +484,21 @@ function makeBateman(sk) {
   applySkinFx(R, sk);
   return R;
 }
+// stand-in Good Guy doll while the real model loads (or if it can't): overalls, a striped
+// shirt, red hair and a kitchen knife, at doll size
+function makeDoll(sk) {
+  const R = new Rig();
+  const skin = mat(sk.tint ?? 0xf0c8a8, { map: 'skin', rough: 0.45 });
+  const denim = mat(0x3a5a9a, { map: 'cloth', rough: 0.9 }), shirt = mat(0xd84a3a, { map: 'cloth' }), hair = mat(0xd8501a, { rough: 0.8 });
+  buildBody(R, { skin, top: shirt, sleeve: shirt, forearm: shirt, hand: skin, pants: denim, shoes: mat(0xe8e8e8, { rough: 0.6 }), hair, bulk: 1.1, legLen: 0.4, eye: 0x2a5aa0 });
+  R.mesh('spine', G.box(0.3, 0.28, 0.24), denim, 0, 0.18, 0.005);
+  R.mesh('head', G.sph(0.12, 14, 10), hair, 0, 0.15, -0.02, 0, 0, 0, 1, 0.7, 1.05);
+  R.mesh('handR', G.box(0.012, 0.03, 0.24), mat(0xc8ccd0, { metal: 0.8, rough: 0.25 }), 0, -0.07, 0.15);
+  R.root.scale.setScalar(0.55);
+  R.kind = 'killer'; R.killer = 'chucky';
+  R.finalize();
+  return R;
+}
 // chainsaw parts as [geo, material, x, y, z, rx, ry, rz] (shared by the prop and the outfit)
 function chainsawParts() {
   const body = mat(0xd89a1e, { rough: 0.5 }), dark = mat(0x1a1a1a, { rough: 0.5 }), bar = mat(0x9a9ea2, { map: 'metal', metal: 0.8, rough: 0.3 });
@@ -505,6 +522,7 @@ const lerp = (a, b, k) => a + (b - a) * k;
 // s: { anim, speed, crouch, injured, t, atk, vaultF, ... }
 export function animate(R, s, dt) {
   if (R.fxTick) R.fxTick(dt, (R.t || 0) + dt);
+  if (R.chucky) return animateChucky(R, s, dt);
   if (R.glb) return animateGlb(R, s, dt);
   R.t += dt;
   const t = R.t;
@@ -625,6 +643,9 @@ export function animate(R, s, dt) {
           P.shL = -2.2 * alive + Math.sin(t * 11) * 0.3 * alive; P.elL = -1.6 * alive; P.shR = -1.9 * alive; P.elR = -1.5 * alive;
           P.lgL = Math.sin(t * 13) * 0.5 * alive - 0.1; P.lgR = -Math.sin(t * 13) * 0.5 * alive - 0.1; P.knL = 0.5; P.knR = 0.4;
         }
+      } else if (ch === 'chucky') {
+        downPose();
+        if (f > 0.28 && f < 0.85) { P.shL = -2.6 + Math.sin(t * 18) * 0.35; P.shR = -2.5 - Math.sin(t * 15) * 0.35; P.knL = 0.5 + Math.sin(t * 13) * 0.3; P.headX = -0.7 + Math.sin(t * 20) * 0.1; }
       } else if (ch === 'wisp') {
         const life = 1 - ramp(0.45, 0.8);
         P.tiltX = 0; P.hipsY = 0; P.headX = -0.6 + (1 - life) * 1.0; P.spineX = -0.05;

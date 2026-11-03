@@ -7,6 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
+import { chuckyReady } from './chuckyGlb.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat } from './models.js';
 import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
@@ -158,6 +159,8 @@ class BloodDecals {
   }
 }
 
+// Chucky's pounce arc
+function leapLift(p) { const L = p.leap; return L ? Math.sin(Math.min(1, L.t / L.d) * Math.PI) * (L.h || 0.6) : 0; }
 // height of a killer swinging on a high chain hook: up to the hook, then a drop at the end
 function pullLift(p) {
   const P = p.pull;
@@ -235,7 +238,7 @@ export class Game {
     const me = playerById(S, this.myId);
     if (me) { this.camYaw = me.yaw; this.myTp = me.tp; }
     this.role = me ? me.role : 'survivor';
-    if (this.role === 'killer') this.setupKillerView(me);
+    if (this.role === 'killer' && !KILLERS[me.char].tpv) this.setupKillerView(me);
     this.buildStaticHUD(S);
     sound.ambience(true);
     this.onResize();
@@ -265,7 +268,7 @@ export class Game {
     if (this.view) { this.camera.remove(this.view); this.view = null; }
     if (this.trail) { this.camera.remove(this.trail); this.trail = null; }
     this.flashHeld = false; this.aimHeld = false; this.eHeld = false; this.skill = null; this.skillCanvas.classList.add('hidden');
-    if (me.role === 'killer') { this.setupKillerView(me); this.camYaw = me.yaw; }
+    if (me.role === 'killer') { if (!KILLERS[me.char].tpv) this.setupKillerView(me); this.camYaw = me.yaw; }
     this.buildStaticHUD(S);
   }
 
@@ -358,6 +361,9 @@ export class Game {
         if (me.char === 'foreman') {
           if (down && me.abCd <= 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'chain', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
+        } else if (me.char === 'chucky') {
+          if (down && me.abCd <= 0 && !me.leap) { this.aimHeld = true; this.sendIn(); }
+          else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'pounce', yaw: me.yaw }); this.sendIn(); }
         } else if (me.char === 'bateman') {
           if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'sawthrow', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
@@ -408,7 +414,7 @@ export class Game {
       this.lastSnap = S;
       const p = playerById(S, this.myId);
       if (p) {
-        const forced = (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down') || !!p.reel || !!p.pull;
+        const forced = (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down') || !!p.reel || !!p.pull || !!p.leap;
         if (!this.me || p.tp !== this.myTp || forced) {
           this.myTp = p.tp;
           this.me = { x: p.x, z: p.z, yaw: this.me ? this.me.yaw : p.yaw, pitch: this.me ? this.me.pitch : 0, vault: null, mv: 0, cr: 0 };
@@ -568,7 +574,8 @@ export class Game {
     const K = killerOf(S);
     for (const p of S.players) {
       let c = this.chars.get(p.id);
-      if (c && (c.role !== p.role || c.char !== p.char)) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
+      if (c && (c.role !== p.role || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = p.role === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
@@ -577,7 +584,7 @@ export class Game {
       }
       const R = c.rig, local = p.id === this.myId;
       const execing = p.role === 'killer' && p.act && p.act.k === 'execute';
-      const hidden = p.st === 'dead' || p.st === 'out' || (local && p.role === 'killer' && !execing);
+      const hidden = p.st === 'dead' || p.st === 'out' || (local && p.role === 'killer' && !execing && !(KILLERS[p.char] && KILLERS[p.char].tpv));
       R.root.visible = !hidden;
       // smoothing. Other players are already interpolated between network updates (clients:
       // snapshots; host: the remote player's own position stream), so only a light filter is
@@ -593,10 +600,10 @@ export class Game {
       c.spd += (spd - c.spd) * Math.min(1, dt * 8);
       c.yaw += angDiff(c.yaw, tyaw) * (local ? 1 : 1 - Math.exp(-dt * (interp ? 30 : 12)));
       // the Foreman flung up to a high hook point, then dropping back down
-      c.lift = (c.lift || 0) + (pullLift(p) - (c.lift || 0)) * Math.min(1, dt * 20);
+      c.lift = (c.lift || 0) + (pullLift(p) + leapLift(p) - (c.lift || 0)) * Math.min(1, dt * 20);
       if (hidden) continue;
       // footsteps of others
-      if (!local && p.mv && !p.cr && !(p.role === 'killer' && (p.char === 'wisp' || p.char === 'slimer'))) {
+      if (!local && p.mv && !p.cr && !(p.role === 'killer' && (p.char === 'wisp' || p.char === 'slimer' || p.char === 'chucky'))) {
         c.step += c.spd * dt;
         if (c.step > (p.role === 'killer' ? 1.5 : 1.3)) { c.step = 0; if (!has(p, 'hushed')) sound.play('step', c.x, c.z, { run: p.mv === 2, vol: p.role === 'killer' ? 0.5 : 0.25 }); }
       }
@@ -630,6 +637,7 @@ export class Game {
         if (p.atk === 1) { c.atkT = (c.atkPrev === 1 ? c.atkT + dt : 0); st.atkF = c.atkT / (RULES.lungeTime * (p.atkAmbush ? 1.4 : 1)); }
         c.atkPrev = p.atk;
         st.atkHit = p.atkHit; st.tele = !!p.tele; st.dark = p.char === 'foreman' && p.ab === 1;
+        st.leap = p.leap ? Math.min(1, p.leap.t / p.leap.d) : null; st.laughF = c.laughAt != null ? (this.t - c.laughAt) / 3 : null;
         if (p.atk === 2) { const tot = p.atkHit ? (p.char === 'butcher' && !p.atkT ? 2.2 : RULES.hitCooldown * (has(p, 'relentless') ? 0.65 : 1)) : RULES.missCooldown; st.recF = Math.max(0, Math.min(1, 1 - p.atkT / tot)); }
         c.st = st;
       }
@@ -641,11 +649,12 @@ export class Game {
       R.root.position.set(c.x, y + c.lift, c.z);
       R.root.rotation.set(0, c.yaw, 0);
       if (anim === 'carried') {
-        const kc = K && this.chars.get(K.id);
+        const CK = playerById(S, p.carriedBy) || K;
+        const kc = CK && this.chars.get(CK.id);
         if (kc) {
           const f = fwd(kc.yaw), rgt = { x: -Math.cos(kc.yaw), z: Math.sin(kc.yaw) };
           // lying poses pivot at the feet: offset the root so the hips rest on the killer's shoulder
-          const sh = K.char === 'butcher' ? 1.78 : 1.62;
+          const sh = CK.char === 'butcher' ? 1.78 : CK.char === 'chucky' ? 1.12 : 1.62;
           R.root.position.set(kc.x + f.x * 0.12 + rgt.x * 0.7, sh, kc.z + f.z * 0.12 + rgt.z * 0.7);
           R.root.rotation.set(0, kc.yaw + Math.PI / 2, 0);
           if (local) R.root.visible = true;
@@ -659,6 +668,7 @@ export class Game {
           let d = 1.05, yy = 0, side = 0;
           if (ch === 'butcher' || ch === 'bateman') { d = 1.05 - sm(0.15, 0.25) * 0.35 + sm(0.86, 0.95) * 0.3; yy = (sm(0.18, 0.3) - sm(0.86, 0.93)) * 0.62; }
           else if (ch === 'wisp') { d = 0.72; yy = sm(0.08, 0.4) * 0.95; }
+          else if (ch === 'chucky') { d = 0.8; yy = 0; }
           else if (ch === 'foreman') { const drag = sm(0.55, 0.92); d = 1.1 - sm(0.25, 0.35) * 0.25 - drag * 2.6; yy = sm(0.28, 0.4) * 1.05 - drag * 0.7; side = Math.sin(drag * Math.PI) * 0.9; }
           else { const up = sm(0.42, 0.62) - sm(0.86, 0.95); d = 1.25 - up * 0.3; yy = up * 1.75; side = sm(0.86, 1) * 1.2 + up * 0.95; }
           const rgt = { x: -Math.cos(kc.yaw), z: Math.sin(kc.yaw) };
@@ -874,7 +884,8 @@ export class Game {
     const shake = this.shake > 0 ? this.shake : 0;
     this.shake = Math.max(0, this.shake - dt * 1.5);
     const sx = (Math.random() - 0.5) * shake * 0.15, sy = (Math.random() - 0.5) * shake * 0.15;
-    if (me.role === 'killer') {
+    const tpv = me.role === 'killer' && KILLERS[me.char] && KILLERS[me.char].tpv;
+    if (me.role === 'killer' && !tpv) {
       const c = this.chars.get(me.id);
       const eye = me.char === 'butcher' ? 2.15 : me.char === 'wisp' ? 2.1 + Math.sin(this.t * 2) * 0.04 : 2.0;
       const bob = Math.sin(this.t * 8) * 0.035 * Math.min(1, (c?.spd || 0) / 4);
@@ -894,12 +905,15 @@ export class Game {
     let fx = tc ? tc.rig.root.position.x : target.x, fz = tc ? tc.rig.root.position.z : target.z;
     let h = 1.5;
     if (target.st === 'down') h = 0.75; else if (target.cr) h = 1.05; else if (target.st === 'carried') h = 1.9; else if (target.st === 'caged') h = 1.8;
-    if (target.role === 'killer') h = 2.2;
-    const yaw = this.camYaw, pitch = this.camPitch;
-    const dist = target.st === 'caged' ? 3.6 : 3.1;
+    if (target.role === 'killer') h = KILLERS[target.char] && KILLERS[target.char].tpv ? 1.05 : 2.2;
+    // Chucky is played over the shoulder: the camera follows his facing, mouse pitch tilts it
+    if (tpv) h = 1.05 + (tc && tc.lift || 0);
+    const yaw = tpv ? me.yaw : this.camYaw, pitch = tpv ? Math.max(-0.35, Math.min(1.0, 0.28 - me.pitch * 0.8)) : this.camPitch;
+    const dist = tpv ? 2.5 : target.st === 'caged' ? 3.6 : 3.1;
     const back = { x: -Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) };
     const right = { x: -Math.cos(yaw), z: Math.sin(yaw) };
-    const piv = { x: fx + right.x * 0.42, y: h, z: fz + right.z * 0.42 };
+    const sideOff = tpv ? 0.32 : 0.42;
+    const piv = { x: fx + right.x * sideOff, y: h, z: fz + right.z * sideOff };
     // pull in if a wall is in the way
     let dd = dist;
     for (let d = 0.3; d <= dist; d += 0.15) {
@@ -919,7 +933,12 @@ export class Game {
     const pitch = ({ mara: 1.15, eli: 0.75, june: 1.3, tomas: 0.8 }[victim.char] || 1);
     const mine = victim.id === this.myId || K.id === this.myId;
     const bloodAt = (n, y = 1.1) => { this.blood.spawn(pos.x, pos.y + y, pos.z, n, 0x6a0303, 3.2, 1.4, -9.8, 1.4); this.blood.spawn(pos.x, pos.y + y, pos.z, Math.floor(n / 3), 0x3a0101, 1.2, 1.4, -9.8, 0.5); if (this.decals) this.decals.add(pos.x + (Math.random() - 0.5) * 0.6, pos.z + (Math.random() - 0.5) * 0.6, 0.9 + n / 80, Math.random() < 0.5 ? 0 : 2); };
-    if (ch === 'bateman') {
+    if (ch === 'chucky') {
+      once('hi', 0.03, () => { sound.play('laugh', pos.x, pos.z); if (mine) this.feed('"We\'re friends till the end!"', 'big'); });
+      once('scream', 0.2, () => sound.play('scream', pos.x, pos.z, { pitch, len: 1.6 }));
+      for (let i = 0; i < 7; i++) once('stab' + i, 0.3 + i * 0.075, () => { bloodAt(25, 0.25); sound.play('thunk', pos.x, pos.z); if (mine) this.shake = 0.4 + i * 0.06; });
+      once('done', 0.92, () => { sound.play('laugh', pos.x, pos.z); if (mine) this.flash = 0.6; });
+    } else if (ch === 'bateman') {
       once('lecture', 0.04, () => { if (mine) this.feed('"Do you like Huey Lewis and the News?"', 'big'); });
       once('scream', 0.22, () => sound.play('scream', pos.x, pos.z, { pitch, len: 1.2 }));
       once('hip', 0.35, () => { if (mine) this.feed('"Hip to be square!"', 'big'); sound.play('swing', pos.x, pos.z); });
@@ -1199,6 +1218,17 @@ export class Game {
           if (e.id === this.myId) { this.feed('You have turned! Hunt down the survivors.', 'big'); this.flash = 0.8; this.shake = 1; }
           break;
         }
+        case 'pounce': sound.play('swing', e.x, e.z); sound.play('grunt', e.x, e.z, { pitch: 1.6 }); break;
+        case 'pounce-hit': sound.play('hit', e.x, e.z); this.blood.spawn(e.x, 1.0, e.z, 45, 0x6a0303, 3, 1.2, -9.8, 1.2); if (e.id === this.myId) { this.shake = 0.9; this.flash = 0.5; this.feed('Chucky pounced on you!', 'big'); } break;
+        case 'pounce-wall': sound.play('thud', e.x, e.z); this.sparks.spawn(e.x, 0.6, e.z, 12, 0xffffff, 2, 0.4, -6); if (e.id === this.myId) { this.shake = 0.7; this.feed('You slammed into a wall.'); } break;
+        case 'pounce-land': sound.play('thud', e.x, e.z); break;
+        case 'laugh': {
+          sound.play('laugh', e.x, e.z);
+          const c = this.chars.get(e.id); if (c) c.laughAt = this.t;
+          if ((e.ids || []).includes(this.myId)) { this.feed('"Hi, I\'m Chucky. Wanna play?" He heard you. You are revealed.', 'big'); this.flash = 0.2; }
+          else if (e.id === this.myId) this.feed((e.ids || []).length ? `${(e.ids || []).length} survivor${(e.ids || []).length === 1 ? '' : 's'} revealed.` : 'Nobody close enough to hear.');
+          break;
+        }
         case 'sawthrow': { const p = S && playerById(S, e.id); sound.play('chainsaw', e.x, e.z); if (p && p.id !== this.myId) this.feed('Chainsaw!'); break; }
         case 'sawhit': sound.play('chainsaw', e.x, e.z); this.blood.spawn(e.x, 1.2, e.z, 70, 0x6a0303, 3.4, 1.4, -9.8, 1.4); if (e.id === this.myId) { this.shake = 1; this.flash = 0.8; this.feed('The chainsaw cut you down!', 'big'); } break;
         case 'sawland': sound.play('thud', e.x, e.z); this.sparks.spawn(e.x, 0.2, e.z, 14, 0xffd080, 2, 0.4, -9); break;
@@ -1328,6 +1358,11 @@ export class Game {
       pct = me.abCd / def.cooldown;
       sub = me.pull ? 'Reeling…' : me.aim ? 'Aiming…' : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       extra = me.ab ? `Lights Out · ${Math.ceil(me.abT)}s · one hit downs` : me.ab2Cd > 0 ? `<kbd>R</kbd> Lights Out ${Math.ceil(me.ab2Cd)}s` : '<kbd>R</kbd> Lights Out ready';
+    } else if (me.char === 'chucky') {
+      const coil = me.aim ? Math.min(1, Math.max(0, (me.abT || 0) - 0.1) / def.coil) : 0;
+      ready = me.abCd <= 0 && !me.leap; pct = me.aim ? 1 - coil : me.abCd / def.cooldown;
+      sub = me.leap ? 'Pouncing!' : me.aim ? `Coiling… ${Math.round(def.min + (def.max - def.min) * coil)}m` : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
+      extra = me.ab2Cd > 0 ? `<kbd>R</kbd> Chucky's Laugh ${Math.ceil(me.ab2Cd)}s` : "<kbd>R</kbd> Chucky's Laugh ready";
     } else if (me.char === 'bateman') {
       const d2 = K.ability2, held = me.ammo > 0;
       ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1;

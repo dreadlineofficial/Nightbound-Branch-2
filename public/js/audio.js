@@ -141,6 +141,11 @@ export class Sound {
       case 'thud': if (!(d = o(5, 40))) return; this.tone(d, t, 0.18, 'sine', 95, 40, 1, 0.003); this.noise(d, t, 0.09, 'lowpass', 900, 200, 1, 0.8); break;
       case 'lightsout': d = o(); this.tone(d, t, 1.2, 'sawtooth', 120, 30, 0.35, 0.01); this.noise(d, t, 0.25, 'highpass', 3000, null, 1, 0.5); this.tone(d, t + 0.05, 2.5, 'sine', 45, 38, 0.5, 0.3); break;
       case 'lightson': d = o(); this.noise(d, t, 0.6, 'bandpass', 120, 240, 3, 0.4, 0.05); this.tone(d, t, 0.8, 'sawtooth', 50, 60, 0.12, 0.2); break;
+      case 'laugh': { // a doll's high, nasty cackle
+        if (!(d = o(8, 60))) return;
+        for (let i = 0; i < 7; i++) { const tt = t + i * 0.16, f = 520 + (i % 2) * 90 - i * 18; this.tone(d, tt, 0.12, 'sawtooth', f, f * 0.82, 0.13, 0.01); this.tone(d, tt, 0.12, 'triangle', f * 1.5, f * 1.2, 0.08, 0.01); this.noise(d, tt, 0.1, 'bandpass', 1800, 900, 3, 0.18, 0.005); }
+        break;
+      }
       case 'chainsaw': if (!(d = o(8, 70))) return; this.tone(d, t, 1.1, 'sawtooth', 70, 150, 0.32, 0.02); this.tone(d, t, 1.1, 'square', 141, 300, 0.1, 0.02); this.noise(d, t, 1.0, 'bandpass', 900, 2400, 2, 0.45, 0.02); break;
       case 'card': if (!(d = o(3, 30))) return; this.noise(d, t, 0.14, 'highpass', 4500, 2500, 1, 0.5, 0.005); this.tone(d, t + 0.05, 0.6, 'sine', 523, 659, 0.1, 0.05); break;
       case 'grunt': if (!(d = o(3, 25))) return; this.scream(d, t, opt.pitch || 1, 0.35, 0.25); break;

@@ -1,6 +1,6 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
 import { RULES, KILLERS, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL } from './config.js';
-import { barBox, losBlocked } from './map.js';
+import { barBox, losBlocked, moveCircle } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute,
 } from './rules.js';
@@ -62,7 +62,7 @@ export class Sim {
       case 'pos': {
         if (m.tp !== p.tp) return;
         if (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down') return;
-        if (p.act || p.stun > 0) { p.yaw = num(m.yaw, p.yaw); p.pitch = num(m.pitch, 0); return; }
+        if (p.act || p.stun > 0 || p.leap || p.pull) { p.yaw = num(m.yaw, p.yaw); p.pitch = num(m.pitch, 0); return; }
         const nx = num(m.x, p.x), nz = num(m.z, p.z);
         // accept anything the player could have covered since their last update (lag spikes
         // included); otherwise pull them back to where the host has them instead of desyncing
@@ -82,6 +82,7 @@ export class Sim {
         if (p.role === 'killer' && p.char === 'foreman') p.aim = !!m.aim && p.abCd <= 0 && !p.pull && p.carry == null && !p.act && p.stun <= 0;
         if (p.role === 'killer' && p.char === 'harrower') p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0;
         if (p.role === 'killer' && p.char === 'bateman') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
+        if (p.role === 'killer' && p.char === 'chucky') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && !p.leap && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
         break;
       }
       case 'act': this.onAct(p, m); break;
@@ -145,7 +146,7 @@ export class Sim {
         break;
       }
       case 'attack': {
-        if (p.role !== 'killer' || p.atk || p.stun > 0 || p.carry != null || p.act || p.vault) return;
+        if (p.role !== 'killer' || p.atk || p.stun > 0 || p.carry != null || p.act || p.vault || p.leap) return;
         if (p.char === 'wisp' && p.ab !== 0) return;
         if (p.char === 'butcher' && p.ab === 1) return;
         if (p.tele) return;
@@ -192,6 +193,16 @@ export class Sim {
         this.ev({ k: 'sawthrow', id: p.id, x: p.x, z: p.z });
         break;
       }
+      case 'pounce': {
+        // Chucky: leap as far as he coiled for, knife first
+        if (p.role !== 'killer' || p.char !== 'chucky' || !p.aim || p.leap || p.stun > 0 || p.carry != null || p.act) return;
+        const D = KILLERS.chucky.ability, yaw = num(m.yaw, p.yaw), f = fwd(yaw);
+        const dist = D.min + (D.max - D.min) * Math.min(1, Math.max(0, p.abT - 0.1) / D.coil);
+        p.yaw = yaw; p.aim = false; p.abT = 0;
+        p.leap = { t: 0, d: +(0.35 + dist * 0.035).toFixed(3), x0: p.x, z0: p.z, x1: p.x + f.x * dist, z1: p.z + f.z * dist, h: +(0.4 + dist * 0.07).toFixed(2) };
+        this.ev({ k: 'pounce', id: p.id, x: p.x, z: p.z });
+        break;
+      }
       case 'teleport': {
         if (p.role !== 'killer' || p.char !== 'lamplighter' || p.teleCd > 0 || p.tele || p.stun > 0 || p.act || p.carry != null || p.atk || p.vault) return;
         const yaw = num(m.yaw, p.yaw);
@@ -219,6 +230,13 @@ export class Sim {
         break;
       }
       case 'ability2': {
+        if (p.role === 'killer' && p.char === 'chucky' && p.ab2Cd <= 0 && !p.act && p.stun <= 0) {
+          // Chucky's Laugh: every survivor in earshot gives themselves away
+          const D = KILLERS.chucky.ability2, ids = [];
+          for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && dist(s, p) < D.radius) { s.reveal = Math.max(s.reveal, D.reveal); ids.push(s.id); }
+          p.ab2Cd = D.cooldown; p.score.b += ids.length * 100;
+          this.ev({ k: 'laugh', id: p.id, x: p.x, z: p.z, ids });
+        }
         if (p.role === 'killer' && p.char === 'bateman' && p.ab2Cd <= 0 && !p.act && p.stun <= 0 && !p.atk) {
           // Business Card: everyone in front of him who can see it is intimidated
           const D = KILLERS.bateman.ability2, f = fwd(p.yaw), ids = [];
@@ -277,7 +295,7 @@ export class Sim {
 
   stunKiller(k, t, byBar) {
     if (k.act && k.act.k === 'execute') return;
-    k.tele = null;
+    k.tele = null; if (k.leap) { k.leap = null; k.tp++; }
     k.stun = Math.max(k.stun, t); k.atk = 0; k.act = null; k.aim = false;
     if (k.carry != null) this.releaseCarry(k, true);
     if (k.char === 'butcher' && k.ab === 1) this.endRampage(k);
@@ -687,6 +705,7 @@ export class Sim {
       for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok')
         for (const L of S.lanterns) if (Math.hypot(s.x - L.x, s.z - L.z) < RULES.lanternRadius) { s.reveal = Math.max(s.reveal, 0.3); break; }
     }
+    if (K.char === 'chucky' && K.leap) this.updateLeap(K, dt);
     // chase tracking for score
     let chasing = false;
     for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && dist(s, K) < 12 && !losBlocked(M, K.x, K.z, s.x, s.z)) { chasing = true; s.score.d += dt * 6; }
@@ -969,6 +988,34 @@ export class Sim {
     }
   }
 
+  // Chucky's pounce: fly along the leap, strike the first survivor in reach, bounce off walls
+  updateLeap(K, dt) {
+    const L = K.leap, S = this.S, M = this.M, D = KILLERS.chucky.ability;
+    L.t += dt;
+    const f = Math.min(1, L.t / L.d);
+    const tx = L.x0 + (L.x1 - L.x0) * f, tz = L.z0 + (L.z1 - L.z0) * f;
+    const want = Math.hypot(tx - K.x, tz - K.z);
+    const r = moveCircle(M, S, K.x, K.z, tx - K.x, tz - K.z, 0.3);
+    const blocked = want > 0.05 && Math.hypot(r.x - K.x, r.z - K.z) < want * 0.4;
+    K.x = r.x; K.z = r.z;
+    for (const s of S.players) {
+      if (s.role !== 'survivor' || s.st !== 'ok') continue;
+      if (Math.hypot(s.x - K.x, s.z - K.z) < 1.2) {
+        this.damage(s, K, false); K.score.b += 300;
+        K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = true; K.atkT = RULES.hitCooldown * 0.8;
+        this.ev({ k: 'pounce-hit', id: s.id, by: K.id, x: s.x, z: s.z });
+        return;
+      }
+    }
+    if (blocked && f > 0.15) {
+      K.leap = null; K.tp++; K.abCd = D.cooldown;
+      this.stunKiller(K, 1.4, false);
+      this.ev({ k: 'pounce-wall', id: K.id, x: K.x, z: K.z });
+      return;
+    }
+    if (f >= 1) { K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = false; K.atkT = 0.6; this.ev({ k: 'pounce-land', id: K.id, x: K.x, z: K.z }); }
+  }
+
   // survivors being reeled in by a chain hook
   updateReels(dt) {
     for (const s of this.S.players) if (s.reel) {
@@ -982,7 +1029,7 @@ export class Sim {
   // Patrick Bateman's thrown chainsaw
   updateSaws(dt) {
     const S = this.S, M = this.M;
-    for (const p of S.players) if (p.role === 'killer' && p.char === 'bateman' && p.aim) p.abT += dt;
+    for (const p of S.players) if (p.role === 'killer' && (p.char === 'bateman' || p.char === 'chucky') && p.aim) p.abT += dt;
     for (let i = S.saws.length - 1; i >= 0; i--) {
       const sw = S.saws[i], K = this.P(sw.by);
       sw.t += dt;

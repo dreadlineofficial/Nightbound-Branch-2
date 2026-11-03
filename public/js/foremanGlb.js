@@ -39,7 +39,7 @@ export function loadForeman() {
 
 // fresnel aura that follows the skeleton
 const auraSkin = new Map();
-function auraSkinMat(color) {
+export function auraSkinMat(color) {
   if (auraSkin.has(color)) return auraSkin.get(color);
   const m = new THREE.ShaderMaterial({
     uniforms: { color: { value: new THREE.Color(color) }, opacity: { value: 1 } },

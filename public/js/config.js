@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 5;
+export const NET_PROTOCOL = 6;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -48,7 +48,7 @@ export const MODES = {
   infection: { name: 'Infection', short: '2 vs 10', killers: 2, survivors: 10, bigMap: true, desc: 'No cages. Two killers, ten survivors, on big maps built for it. Downed survivors rise as killers a few seconds later, and every 60s the infected sense every survivor. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
 };
 // killers an infected survivor can turn into
-export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman'];
+export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman', 'chucky'];
 
 export const KILLERS = {
   butcher: {
@@ -100,6 +100,15 @@ export const KILLERS = {
     ability2: { name: 'Lights Out', key: 'R', cooldown: 45, duration: 9, desc: 'Kill every light on the map for 9s: the fog closes in, you go silent, runners are revealed and one strike of your hook puts a survivor down.' },
     feature: { name: 'Hunts by Sound', desc: 'Survivors running within 22m of you give away their position with a noise ping, lights or no lights.' },
     color: 0xd8ccbc,
+  },
+  chucky: {
+    id: 'chucky', name: 'Chucky', speed: 4.6, terror: 20, weapon: 'Kitchen Knife', crossover: "Child's Play (fan-made)", tpv: true,
+    lore: 'A Good Guy doll with the soul of a strangler inside. He is two and a half feet tall and he does not stop laughing.',
+    exec: { name: 'Friends Till the End', desc: 'Leaps onto the survivor\'s chest and stabs, and stabs, and stabs.' },
+    ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (slowed), release to leap up to 10m: the longer you coil, the farther you fly. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
+    ability2: { name: "Chucky's Laugh", key: 'R', cooldown: 35, radius: 28, reveal: 5, desc: 'Laugh. Every survivor within 28m hears it and is revealed to you for 5s.' },
+    feature: { name: 'Tiny Terror', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. You play him in third person.' },
+    color: 0xd83a22,
   },
   bateman: {
     id: 'bateman', name: 'Patrick Bateman', speed: 4.6, terror: 30, weapon: 'Axe', crossover: 'American Psycho (fan-made)',
@@ -225,6 +234,11 @@ export const SKINS = {
     { id: 'ectoblue', name: 'Ecto Blue', price: 2500, desc: 'A rarer, colder spirit: icy blue ectoplasm.', fx: [['tint', { color: 0x4aa8ff, k: 0.7, e: 0x0a3a8a, ei: 0.8 }]] },
     { id: 'golden', name: 'Golden Glutton', price: 5000, desc: 'He ate the hotel safe. Solid gold, still hungry.', fx: [['tint', { color: 0xe8c040, k: 0.75, e: 0x5a3a00, ei: 0.5 }], ['crown', { color: 0xd8b040, gem: 0x40ff40 }]] },
   ],
+  chucky: [
+    { id: 'default', name: 'Good Guy', price: 0, desc: 'Denim overalls, striped shirt, red hair and a kitchen knife. Hi, I\'m Chucky. Wanna play?' },
+    { id: 'charred', name: 'Burnt Out', price: 2500, tint: 0x141210, tintK: 0.88, glow: 0x6a1400, glowK: 0.12, desc: 'Pulled from the toy factory fire. Charred black and still smouldering.' },
+    { id: 'voodoo', name: 'Voodoo', price: 4500, tint: 0x7aff8a, tintK: 0.3, glow: 0x0a6a1a, glowK: 0.7, desc: 'Ade due Damballa. A sickly green glow from the inside.' },
+  ],
   bateman: [
     { id: 'default', name: 'Pierce & Pierce', price: 0, desc: 'Charcoal pinstripe double-breasted suit, crisp white shirt, red silk tie and a cigar. Valentino Couture.' },
     { id: 'raincoat', name: 'Hip to Be Square', price: 2500, rain: true, desc: 'A clear plastic raincoat over the suit, for the mess. Newspaper on the floor optional.' },
@@ -245,6 +259,7 @@ export const CHAPTERS = [
     tagline: 'Night shift at the Hollow Pines Meatworks. Headcount must be maintained.',
     contents: ['The Foreman: Chain Hook, Lights Out and Hunts by Sound', 'Execution: Reassignment', 'Map: Hollow Pines Meatworks (free for everyone)', '3 Foreman outfits in the Store'] },
   { id: 'psycho', num: 'VII', name: 'American Psycho', sub: '(fan-made)', killer: 'bateman', base: true, isNew: true, tagline: 'Do you like Huey Lewis and the News?' },
+  { id: 'childsplay', num: 'VI', name: "Child's Play", sub: '(fan-made)', killer: 'chucky', base: true, isNew: true, tagline: 'Hi, I\'m Chucky. Wanna play?' },
   { id: 'base4', num: 'IV', name: 'The Last Light', killer: 'lamplighter', base: true, tagline: 'Every lantern is a door. Every door leads to him.' },
   { id: 'base3', num: 'III', name: 'Trophy Season', killer: 'harrower', base: true, tagline: 'He does not chase. He collects.' },
   { id: 'base2', num: 'II', name: 'Drowned Embrace', killer: 'wisp', base: true, tagline: 'She was here first. She will be here last.' },
@@ -255,8 +270,19 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.12.0';
+export const VERSION = '2.13.0';
 export const INBOX = [
+  {
+    id: 'v2.13', version: '2.13.0', date: 'Nov 2026', title: 'Chucky', tag: 'Crossover',
+    gift: { embers: 1500, label: 'Gift: 1,500 Embers' },
+    body: [
+      'New killer, free for everyone: Chucky (Child\'s Play, fan-made). A fully animated Good Guy doll, two and a half feet tall, played in third person.',
+      'Pounce (RMB): hold to coil, release to leap up to 10m. The longer the coil, the farther the leap. Landing on a survivor strikes them; leaping into a wall stuns you.',
+      'Chucky\'s Laugh (R): every survivor within 28m hears it and is revealed to you for 5s.',
+      'Tiny Terror: a 20m terror radius and silent footsteps. Execution: Friends Till the End.',
+      'Outfits in the Store: Burnt Out and Voodoo.',
+    ],
+  },
   {
     id: 'v2.12', version: '2.12.0', date: 'Nov 2026', title: 'Infection Grows', tag: 'New Maps',
     body: [

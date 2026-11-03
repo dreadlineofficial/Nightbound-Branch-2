@@ -8,6 +8,7 @@ import { QUALITY } from './world.js';
 import { setDetail } from './models.js';
 import { MenuScene } from './menu.js';
 import { loadForeman, onForemanReady } from './foremanGlb.js';
+import { loadChucky, onChuckyReady } from './chuckyGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
@@ -110,6 +111,8 @@ function startBG() {
   renderShowcase();
 }
 loadForeman();
+loadChucky();
+onChuckyReady(() => { forgetArt('chucky'); if (menu && menu.killerChar === 'chucky') menu.setKiller('chucky', menu.killerSkin); });
 onForemanReady(() => { if (menu && menu.killerChar === 'foreman') menu.setKiller('foreman', menu.killerSkin); });
 function stopBG() { if (menu) { menu.dispose(); menu = null; } }
 function setScene(mode) { menuMode = mode; if (menu) menu.setMode(mode); renderShowcase(); }

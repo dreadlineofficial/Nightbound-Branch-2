@@ -41,7 +41,8 @@ html = html.replace(/<script type="importmap">[\s\S]*?<\/script>\s*/, '');
 const peer = (await readFile(join(pub, 'vendor/peerjs.min.js'), 'utf8')).replace(/<\/script/gi, '<\\/script');
 // the Foreman's rigged model as base64 in an inert tag placed before the game script (read by foremanGlb.js)
 const glb = (await readFile(join(pub, 'models/foreman.glb'))).toString('base64');
-const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `<script id="nb-foreman-glb" type="application/octet-stream">${glb}</script>\n<script>${peer}</script>\n<script>${js}</script>`);
+const chucky = (await readFile(join(pub, 'models/chucky.glb'))).toString('base64');
+const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `<script id="nb-foreman-glb" type="application/octet-stream">${glb}</script>\n<script id="nb-chucky-glb" type="application/octet-stream">${chucky}</script>\n<script>${peer}</script>\n<script>${js}</script>`);
 // the web build stays small: it fetches public/models/foreman.glb instead of embedding it
 const web = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `<script>${peer}</script>\n<script>${js}</script>`);
 const note = '<title>Nightbound</title>\n  <!-- Built file: everything is inlined. Source lives in public/. -->';
