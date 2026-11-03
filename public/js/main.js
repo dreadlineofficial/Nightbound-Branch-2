@@ -9,12 +9,13 @@ import { setDetail } from './models.js';
 import { MenuScene } from './menu.js';
 import { loadForeman, onForemanReady } from './foremanGlb.js';
 import { loadChucky, onChuckyReady, chuckyReady } from './chuckyGlb.js';
+import { loadTed } from './sidekicks.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound } from './audio.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
 
 window.__nbBooted = true;
@@ -57,7 +58,8 @@ if (!KILLERS[profile.killer.char]) profile.killer.char = 'butcher';
 profile.killer.perks = (profile.killer.perks || []).filter(k => KILLER_PERKS[k]);
 profile.survivor.perks = (profile.survivor.perks || []).filter(k => SURV_PERKS[k]);
 // perks are bought with Embers; defaults are free, and anything already equipped stays owned
-profile.perksOwned ||= {};
+profile.perksOwned ||= {}; profile.pets ||= {};
+const petOf = role => (profile[role].pet && profile.pets[profile[role].pet] && SIDEKICKS[profile[role].pet]) ? profile[role].pet : '';
 for (const k of [...profile.survivor.perks, ...profile.killer.perks]) profile.perksOwned[k] = true;
 const perkPrice = k => PERK_PRICES[k] || 0;
 const ownsPerk = k => !perkPrice(k) || !!profile.perksOwned[k];
@@ -119,6 +121,7 @@ function startBG() {
 }
 loadForeman();
 loadChucky();
+loadTed();
 // Chucky's model is 5MB: once it arrives, redraw every place that may have drawn the stand-in doll
 onChuckyReady(() => {
   forgetArt('chucky');
@@ -268,6 +271,7 @@ function renderLoadout(container, role, compact, onChange) {
       <div class="lo2-chars">${Object.values(defs).map(c => `<button class="lo2-por ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" title="${esc(c.name)}"><img alt="" src="${art('portrait', c.id, skinId(c.id), 120, 120)}"><span>${esc(c.name.replace(/^The /, ''))}</span>${ownsChar(c.id) ? '' : '<i class="lock">DLC</i>'}</button>`).join('')}</div>
       <div class="lo2-head"><b>${esc(charName0(lo.char))}</b>${role === 'killer' && defs[lo.char] ? `<span>${icon(POWER_ICON[lo.char])}${esc(defs[lo.char].ability.name)}</span>` : ''}</div>
       ${role === 'survivor' ? `<div class="lo2-row"><span class="lo2-lbl">Item</span><div class="seg lo-item"><button data-item="flashlight" class="${lo.item !== 'trap' ? 'on' : ''}">Flashlight</button><button data-item="trap" class="${lo.item === 'trap' ? 'on' : ''}">Ghost Trap</button></div></div>` : ''}
+      <div class="lo2-row"><span class="lo2-lbl">Sidekick</span><div class="seg lo-pet"><button data-petpick="" class="${!petOf(role) ? 'on' : ''}">None</button>${Object.entries(SIDEKICKS).map(([id, s]) => `<button data-petpick="${id}" class="${petOf(role) === id ? 'on' : ''} ${profile.pets[id] ? '' : 'locked'}">${esc(s.name)}${profile.pets[id] ? '' : ' 🔒'}</button>`).join('')}</div></div>
       <div class="lo2-row"><span class="lo2-lbl">Perks</span><div class="lo2-slots">${slots}</div></div>
       <div class="lo2-inv-t"><span>Inventory · Perks</span><span>${Object.keys(perks).filter(ownsPerk).length} / ${Object.keys(perks).length} owned · ${price(profile.stats.embers)}</span></div>
       <div class="lo2-inv">${grid}</div>
@@ -287,7 +291,12 @@ function renderLoadout(container, role, compact, onChange) {
       if (perkFits(k, lo.char) && lo.perks.length < PERK_SLOTS) lo.perks.push(k);
       saveProfile(); rerender();
     });
-    if (menu) { menu.setShowcase(lo.char, skinId(lo.char), 0.42); menu.setMode('show'); }
+    container.querySelectorAll('[data-petpick]').forEach(el => el.onclick = () => {
+      const id = el.dataset.petpick;
+      if (id && !profile.pets[id]) { sound.play('click'); openStore('sidekicks'); storePet = id; renderStore(); return; }
+      lo.pet = id; saveProfile(); sound.play('click'); rerender();
+    });
+    if (menu) { menu.setShowcase(lo.char, skinId(lo.char), 0.42, petOf(role)); menu.setMode('show'); }
   }
   container.querySelectorAll('.char, .lo2-por').forEach(el => el.onclick = () => {
     if (!ownsChar(el.dataset.c)) { sound.play('click'); openStore('chapters'); return; }
@@ -370,9 +379,11 @@ function renderStore() {
   const body = $('st-body');
   if (storeTab === 'chapters') body.innerHTML = chaptersHTML();
   else if (storeTab === 'collections') body.innerHTML = collectionsHTML();
+  else if (storeTab === 'sidekicks') body.innerHTML = sidekicksHTML();
   else body.innerHTML = charactersHTML();
   bindStore(body);
-  if (menu) { if (storeTab === 'characters') { if (!menu.showRig || menu.showFor !== storeChar + ':' + (storePreview || skinId(storeChar))) { menu.showFor = storeChar + ':' + (storePreview || skinId(storeChar)); previewSkin(storePreview || skinId(storeChar)); } else menu.setMode('show'); } else menu.setMode(menuMode); }
+  if (menu && storeTab === 'sidekicks') { const role = storePetRole; menu.setShowcase(profile[role].char, skinId(profile[role].char), 0.3, storePet); menu.setMode('show'); menu.showFor = null; }
+  else if (menu) { if (storeTab === 'characters') { if (!menu.showRig || menu.showFor !== storeChar + ':' + (storePreview || skinId(storeChar))) { menu.showFor = storeChar + ':' + (storePreview || skinId(storeChar)); previewSkin(storePreview || skinId(storeChar)); } else menu.setMode('show'); } else menu.setMode(menuMode); }
 }
 function chaptersHTML() {
   const dlc = CHAPTERS.filter(c => !c.base), base = CHAPTERS.filter(c => c.base);
@@ -427,7 +438,23 @@ function collectionsHTML() {
   }).join('');
   return `<div class="ch-row-title">Outfit collections · every outfit for one character at 25% off</div><div class="co-grid">${cards}</div>`;
 }
+// ---------- sidekicks ----------
+let storePet = 'ted', storePetRole = 'survivor';
+function sidekicksHTML() {
+  const cards = Object.entries(SIDEKICKS).map(([id, s]) => {
+    const own = !!profile.pets[id];
+    const eq = r => profile[r].pet === id;
+    const btns = own ? ['survivor', 'killer'].map(r => `<button class="btn ${eq(r) ? '' : 'primary'}" data-petequip="${id}" data-petrole="${r}">${eq(r) ? 'Unequip' : 'Equip'} (${r === 'killer' ? 'Killer' : 'Survivor'})</button>`).join('')
+      : `<span class="ch-price">${price(s.price)}</span><button class="btn primary" data-petbuy="${id}">Buy</button>`;
+    return `<div class="pet-card ${storePet === id ? 'on' : ''}" data-pet="${id}"><div class="pet-t"><small>Sidekick</small><b>${esc(s.name)}</b></div><p>${esc(s.desc)}</p><div class="row">${btns}</div></div>`;
+  }).join('');
+  return `<div class="ch-row-title">Sidekicks · they follow you, react to the match and can't be hurt. Equip one for your survivor and one for your killer.</div><div class="pet-grid">${cards}</div>`;
+}
+
 function bindStore(body) {
+  body.querySelectorAll('[data-pet]').forEach(el => el.onclick = e => { if (e.target.closest('button')) return; storePet = el.dataset.pet; sound.play('hover'); renderStore(); });
+  body.querySelectorAll('[data-petbuy]').forEach(b => b.onclick = () => { const id = b.dataset.petbuy; if (profile.pets[id] || !spend(SIDEKICKS[id].price, SIDEKICKS[id].name)) return; profile.pets[id] = true; profile.survivor.pet ||= id; saveProfile(); storePet = id; renderStore(); });
+  body.querySelectorAll('[data-petequip]').forEach(b => b.onclick = () => { const id = b.dataset.petequip, r = b.dataset.petrole; profile[r].pet = profile[r].pet === id ? '' : id; storePet = id; storePetRole = r; saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-chapter]').forEach(b => b.onclick = () => {
     const c = CHAPTERS.find(x => x.id === b.dataset.chapter);
     if (ownsChapter(c.id) || !spend(c.price, c.name + ' × Nightbound')) return;
@@ -525,7 +552,7 @@ function botSurvivor(i, used) {
   const nm = pool[Math.floor(Math.random() * pool.length)] || 'Bot ' + i;
   used.names.push(nm);
   const sk = SKINS[char]; const skin = Math.random() < 0.5 ? 'default' : sk[1 + Math.floor(Math.random() * (sk.length - 1))].id;
-  return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS, PERK_SLOTS, char), item, bot: true };
+  return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS, PERK_SLOTS, char), item, pet: Math.random() < 0.2 ? (Math.random() < 0.5 ? 'ted' : 'rosy') : '', bot: true };
 }
 function botKiller(char, n = 0, avoid = []) {
   const ks = Object.keys(KILLERS).filter(k => !avoid.includes(k));
@@ -538,7 +565,7 @@ $('btn-bots-start').addEventListener('click', () => {
   const roster = [];
   const meRole = botsCfg.role;
   if (meRole === 'killer' && !ownsChar(profile.killer.char)) { toast(`${charName(profile.killer.char)} is part of a chapter. Get it in the Store, or pick another killer.`, 5000); openStore('chapters'); return; }
-  roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: profile[meRole].perks, item: profile.survivor.item || 'flashlight', bot: false });
+  roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: profile[meRole].perks, item: profile.survivor.item || 'flashlight', pet: petOf(meRole), bot: false });
   const used = meRole === 'survivor' ? [profile.survivor.char] : [];
   const gm = MODES[botsCfg.gm] ? botsCfg.gm : 'classic', nk = MODES[gm].killers || 1, ns = MODES[gm].survivors;
   if (meRole === 'survivor') {
@@ -776,7 +803,7 @@ $('btn-host').addEventListener('click', async () => {
     const net = await hostRoom(mode);
     lobby = { isHost: true, net, code: net.code, mode, myId: 'host', players: [], fill: true, diff: 'normal', gm: 'classic', inGame: false, chat: [] };
     const lo = profile.survivor;
-    lobby.players.push({ id: 'host', name: settings.name, role: 'survivor', char: lo.char, skin: skinId(lo.char), perks: lo.perks.slice(), host: true, loadouts: myLoadouts() });
+    lobby.players.push({ id: 'host', name: settings.name, role: 'survivor', char: lo.char, skin: skinId(lo.char), perks: lo.perks.slice(), pet: petOf('survivor'), host: true, loadouts: myLoadouts() });
     net.on('msg', (id, m) => hostMsg(id, m));
     net.on('leave', id => {
       const p = lobby && lobby.players.find(x => x.id === id);
@@ -821,7 +848,7 @@ function hostMsg(id, m) {
     let role = m.role === 'killer' && !killerTaken ? 'killer' : 'survivor';
     if (role === 'survivor' && survCount >= cap.s) role = 'killer';
     const lo = sanitizeLoadout(role, m.loadouts?.[role]?.char, m.loadouts?.[role]?.perks);
-    lobby.players.push({ id, name: String(m.name || 'Player').slice(0, 16), role, ...lo, skin: cleanSkin(lo.char, m.loadouts?.[role]?.skin), loadouts: m.loadouts || {} });
+    lobby.players.push({ id, name: String(m.name || 'Player').slice(0, 16), role, ...lo, skin: cleanSkin(lo.char, m.loadouts?.[role]?.skin), pet: SIDEKICKS[m.loadouts?.[role]?.pet] ? m.loadouts[role].pet : '', loadouts: m.loadouts || {} });
     lobby.net.send(id, { t: 'welcome', id });
     addChat(null, String(m.name || 'Player').slice(0, 16) + ' joined.');
     broadcastLobby();
@@ -846,6 +873,7 @@ function applyLoadout(p, m) {
   const lo = sanitizeLoadout(role, m.char ?? p.loadouts?.[role]?.char, m.perks ?? p.loadouts?.[role]?.perks);
   p.item = (m.item ?? p.loadouts?.survivor?.item) === 'trap' ? 'trap' : 'flashlight';
   p.role = role; p.char = lo.char; p.perks = lo.perks; p.skin = cleanSkin(lo.char, m.skin ?? p.loadouts?.[role]?.skin);
+  p.pet = SIDEKICKS[p.loadouts?.[role]?.pet] ? p.loadouts[role].pet : '';
 }
 function broadcastLobby() {
   if (!lobby || !lobby.isHost) return;
@@ -931,7 +959,7 @@ function renderLobby() {
   }
 }
 const playableKiller = () => ownsChar(profile.killer.char) ? profile.killer.char : 'butcher';
-function myLoadouts() { return { survivor: { ...profile.survivor, skin: skinId(profile.survivor.char) }, killer: { ...profile.killer, char: playableKiller(), skin: skinId(playableKiller()) } }; }
+function myLoadouts() { return { survivor: { ...profile.survivor, skin: skinId(profile.survivor.char), pet: petOf('survivor') }, killer: { ...profile.killer, char: playableKiller(), skin: skinId(playableKiller()), pet: petOf('killer') } }; }
 function sendMyLoadout(role) {
   const me = myLobbyPlayer();
   if (!me) return;
@@ -979,7 +1007,7 @@ $('btn-leave-lobby').addEventListener('click', () => leaveOnline());
 $('btn-lobby-start').addEventListener('click', () => {
   if (!lobby || !lobby.isHost) return;
   const ps = lobby.players;
-  const roster = ps.map(p => ({ id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, bot: false }));
+  const roster = ps.map(p => ({ id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, pet: p.pet || '', bot: false }));
   const used = roster.filter(r => r.role === 'survivor').map(r => r.char);
   const cap = lobbyCaps();
   if (!roster.some(r => r.role === 'killer')) {

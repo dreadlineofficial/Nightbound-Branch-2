@@ -12,7 +12,7 @@
 // bunched-up packets no longer make anyone stutter or teleport.
 import { SPEED } from './config.js';
 
-const STATIC = ['name', 'role', 'char', 'skin', 'perks', 'diffMul', 'item'];
+const STATIC = ['name', 'role', 'char', 'skin', 'perks', 'diffMul', 'item', 'pet'];
 // default of every per-player field that changes during play; omitted while equal
 const PDEF = {
   pitch: 0, mv: 0, cr: 0, tp: 0, st: 'ok', hp: 2, act: null, prog: 0, healP: 0, bleed: 0, cage: -1, stage: 0, cageT: 0,

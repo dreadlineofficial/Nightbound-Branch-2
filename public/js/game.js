@@ -8,6 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
+import { Sidekick } from './sidekicks.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat } from './models.js';
 import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
@@ -455,6 +456,7 @@ export class Game {
     if (me && me.role !== this.role) this.switchRole(me, S);
     this.handleLocal(dt, S, me);
     this.updateChars(dt, S, me);
+    this.updateSidekicks(dt, S, me);
     this.updateTorchLight();
     this.updateTraps(S);
     this.updateSlime(S);
@@ -851,6 +853,23 @@ export class Game {
     });
   }
 
+  // sidekicks: one per owner, run locally on every client
+  updateSidekicks(dt, S, me) {
+    this.pets ||= new Map();
+    for (const p of S.players) {
+      let k = this.pets.get(p.id);
+      if (p.pet && (!k || k.kind !== p.pet)) { if (k) k.dispose(); k = new Sidekick(this.scene, this.M, p.pet, p.id); this.pets.set(p.id, k); }
+      else if (!p.pet && k) { k.dispose(); this.pets.delete(p.id); k = null; }
+      if (!k) continue;
+      // a disguised body's sidekick would give Chucky away: it stays with the doll; ghosts' pets wait
+      const c = this.chars.get(p.id);
+      const owner = c ? { ...p, x: c.x, z: c.z, yaw: c.yaw } : p;
+      k.update(dt, owner, { visible: !(p.st === 'ghost' && p.id !== this.myId), smoke: (x, y, z) => this.smoke.spawn(x, y, z, 6, 0xcfd6c8, 0.25, 1.4, 0.35, 0.5) });
+    }
+    for (const [id, k] of this.pets) if (!S.players.some(p => p.id === id)) { k.dispose(); this.pets.delete(id); }
+  }
+  petReact(id, mood, time) { const k = this.pets && this.pets.get(id); if (k) k.react(mood, time); }
+
   // Chucky's spare dolls (Soul Split), lying where they were dropped
   updateDolls(S) {
     this.dolls ||= new Map();
@@ -1219,6 +1238,7 @@ export class Game {
           break;
         case 'hit': {
           const hc = this.chars.get(e.id); if (hc) hc.hitAt = this.t;
+          this.petReact(e.id, e.down ? 'panic' : 'jump', e.down ? 3 : 1.2); this.petReact(e.by, 'cheer', 1.5);
           if (e.by === this.myId) { this.shake = 0.45; this.hitStop = 0.08; this.splat(); }
           sound.play('hit', e.x, e.z, { pitch: pitchOf(e.id), down: e.down });
           {
@@ -1248,7 +1268,7 @@ export class Game {
         case 'tele-end': this.smoke.spawn(e.x, 1, e.z, 18, 0x0a2a12, 1.2, 2, 0.5, 1); this.sparks.spawn(e.x, 1.2, e.z, 50, 0x5aff7a, 2.5, 1.2, 0.5); sound.play('fade', e.x, e.z, { on: false }); break;
         case 'marked': if (e.id === this.myId) this.feed('You have been Marked — the Harrower can see you.', 'big'); break;
         case 'msg': this.feed(e.text); break;
-        case 'gen':
+        case 'gen': for (const p of S.players) if (p.role === 'survivor' && Math.hypot(p.x - e.x, p.z - e.z) < 3) this.petReact(p.id, 'cheer', 2);
           sound.play('gen', e.x, e.z);
           this.sparks.spawn(e.x, 1.6, e.z, 60, 0xffc060, 4, 1.2, -6);
           this.feed(e.left > 0 ? `A generator has been repaired. ${e.left} to go.` : 'All required generators repaired!');
@@ -1265,7 +1285,7 @@ export class Game {
         case 'noise': if (me && me.role === 'killer') this.marker(e.x, 1.2, e.z, 'noise'); break;
         case 'powered': sound.play('powered'); this.feed('The exit gates are powered! Escape before the night closes in.', 'big'); break;
         case 'gateopen': { const g = this.M.gates[e.id]; sound.play('gateopen', g.x, g.z); this.feed('An exit gate has been opened!', 'big'); break; }
-        case 'escaped': sound.play('escaped'); this.feed(name(e.id) + ' escaped.'); break;
+        case 'escaped': sound.play('escaped'); this.feed(name(e.id) + ' escaped.'); this.petReact(e.id, 'cheer', 3); break;
         case 'infected': {
           this.sparks.spawn(e.x, 0.6, e.z, 60, 0x9aff3a, 3, 1.6, 0.4, 1.2); this.smoke.spawn(e.x, 0.8, e.z, 12, 0x1a3a10, 1, 2.5, 0.6, 0.8);
           sound.play('caged', e.x, e.z);
@@ -1300,7 +1320,7 @@ export class Game {
         case 'laststand': if (e.id === this.myId) { this.feed('You are the last survivor! Survive 45 seconds.', 'big'); this.flash = 0.4; } sound.play('powered'); break;
         case 'drop': { const b = this.M.bars[e.id]; sound.play('drop', b.x, b.z); this.smoke.spawn(b.x, 0.3, b.z, 6, 0x5a5048, 1.2, 1.5, 0.3, 1.2); break; }
         case 'break': { const b = this.M.bars[e.id]; sound.play('break', b.x, b.z); this.blood.spawn(b.x, 0.6, b.z, 40, 0x6a4a30, 4, 1.2, -9, 1.5); break; }
-        case 'stun': { const p = S && playerById(S, e.id); if (p) { sound.play('stun', p.x, p.z); this.sparks.spawn(p.x, 2.2, p.z, 12, 0xffffff, 1.5, 0.6, 0); } if (e.id === this.myId) this.shake = 0.8; this.feed(name(e.id) + ' was stunned!'); break; }
+        case 'stun': { this.petReact(e.id, 'jump', 1); const p = S && playerById(S, e.id); if (p) { sound.play('stun', p.x, p.z); this.sparks.spawn(p.x, 2.2, p.z, 12, 0xffffff, 1.5, 0.6, 0); } if (e.id === this.myId) this.shake = 0.8; this.feed(name(e.id) + ' was stunned!'); break; }
         case 'kick': { const g = this.M.gens[e.id]; sound.play('kick', g.x, g.z); this.sparks.spawn(g.x, 1.0, g.z, 25, 0xffd080, 3, 0.6, -9); break; }
         case 'vault': if (e.id !== this.myId) sound.play('vault', e.x, e.z, { fast: e.fast }); break;
         case 'caged': { const c = this.M.cages[e.cage]; sound.play('caged', c.x, c.z); this.sparks.spawn(c.x, 0.3, c.z, 50, 0xff5020, 3, 1.5, 1); break; }
@@ -1313,8 +1333,8 @@ export class Game {
         }
         case 'rescued': if (e.by !== -1) this.feed(name(e.id) + ' was freed by ' + name(e.by) + '.'); break;
         case 'wiggle-free': this.feed(name(e.id) + ' struggled free!'); sound.play('stun', e.x, e.z); break;
-        case 'pickup': { const p = S && playerById(S, e.id); if (p) sound.play('pickup', p.x, p.z, { pitch: pitchOf(e.id) }); break; }
-        case 'healed': if (e.id === this.myId || e.by === this.myId) sound.play('heal'); break;
+        case 'pickup': { this.petReact(e.id, 'panic', 4); this.petReact(e.by, 'cheer', 1.5); const p = S && playerById(S, e.id); if (p) sound.play('pickup', p.x, p.z, { pitch: pitchOf(e.id) }); break; }
+        case 'healed': this.petReact(e.id, 'cheer', 1.5); if (e.id === this.myId || e.by === this.myId) sound.play('heal'); break;
         case 'throw': sound.play('throw', e.x, e.z); break;
         case 'spearend': sound.play('thunk', e.x, e.z); this.blood.spawn(e.x, e.y, e.z, 10, 0x8a7a60, 2, 0.6); break;
         case 'fade': { const p = S && playerById(S, e.id); if (p) sound.play('fade', p.x, p.z, { on: e.on }); break; }

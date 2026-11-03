@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { SURVIVORS, KILLERS, skinOf } from './config.js';
 import { tex } from './textures.js';
 import { mat, makeSurvivor, makeKiller, animate, treeGeos, pineGeo, rockGeo, makeCage } from './models.js';
+import { makeSidekickModel, loadTed } from './sidekicks.js';
 import { rng } from './map.js';
 
 // the showroom: a lit clearing off to the side where the Store and Loadout show one character standing
@@ -130,8 +131,13 @@ export class MenuScene {
   }
 
   // stand one character in the showroom, facing the camera
-  setShowcase(char, skin = 'default', place = 0.3) {
+  setShowcase(char, skin = 'default', place = 0.3, pet = '') {
     if (this.showRig) this.scene.remove(this.showRig.root);
+    if (this.showPet) { this.scene.remove(this.showPet.root); this.showPet = null; }
+    if (pet) {
+      const P = makeSidekickModel(pet); P.root.position.set(SHOW.x + 0.75, 0, SHOW.z + 0.35); P.root.rotation.y = -0.2; this.scene.add(P.root); this.showPet = P;
+      if (pet === 'ted' && P.kind !== 'ted') loadTed().then(() => { if (this.showPet === P) this.setShowcase(char, skin, place, pet); });
+    }
     const killer = !!KILLERS[char];
     const rig = killer ? makeKiller(char, skinOf(char, skin)) : makeSurvivor(SURVIVORS[char] || SURVIVORS.mara, skinOf(char, skin));
     rig.root.position.copy(SHOW); rig.root.rotation.y = 0.35;
@@ -224,6 +230,7 @@ export class MenuScene {
     this.showRim.intensity += ((showing ? 26 : 0) - this.showRim.intensity) * lk;
     this.showFill.intensity += ((showing ? 7 : 0) - this.showFill.intensity) * lk;
     if (this.showRig) animate(this.showRig, { anim: this.showKiller ? 'idle' : 'idle', speed: 0, t, injured: false }, dt);
+    if (this.showPet) this.showPet.pose(t);
     // characters
     for (const r of this.survRigs) animate(r, { anim: r.stand ? 'idle' : 'sit', speed: 0, t, injured: false }, dt);
     animate(this.killerRig, { anim: 'menace', speed: 0, t }, dt);

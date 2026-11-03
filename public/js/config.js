@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 10;
+export const NET_PROTOCOL = 11;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -172,6 +172,11 @@ export const PERK_PRICES = {
   static: 1500, dread: 1500, brute: 1500, rust: 2000, sentry: 2000, fury: 1500, irongrip: 2000, stalker: 2500,
 };
 export const PERK_SLOTS = 4;
+// ---------------- Sidekicks (cosmetic companions, for survivors and killers) ----------------
+export const SIDEKICKS = {
+  ted: { name: 'Ted', price: 4000, desc: 'A foul-mouthed teddy bear who came to life and never grew up. He follows you everywhere, cheers you on, panics when you get hurt, and if you die he pulls up a camping chair next to your body with a beer and his bong.' },
+  rosy: { name: 'Rosy', price: 2500, desc: 'A loyal little rose-coloured dog. Trots at your heels, wags when things go well, runs in circles when they don\'t, and lies down beside you if you fall.' },
+};
 export const DEFAULT_SURV_PERKS = ['steady', 'shared', 'lastwind'];
 export const DEFAULT_KILLER_PERKS = ['scent', 'overload', 'relentless'];
 
@@ -357,8 +362,17 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.16.1';
+export const VERSION = '2.17.0';
 export const INBOX = [
+  {
+    id: 'v2.17', version: '2.17.0', date: 'Nov 2026', title: 'Sidekicks', tag: 'Update',
+    body: [
+      'New in the Store: Sidekicks, companions that follow you through the match, for survivors and killers. Equip one for each in the Store or on the Loadout screen.',
+      'Ted (4,000 Embers): cheers when things go well, panics when you get hurt, and if you die he pulls up a camping chair next to your body with a beer and his bong.',
+      'Rosy (2,500 Embers): a loyal little dog who trots at your heels, wags, runs circles when you are in trouble and lies down beside you if you fall.',
+      'Sidekicks can\'t be hurt and can\'t hurt anyone. Everyone in the match sees them.',
+    ],
+  },
   {
     id: 'v2.16.1', version: '2.16.1', date: 'Nov 2026', title: 'Chucky Coils on the Run', tag: 'Balance',
     body: ['Chucky is no longer slowed while coiling a Pounce: keep running at full speed and leap when you are ready.'],
