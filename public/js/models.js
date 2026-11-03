@@ -5,6 +5,7 @@ import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
 import { makeRealism } from './realism.js';
+import { makeStaticKiller, animateStaticKiller } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
 
 // ---------- aura material ----------
@@ -262,6 +263,7 @@ export function makeSurvivor(def, sk = {}) {
 }
 
 export function makeKiller(id, sk = {}) {
+  if (id === 'slimer') { const g = makeStaticKiller('slimer', sk); if (g) return g; }
   if (id === 'slimer') {
     const R = new Rig();
     // The Slimer (fan-made): a floating translucent green glutton with a huge mouth and a ghostly tail
@@ -526,6 +528,7 @@ const lerp = (a, b, k) => a + (b - a) * k;
 export function animate(R, s, dt) {
   if (R.fxTick) R.fxTick(dt, (R.t || 0) + dt);
   if (R.retarget) { animate(R.proc, s, dt); R.copy(); return; }
+  if (R.staticGlb) return animateStaticKiller(R, s, dt);
   if (R.chucky) return animateChucky(R, s, dt);
   if (R.glb) return animateGlb(R, s, dt);
   R.t += dt;

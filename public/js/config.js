@@ -324,8 +324,8 @@ export const SKINS = {
   ],
   slimer: [
     { id: 'default', name: 'Kitchen Raider', price: 0 },
-    { id: 'ectoblue', name: 'Ecto Blue', price: 2500, desc: 'A rarer, colder spirit: icy blue ectoplasm.', fx: [['tint', { color: 0x4aa8ff, k: 0.7, e: 0x0a3a8a, ei: 0.8 }]] },
-    { id: 'golden', name: 'Golden Glutton', price: 5000, desc: 'He ate the hotel safe. Solid gold, still hungry.', fx: [['tint', { color: 0xe8c040, k: 0.75, e: 0x5a3a00, ei: 0.5 }], ['crown', { color: 0xd8b040, gem: 0x40ff40 }]] },
+    { id: 'ectoblue', name: 'Ecto Blue', price: 2500, desc: 'A rarer, colder spirit: icy blue ectoplasm.', fx: [['tint', { color: 0x4aa8ff, k: 0.7, e: 0x0a3a8a, ei: 0.8 }]], tintGlb: { color: 0x9ad0ff, k: 1, emissive: 0x1a5aff, ei: 0.55 } },
+    { id: 'golden', name: 'Golden Glutton', price: 5000, desc: 'He ate the hotel safe. Solid gold, still hungry.', fx: [['tint', { color: 0xe8c040, k: 0.75, e: 0x5a3a00, ei: 0.5 }], ['crown', { color: 0xd8b040, gem: 0x40ff40 }]], tintGlb: { color: 0xffe080, k: 1, emissive: 0x8a5a00, ei: 0.6 } },
   ],
   chucky: [
     { id: 'default', name: 'Good Guy', price: 0, desc: 'Denim overalls, striped shirt, red hair and a kitchen knife. Hi, I\'m Chucky. Wanna play?' },
@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.18.0';
+export const VERSION = '2.18.1';
 export const INBOX = [
+  {
+    id: 'v2.18.1', version: '2.18.1', date: 'Nov 2026', title: 'The New Slimer', tag: 'Crossover', gb: true,
+    body: ['The Slimer has a brand-new realistic model: slick green ectoplasm, red eyes, a huge lipped mouth full of teeth. He floats, bobs, squashes and stretches, lunges into his attacks and wobbles when stunned. Ecto Blue and Golden Glutton recolour the new model.'],
+  },
   {
     id: 'v2.18', version: '2.18.0', date: 'Nov 2026', title: 'Brutal Executions', tag: 'Update',
     body: [

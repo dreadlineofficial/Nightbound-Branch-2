@@ -11,6 +11,7 @@ import { loadForeman, onForemanReady } from './foremanGlb.js';
 import { loadChucky, onChuckyReady, chuckyReady } from './chuckyGlb.js';
 import { loadTed } from './sidekicks.js';
 import { loadRealism } from './realism.js';
+import { loadStatic } from './glbModels.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
@@ -123,6 +124,7 @@ function startBG() {
 loadForeman();
 loadChucky();
 loadTed();
+loadStatic('slimer').then(m => { if (!m) return; forgetArt('slimer'); if (menu && menu.killerChar === 'slimer') menu.setKiller('slimer', menu.killerSkin); });
 loadRealism('ray').then(m => { if (!m) return; forgetArt('raghuvir'); if (menu) menu.setSurvivor(profile.survivor.char, skinId(profile.survivor.char)); if (!$('store').classList.contains('hidden')) { menu && (menu.showFor = null); renderStore(); } });
 // Chucky's model is 5MB: once it arrives, redraw every place that may have drawn the stand-in doll
 onChuckyReady(() => {
