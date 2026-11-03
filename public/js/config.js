@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 6;
+export const NET_PROTOCOL = 7;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -107,7 +107,7 @@ export const KILLERS = {
     exec: { name: 'Friends Till the End', desc: 'Leaps onto the survivor\'s chest and stabs, and stabs, and stabs.' },
     ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (slowed), release to leap up to 10m: the longer you coil, the farther you fly. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
     ability2: { name: "Chucky's Laugh", key: 'R', cooldown: 35, radius: 28, reveal: 5, desc: 'Laugh. Every survivor within 28m hears it and is revealed to you for 5s.' },
-    feature: { name: 'Tiny Terror', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. You play him in third person.' },
+    feature: { name: 'Tiny Terror', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump: he hops straight over windows, dropped pallets and rocks. You play him in third person.' },
     color: 0xd83a22,
   },
   bateman: {
@@ -270,8 +270,14 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.13.0';
+export const VERSION = '2.13.1';
 export const INBOX = [
+  {
+    id: 'v2.13.1', version: '2.13.1', date: 'Nov 2026', title: 'Chucky Can Jump', tag: 'Balance',
+    body: [
+      'Chucky can jump (Space). He hops straight over window frames, dropped pallets and low rocks instead of vaulting, and crossing a window or pallet takes him half a second.',
+    ],
+  },
   {
     id: 'v2.13', version: '2.13.0', date: 'Nov 2026', title: 'Chucky', tag: 'Crossover',
     gift: { embers: 1500, label: 'Gift: 1,500 Embers' },

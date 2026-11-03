@@ -338,9 +338,10 @@ function pushOutBox(p, b, r) {
 }
 
 // Moves a circle of radius r from (x,z) by (dx,dz), sliding along obstacles.
-export function moveCircle(M, st, x, z, dx, dz, r = 0.38) {
+// low > 0: mid-jump, anything lower than that is cleared (window sills, dropped barricades, rocks)
+export function moveCircle(M, st, x, z, dx, dz, r = 0.38, low = 0) {
   const p = { x: x + dx, z: z + dz };
-  const dyn = dynBoxes(M, st);
+  const dyn = low > 0 ? dynBoxes(M, st).filter(o => o.kind !== 'bar') : dynBoxes(M, st);
   let hit = false;
   for (let it = 0; it < 3; it++) {
     let any = false;
@@ -349,6 +350,7 @@ export function moveCircle(M, st, x, z, dx, dz, r = 0.38) {
       const bucket = g.get(a * 1000 + b);
       if (!bucket) continue;
       for (const o of bucket) {
+        if (low > 0 && o.h < low) continue;
         if (o.r !== undefined) {
           const ddx = p.x - o.x, ddz = p.z - o.z, d = Math.hypot(ddx, ddz), min = o.r + r;
           if (d < min && d > 1e-6) { p.x = o.x + ddx / d * min; p.z = o.z + ddz / d * min; any = true; }

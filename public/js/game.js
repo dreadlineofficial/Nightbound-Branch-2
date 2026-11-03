@@ -160,7 +160,11 @@ class BloodDecals {
 }
 
 // Chucky's pounce arc
-function leapLift(p) { const L = p.leap; return L ? Math.sin(Math.min(1, L.t / L.d) * Math.PI) * (L.h || 0.6) : 0; }
+function leapLift(p) {
+  const L = p.leap; if (L) return Math.sin(Math.min(1, L.t / L.d) * Math.PI) * (L.h || 0.6);
+  const f = p.hop ? Math.min(1, p.hop.t / p.hop.d) : p.hopF || 0; // Chucky's jump
+  return f > 0 ? Math.sin(f * Math.PI) * 0.8 : 0;
+}
 // height of a killer swinging on a high chain hook: up to the hook, then a drop at the end
 function pullLift(p) {
   const P = p.pull;
@@ -390,6 +394,10 @@ export class Game {
     if (this.skill && this.skill.phase === 'active') { this.resolveSkill(); return; }
     if (me.st === 'caged') { if (me.stage === 1 && me.esc < 3) this.send({ t: 'act', a: 'esc' }); return; }
     const v = findSpace(this.M, S, me);
+    // Chucky: Space is a jump. Over a window or pallet it is a quick hop across, anywhere else a leap
+    if (!v && me.role === 'killer' && me.char === 'chucky' && !me.hop && !me.vault && !me.leap && me.stun <= 0 && !me.act && me.carry == null) {
+      me.hop = { t: 0, d: 0.5 }; sound.play('vault', me.x, me.z, { fast: true }); return;
+    }
     if (!v) return;
     if (v.k === 'drop') { this.send({ t: 'act', a: 'drop', id: v.id }); return; }
     const running = me.role === 'survivor' && this.keys.has('ShiftLeft') && this.moveInput().mag > 0.1;
@@ -507,12 +515,12 @@ export class Game {
       if (this.myStep > (sprint ? 1.6 : 1.2) && !(me.cr) && !has(me, 'hushed')) { this.myStep = 0; sound.play('step', me.x, me.z, { run: sprint, vol: me.role === 'killer' ? 0.35 : 0.18 }); }
     }
     if (!this.isHost) {
-      this.me = { x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, vault: me.vault, mv: me.mv, cr: me.cr };
+      this.me = { x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, vault: me.vault, mv: me.mv, cr: me.cr, hop: me.hop };
       this.posTimer -= dt;
       if (this.posTimer <= 0) {
         // 30/s on a steady cadence; ct (my clock) lets the host order and smooth the updates
         this.posTimer = Math.max(0, this.posTimer + 1 / 30);
-        this.send({ t: 'pos', x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), mv: me.mv, cr: me.cr, v: me.vault ? 1 : 0, tp: this.myTp, ct: +(performance.now() / 1000).toFixed(3) });
+        this.send({ t: 'pos', x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), mv: me.mv, cr: me.cr, v: me.vault ? 1 : 0, h: me.hop ? +(me.hop.t / me.hop.d).toFixed(2) : 0, tp: this.myTp, ct: +(performance.now() / 1000).toFixed(3) });
       }
     }
     // skill checks
@@ -1324,7 +1332,7 @@ export class Game {
     this.hudCache = {};
     const k = (x) => `<kbd>${x}</kbd>`;
     $('controls-hint').innerHTML = me.role === 'killer'
-      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} vault · ${k('Q')} drop · ${k('Tab')} status`
+      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} ${me.char === 'chucky' ? 'jump' : 'vault'} · ${k('Q')} drop · ${k('Tab')} status`
       : `${k('WASD')} move · ${k('Shift')} run · ${k('Ctrl')} crouch · ${k('E')} interact · ${k('RMB')} flashlight · ${k('G')} ghost trap · ${k('Space')} vault / barricade / skill check · ${k('Tab')} status`;
     $('controls-hint').classList.remove('fade');
     clearTimeout(this.hintT); this.hintT = setTimeout(() => $('controls-hint').classList.add('fade'), 14000);

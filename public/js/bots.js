@@ -94,6 +94,7 @@ export class Bots {
   // ---------- path following ----------
   costFn(p) {
     const S = this.sim.S;
+    if (p.role === 'killer' && p.char === 'chucky') return (t, r) => t === 1 ? Infinity : t === 2 ? 1.5 : t === 3 ? (S.bars[r] === 1 ? 1.5 : 1) : t === 4 ? Infinity : 1; // jumps them
     if (p.role === 'killer') return (t, r) => t === 1 ? Infinity : t === 2 ? 5 : t === 3 ? (S.bars[r] === 1 ? 8 : 1) : t === 4 ? Infinity : 1;
     return (t, r) => t === 1 ? Infinity : t === 2 ? 3 : t === 3 ? (S.bars[r] === 1 ? 3.5 : 1) : t === 4 ? (S.gates[r].open ? 1 : Infinity) : 1;
   }
@@ -138,7 +139,7 @@ export class Bots {
     const tk = b.path[ti], tc = cellPos(M, tk), tt = g.type[tk];
     // special cells: windows / dropped barricades
     if ((tt === 2 || (tt === 3 && S.bars[g.ref[tk]] === 1)) && Math.hypot(tc.x - p.x, tc.z - p.z) < 1.6) {
-      if (p.role === 'killer' && tt === 3) {
+      if (p.role === 'killer' && tt === 3 && p.char !== 'chucky') {
         // face it and break it
         const bar = M.bars[g.ref[tk]];
         p.yaw = Math.atan2(bar.x - p.x, bar.z - p.z);

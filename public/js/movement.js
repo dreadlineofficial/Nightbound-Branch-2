@@ -22,6 +22,9 @@ export function stepMover(M, S, p, intent, dt) {
     return;
   }
   if (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down') { p.mv = 0; return; }
+  // Chucky's jump: half a second in the air, clearing anything low
+  let low = 0;
+  if (p.hop) { p.hop.t += dt; low = 1.25; if (p.hop.t >= p.hop.d) p.hop = null; }
   const sp = speedOf(p, S, intent.sprint, intent.crouch && p.role === 'survivor');
   let mx = intent.mx, mz = intent.mz;
   if (p.role === 'killer' && p.char === 'butcher' && p.ab === 1) { const f = fwd(p.yaw); mx = f.x; mz = f.z; }
@@ -30,7 +33,7 @@ export function stepMover(M, S, p, intent, dt) {
   const r = p.role === 'killer' ? 0.45 : 0.36;
   const dx = mx * sp * dt, dz = mz * sp * dt;
   // Slimer's Ghost Phase: float straight through walls (still kept inside the map)
-  const res = p.phase > 0 ? { x: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.x + dx * 1.1)), z: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.z + dz * 1.1)) } : moveCircle(M, S, p.x, p.z, dx, dz, r);
+  const res = p.phase > 0 ? { x: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.x + dx * 1.1)), z: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.z + dz * 1.1)) } : moveCircle(M, S, p.x, p.z, dx, dz, r, low);
   // soft body-blocking between characters
   for (const o of S.players) {
     if (o === p || o.vault) continue;

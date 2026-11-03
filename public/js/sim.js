@@ -71,6 +71,7 @@ export class Sim {
         else p.tp++;
         p.posT = S.t;
         p.yaw = num(m.yaw, p.yaw); p.pitch = num(m.pitch, 0); p.mv = m.mv | 0; p.cr = m.cr ? 1 : 0;
+        p.hopF = Math.max(0, Math.min(1, num(m.h, 0))); // remote Chucky mid-jump (drawn by everyone)
         p.vault = m.v ? { remote: true } : null;
         break;
       }

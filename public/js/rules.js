@@ -174,12 +174,12 @@ export function findSpace(M, S, p) {
     }
   };
   for (const w of M.windows) tryV(w, 'win', w.half);
-  if (p.role === 'survivor') for (const b of M.bars) if (S.bars[b.id] === 1) tryV(b, 'bar', b.half);
+  if (p.role === 'survivor' || p.char === 'chucky') for (const b of M.bars) if (S.bars[b.id] === 1) tryV(b, 'bar', b.half); // Chucky hops pallets too
   return best;
 }
 
 export function vaultDuration(p, kind, running) {
-  if (p.role === 'killer') return 1.7;
+  if (p.role === 'killer') return p.char === 'chucky' ? 0.5 : 1.7; // Chucky just jumps over
   let d = running ? 0.62 : 1.15;
   if (kind === 'bar') d = running ? 0.7 : 1.2;
   if (has(p, 'acrobat')) d *= 0.7;
