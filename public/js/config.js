@@ -105,7 +105,7 @@ export const KILLERS = {
     id: 'chucky', name: 'Chucky', speed: 4.6, terror: 20, weapon: 'Kitchen Knife', crossover: "Child's Play (fan-made)", tpv: true,
     lore: 'A Good Guy doll with the soul of a strangler inside. He is two and a half feet tall and he does not stop laughing.',
     exec: { name: 'Friends Till the End', desc: 'Leaps onto the survivor\'s chest and stabs, and stabs, and stabs.' },
-    ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (slowed), release to leap up to 10m: the longer you coil, the farther you fly. He sails over fences, pallets and other low obstacles. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
+    ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (at full speed), release to leap up to 10m: the longer you coil, the farther you fly. He sails over fences, pallets and other low obstacles. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
     ability2: { name: "Chucky's Laugh", key: 'R', cooldown: 35, radius: 28, reveal: 5, desc: 'Laugh. Every survivor within 28m hears it and is revealed to you for 5s.' },
     feature: { name: 'Tiny Terror & Possession', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump over windows, pallets and rocks. Possession (G, once every 10 minutes): take over a downed survivor in secret. They wander as an invisible ghost, your doll is left as a harmless decoy, and you can let go once you have downed and caged someone. Soul Split (V, once, with one generator left): jump into a spare doll lying on the map; your old body keeps hunting as a bot that can down survivors but not cage them. Played in third person.' },
     color: 0xd83a22,
@@ -357,8 +357,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.16.0';
+export const VERSION = '2.16.1';
 export const INBOX = [
+  {
+    id: 'v2.16.1', version: '2.16.1', date: 'Nov 2026', title: 'Chucky Coils on the Run', tag: 'Balance',
+    body: ['Chucky is no longer slowed while coiling a Pounce: keep running at full speed and leap when you are ready.'],
+  },
   {
     id: 'v2.16', version: '2.16.0', date: 'Nov 2026', title: 'Perk Shop & New Loadout', tag: 'Update',
     gift: { embers: 3000, label: 'Gift: 3,000 Embers' },
