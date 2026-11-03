@@ -331,6 +331,7 @@ function renderSettings() {
   $('set-vol').value = settings.vol; $('set-music').value = settings.music;
   $('set-invert').checked = !!settings.invert;
   $('set-net').value = settings.net;
+  renderCam();
 }
 $('set-name').addEventListener('input', e => { settings.name = e.target.value.trim().slice(0, 16) || 'Player'; saveSettings(); renderShowcase(); });
 seg('set-quality', v => { settings.quality = v; saveSettings(); $('set-quality-hint').textContent = QHINT[v]; stopBG(); makeRenderer(); startBG(); });
@@ -343,6 +344,26 @@ $('set-vol').addEventListener('input', e => { settings.vol = +e.target.value; so
 $('set-music').addEventListener('input', e => { settings.music = +e.target.value; sound.setMusic(settings.music); saveSettings(); });
 $('set-invert').addEventListener('change', e => { settings.invert = e.target.checked; saveSettings(); });
 $('set-net').addEventListener('change', e => { settings.net = e.target.value; saveSettings(); });
+// ---------- camera placement (settings and pause menu share these controls) ----------
+const CAM_DEF = { side: 1, dist: 1, height: 0, angle: 0 };
+const camKey = { side: 'camSide', dist: 'camDist', height: 'camHeight', angle: 'camAngle' };
+const camFmt = { dist: v => Math.round(v * 100) + '%', height: v => (v > 0 ? '+' : '') + (+v).toFixed(2) + ' m', angle: v => (v > 0 ? '+' : '') + v + '°' };
+function renderCam() {
+  for (const el of document.querySelectorAll('[data-cam]')) {
+    const k = el.dataset.cam; if (k === 'reset') continue;
+    const v = settings[camKey[k]] ?? CAM_DEF[k];
+    if (k === 'side') { for (const b of el.children) b.classList.toggle('on', +b.dataset.v === v); } else el.value = v;
+  }
+  for (const el of document.querySelectorAll('[data-camv]')) { const k = el.dataset.camv; el.textContent = camFmt[k](settings[camKey[k]] ?? CAM_DEF[k]); }
+}
+window.addEventListener('nb-cam', () => { saveSettings(); renderCam(); });
+for (const el of document.querySelectorAll('[data-cam]')) {
+  const k = el.dataset.cam;
+  if (k === 'reset') el.addEventListener('click', () => { for (const [a, b] of Object.entries(camKey)) settings[b] = CAM_DEF[a]; saveSettings(); renderCam(); });
+  else if (k === 'side') el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; settings.camSide = +b.dataset.v; saveSettings(); renderCam(); });
+  else el.addEventListener('input', () => { settings[camKey[k]] = +el.value; saveSettings(); renderCam(); });
+}
+renderCam();
 $('pause-sens').addEventListener('input', e => { settings.sens = +e.target.value; saveSettings(); });
 $('pause-vol').addEventListener('input', e => { settings.vol = +e.target.value; sound.setVolume(settings.vol); saveSettings(); });
 

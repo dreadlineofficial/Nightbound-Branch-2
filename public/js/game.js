@@ -392,6 +392,7 @@ export class Game {
         if (e.code !== this.lastWigKey) { this.lastWigKey = e.code; this.send({ t: 'act', a: 'wig' }); this.wigFlash = 0.15; }
       }
       if (e.code === 'KeyF' || e.code === 'Digit1') this.cycleSpectate();
+      if (e.code === 'KeyH' && !e.repeat) { this.settings.camSide = (this.settings.camSide ?? 1) === 1 ? -1 : 1; window.dispatchEvent(new Event('nb-cam')); this.feed(this.settings.camSide === 1 ? 'Camera: right shoulder' : 'Camera: left shoulder'); }
       if (e.code === 'KeyT') { const b = this.takeoverTarget(); if (b) this.send({ t: 'act', a: 'takeover', id: b.id }); }
     } else this.keys.delete(e.code);
   }
@@ -1012,10 +1013,14 @@ export class Game {
     // Chucky is played over the shoulder: the camera follows his facing, mouse pitch tilts it
     if (tpv) h = (me.disguise ? 1.5 : 1.05) + (tc && tc.lift || 0);
     const yaw = tpv ? me.yaw : this.camYaw, pitch = tpv ? Math.max(-0.35, Math.min(1.0, 0.28 - me.pitch * 0.8)) : this.camPitch;
-    const dist = tpv ? 2.5 : target.st === 'caged' ? 3.6 : 3.1;
-    const back = { x: -Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) };
+    // player camera placement (Settings > Camera): shoulder, distance, height, orbit angle
+    const cs = this.settings, side = cs.camSide ?? 1, orbit = (cs.camAngle || 0) * Math.PI / 180;
+    h += cs.camHeight || 0;
+    const dist = (tpv ? 2.5 : target.st === 'caged' ? 3.6 : 3.1) * (cs.camDist || 1);
+    const cy = yaw + orbit;
+    const back = { x: -Math.sin(cy) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(cy) * Math.cos(pitch) };
     const right = { x: -Math.cos(yaw), z: Math.sin(yaw) };
-    const sideOff = tpv ? 0.32 : 0.42;
+    const sideOff = (tpv ? 0.32 : 0.42) * side;
     const piv = { x: fx + right.x * sideOff, y: h, z: fz + right.z * sideOff };
     // pull in if a wall is in the way
     let dd = dist;

@@ -588,3 +588,6 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 #show-drag.lo { left: calc(min(760px, 58vw) + 2vw); bottom: 40px; top: 90px; }
 #show-drag.dragging { cursor: grabbing; }
 #show-drag span { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(233,224,208,.45); text-shadow: 0 1px 3px #000; white-space: nowrap; pointer-events: none; }
+.hint-inline { font-size: 12px; color: #8d8578; text-transform: none; letter-spacing: 0; font-family: var(--body, inherit); }
+[data-cam="side"] button { font-size: 16px; padding: 6px 12px; }
+#pause .dialog { max-height: 92vh; overflow-y: auto; }

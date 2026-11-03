@@ -133,6 +133,12 @@
           <div class="field"><label>Brightness <span id="set-bright-v">100%</span></label><input type="range" id="set-bright" min="0.6" max="1.8" step="0.05" value="1"></div>
           <div class="field"><label>Mouse sensitivity <b id="set-sens-v"></b></label><input type="range" id="set-sens" min="0.2" max="3" step="0.05"></div>
           <div class="field"><label>Field of view <b id="set-fov-v"></b></label><input type="range" id="set-fov" min="60" max="100" step="1"></div>
+          <div class="field cam-block"><label>Camera position <span class="hint-inline">(third person: H swaps shoulders in a match)</span></label>
+            <div class="seg" data-cam="side"><button data-v="-1">Left shoulder</button><button data-v="0">Centered</button><button data-v="1">Right shoulder</button></div></div>
+          <div class="field"><label>Camera distance <b data-camv="dist"></b></label><input type="range" data-cam="dist" min="0.6" max="1.6" step="0.05"></div>
+          <div class="field"><label>Camera height <b data-camv="height"></b></label><input type="range" data-cam="height" min="-0.5" max="0.8" step="0.05"></div>
+          <div class="field"><label>Camera angle <b data-camv="angle"></b></label><input type="range" data-cam="angle" min="-60" max="60" step="5"></div>
+          <button class="btn small" data-cam="reset">Reset camera</button>
           <div class="field"><label>Master volume</label><input type="range" id="set-vol" min="0" max="1" step="0.01"></div>
           <div class="field"><label>Music &amp; ambience</label><input type="range" id="set-music" min="0" max="1" step="0.01"></div>
           <label class="check"><input type="checkbox" id="set-invert"> Invert mouse Y</label>
@@ -231,6 +237,12 @@
       <p class="hint">Online matches keep running while you're paused.</p>
       <div class="field"><label>Mouse sensitivity</label><input type="range" id="pause-sens" min="0.2" max="3" step="0.05"></div>
       <div class="field"><label>Master volume</label><input type="range" id="pause-vol" min="0" max="1" step="0.01"></div>
+      <div class="field cam-block"><label>Camera position <span class="hint-inline">(third person: H swaps shoulders in a match)</span></label>
+            <div class="seg" data-cam="side"><button data-v="-1">Left shoulder</button><button data-v="0">Centered</button><button data-v="1">Right shoulder</button></div></div>
+          <div class="field"><label>Camera distance <b data-camv="dist"></b></label><input type="range" data-cam="dist" min="0.6" max="1.6" step="0.05"></div>
+          <div class="field"><label>Camera height <b data-camv="height"></b></label><input type="range" data-cam="height" min="-0.5" max="0.8" step="0.05"></div>
+          <div class="field"><label>Camera angle <b data-camv="angle"></b></label><input type="range" data-cam="angle" min="-60" max="60" step="5"></div>
+          <button class="btn small" data-cam="reset">Reset camera</button>
       <div class="actions"><button class="btn" id="btn-quit">Leave Match</button><button class="btn primary" id="btn-resume">Resume</button></div>
     </div>
   </div>
