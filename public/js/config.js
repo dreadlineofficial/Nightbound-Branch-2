@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.6';
+export const VERSION = '2.19.7';
 export const INBOX = [
+  {
+    id: 'v2.19.7', version: '2.19.7', date: 'Nov 2026', title: 'Ted: Fewer Reruns', tag: 'Update',
+    body: ['Ted no longer repeats himself: most of his lines are said once a match. Only "Bring it in, you bastard!", "Shit.", the "acting like a..." line and "Arfh!" can come up again.', 'New line when you\'re put in a cage: "You got a lot of problems."'],
+  },
   {
     id: 'v2.19.6', version: '2.19.6', date: 'Nov 2026', title: 'Ted: Arfh!', tag: 'Fix',
     body: ['Ted\'s "Arfh!" now plays when he sees you get downed (it used to wait until you died).'],

@@ -258,7 +258,11 @@ export const TED_LINES = {
   idle: 'Thank you for creeping up my night, and Jesus be with you.',
   arfh: 'Arfh!',
   teddy: "I'm a fucking teddy bear!",
+  problems: 'You got a lot of problems.',
 };
+
+// lines Ted can say again; every other line is said at most once a match
+const TED_REPEAT = new Set(['bringit', 'shit', 'cock', 'arfh']);
 
 // ---------------- the sidekick ----------------
 export class Sidekick {
@@ -276,6 +280,7 @@ export class Sidekick {
   // queue a line (Ted only); `gap` = seconds before this same line may repeat
   say(line, gap = 30, force = false) {
     if (this.kind !== 'ted' || !TED_LINES[line]) return false;
+    if (!TED_REPEAT.has(line) && this.said[line] != null) return false; // already said this match
     if ((!force && this.t - this.voiceAt < 7) || this.t - (this.said[line] ?? -999) < gap) return false;
     this.voiceAt = this.t; this.said[line] = this.t; this.queued = line;
     return true;
@@ -296,10 +301,11 @@ export class Sidekick {
     if (this.queued) { env.say && R0(this) && env.say(this.queued, this.x, this.z); this.queued = null; }
     // seeing the owner go down
     if (owner && this.prevSt && this.prevSt !== 'down' && owner.st === 'down') this.say('arfh', 5, true);
+    if (owner && this.prevSt && this.prevSt !== 'caged' && owner.st === 'caged') this.say('problems', 0, true);
     if (owner) this.prevSt = owner.st;
     if (owner && this.kind === 'ted' && env.visible !== false && owner.st !== 'out' && owner.st !== 'ghost') {
       // running from the monster
-      if (owner.role === 'survivor' && owner.st === 'ok' && owner.mv === 2 && env.killerD != null && env.killerD < 14 && Math.random() < dt * 0.25) this.say(['bringit', 'email', 'teddy'][Math.floor(Math.random() * 3)], 45);
+      if (owner.role === 'survivor' && owner.st === 'ok' && owner.mv === 2 && env.killerD != null && env.killerD < 14 && Math.random() < dt * 0.25) { const pool = ['bringit', 'email', 'teddy'].filter(l => TED_REPEAT.has(l) || this.said[l] == null); this.say(pool[Math.floor(Math.random() * pool.length)], 45); }
       // every so often, for no reason at all
       if (this.t > this.idleNext) { this.idleNext = this.t + 70 + Math.random() * 60; if (!(this.c && this.c.ph === 'seated')) this.say('idle', 60); }
     }
