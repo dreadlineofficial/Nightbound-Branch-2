@@ -125,10 +125,11 @@ export const KILLERS = {
     id: 'granny', name: 'Granny', speed: 4.7, terror: 32, weapon: 'Baseball Bat', crossover: 'Granny (fan-made)',
     lore: 'She has kept you in her house for five days. She hears every creak of the floorboards, and she does not like guests leaving early.',
     exec: { name: 'Bedtime Trap', desc: 'Forces the survivor to their knees, sets a bear trap in front of them, and shoves their face into it.' },
-    ability: { name: 'Bat Rush', cooldown: 8, minCharge: 0.25, maxCharge: 1.0, minDist: 3, maxDist: 8, speed: 13, wallStun: 0.9, desc: 'Hold to wind up the bat (slowed), release to rush forward 3 to 8m, further the longer you wound up. She smashes straight through dropped pallets and strikes the first survivor in her way; a survivor she has Heard goes straight down. Rushing into a wall stuns her.' },
+    ability: { name: 'Bat Rush', cooldown: 8, minCharge: 0.25, maxCharge: 1.0, minDist: 3, maxDist: 8, speed: 13, turn: 2.4, palletBonus: 2, slamRadius: 2.6, slamGen: 0.1, wallStun: 0.9, desc: 'Hold to wind up the bat (slowed), release to charge 3 to 8m, further the longer you wound up. Steer the charge with the mouse. She crashes straight through windows and smashes dropped pallets (each one carries her 2m further), and strikes the first survivor in her way; a Heard survivor goes straight down. Fully wound up, the charge ends in a Ground Slam: everyone around her is struck and a nearby generator is damaged. Charging into a wall stuns her.' },
     ability2: { name: 'I Hear You', key: 'R', cooldown: 25, reveal: 6, heard: 15, desc: 'Stop and listen. Every survivor who is running, repairing, healing or unhooking anywhere on the map is revealed for 6s and Heard for 15s: her next hit on a Heard survivor puts them straight down.' },
-    teleport: { name: 'Creep', key: 'G', cooldown: 25, time: 1.2, haste: 3, desc: 'Hold G: every window, pallet, generator and hook on the map, and Spider Mom, is marked. Release to vanish and reappear at the one in your sights, with a short burst of speed.' },
-    feature: { name: 'Sharp Ears, Slendrina & Spider Mom', desc: 'She hears everything: survivors who run within 22m of her are revealed, and a failed skill check is heard anywhere. Spider Mom crawls between the generators; anyone she finds repairing is shown to Granny and webbed (slowed for 3s). Slendrina haunts the trial, now and then early on and constantly once the exit gates are powered: look at her for half a second and you are injured.' },
+    teleport: { name: 'Creep', key: 'G', cooldown: 25, time: 1.2, haste: 3, desc: 'Hold G: every window, pallet, generator and hook on the map is marked. Release to vanish and reappear at the one in your sights, with a short burst of speed.' },
+    swap: { name: 'Body Swap', key: 'V', cooldown: 6, desc: 'Switch bodies with Spider Mom, any time: Granny appears where Spider Mom was, and Spider Mom where Granny stood. Hold V to look through Spider Mom\'s eyes first, release to swap.' },
+    feature: { name: 'Sharp Ears & Spider Mom', desc: 'She hears everything: survivors who run within 22m of her are revealed, and a failed skill check is heard anywhere. Spider Mom crawls between the generators; anyone she finds repairing is shown to Granny and webbed (slowed for 3s).' },
     color: 0xd8d0c0,
   },
   bateman: {
@@ -272,7 +273,7 @@ export const LORE = {
   ] },
   granny: { title: 'Five Days', story: [
     'A fan-made crossover. Nobody knows how long she has lived in the old house by the moat, only that the people who wake up in it have five days to find their way out, and that she hears every one of them try.',
-    'She walks the halls with a bloody bat, comes out of nowhere wherever the floor creaks, and stops dead when she hears a door or a dropped plate. Her husband keeps the cellar. Her granddaughter Slendrina keeps the shadows, and the thing in the attic she calls Spider Mom keeps watch over the generators.',
+    'She walks the halls with a bloody bat, comes out of nowhere wherever the floor creaks, and stops dead when she hears a door or a dropped plate. Her husband keeps the cellar. And the thing in the attic she calls Spider Mom keeps watch over the generators, and lends Granny her body whenever she asks.',
     'The Entity did not have to take her anywhere. It simply moved the house. Now the guests are survivors, the trial is her home, and the rules have not changed: be quiet, and do not look at the girl in the white dress.',
   ] },
   chucky: { title: 'Friends Till the End', story: [
@@ -383,7 +384,7 @@ export const SKINS = {
 export const CHAPTERS = [
   { id: 'granny', num: 'VIII', name: 'Granny', sub: '× Nightbound', price: 5000, killer: 'granny', map: 'granny', banner: 'granny', isNew: true,
     tagline: 'You have five days. She hears everything.',
-    contents: ['Granny: Bat Rush, I Hear You, Creep (teleport), Sharp Ears', 'Her helpers: Slendrina and Spider Mom', 'Execution: Bedtime Trap', "Map: Granny's House (free for everyone)", '2 Granny outfits in the Store'] },
+    contents: ['Granny: Bat Rush, I Hear You, Creep (teleport), Body Swap', 'Her helper: Spider Mom', 'Execution: Bedtime Trap', "Map: Granny's House (free for everyone)", '2 Granny outfits in the Store'] },
   { id: 'offal', num: 'V', name: 'OFFAL', sub: '× Nightbound', price: 5000, killer: 'foreman', map: 'meatworks', banner: 'offal',
     tagline: 'Night shift at the Hollow Pines Meatworks. Headcount must be maintained.',
     contents: ['The Foreman: Chain Hook, Lights Out and Hunts by Sound', 'Execution: Reassignment', 'Map: Hollow Pines Meatworks (free for everyone)', '3 Foreman outfits in the Store'] },
@@ -399,8 +400,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.26.0';
+export const VERSION = '2.27.0';
 export const INBOX = [
+  {
+    id: 'v2.27.0', version: '2.27.0', date: 'Nov 2026', title: 'Granny: Body Swap & a Wilder Bat Rush', tag: 'Update',
+    body: ['New for Granny: Body Swap (V). Switch bodies with Spider Mom at any moment: Granny appears where Spider Mom was, and Spider Mom where Granny stood. Hold V to look through Spider Mom\'s eyes first, then let go to swap.', 'Bat Rush, upgraded: steer the charge with the mouse, crash straight through windows, and each dropped pallet you smash carries you 2m further. Wind it up all the way and it ends in a Ground Slam that strikes everyone around her and damages a nearby generator.', 'Slendrina is gone from the Granny chapter: no more apparitions, and the trailer and banner now feature Spider Mom.'],
+  },
   {
     id: 'v2.26.0', version: '2.26.0', date: 'Nov 2026', title: 'Granny Rework, Online Fixes', tag: 'Update',
     body: ['Granny, reworked to be more fun and more dangerous. New power, Bat Rush (hold RMB, release): wind up the bat and charge 3 to 8m, smashing through dropped pallets; the first survivor in her way is struck. Rush into a wall and she is stunned. Frenzy is gone.', 'I Hear You (R) now marks everyone it reveals as Heard for 15s: her next hit on a Heard survivor, bat or Bat Rush, puts them straight down.', 'Creep (G) can now take her to Spider Mom, and she arrives with a burst of speed. Spider Mom webs the survivors she finds (slowed for 3s).', 'Online: players who end up on the slower relay keep trying for a direct connection in the background and switch over mid-match when it works. More relay servers help direct connections succeed in the first place.', 'Online: key presses can no longer get lost on the relay, held keys (E, aim, flashlight) can no longer get stuck, and a laggy killer\'s hits now count (lag compensation up to 0.8s).', "Online: on Granny's House, a player who joined now really is on the floor they climbed to, so hits upstairs work.", 'Removed the Scarred Chucky and Chucky DBD outfits (they glitched). Anyone who bought one got their embers back.'],

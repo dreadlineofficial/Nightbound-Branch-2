@@ -9,7 +9,7 @@ import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
-import { grannyReady, grandpaReady, slendrinaReady, makeSlendrina, spiderMomReady, makeSpiderMom } from './grannyGlb.js';
+import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
 import { bakeArm } from './fpArms.js';
@@ -499,6 +499,13 @@ export class Game {
       if (e.code === 'KeyR' && this.mine() && this.mine().role === 'killer' && KILLERS[this.mine().char].ability2) this.send({ t: 'act', a: 'ability2' });
       if (e.code === 'KeyG' && this.mine() && this.mine().role === 'killer' && (this.mine().char === 'chucky' || this.mine().disguise)) this.send({ t: 'act', a: 'possess' });
       if (e.code === 'KeyV' && this.mine() && this.mine().role === 'killer' && this.mine().char === 'chucky') this.send({ t: 'act', a: 'split' });
+      if (e.code === 'KeyV' && this.mine() && this.mine().role === 'killer' && this.mine().char === 'granny') {
+        const m = this.mine();
+        if (!this.S.spider) this.feed('Spider Mom is not here.');
+        else if (m.swapCd > 0) this.feed(`Body Swap in ${Math.ceil(m.swapCd)}s`);
+        else if (m.carry != null) this.feed('Not while carrying someone.');
+        else { this.swapHeld = true; this.swapT = this.t; }
+      }
       if (e.code === 'KeyF' && this.mine() && this.mine().role === 'killer') { const ex = findExecute(this.M, this.S, this.mine()); if (ex) this.send({ t: 'act', a: 'execute', id: ex.id }); }
       if ((e.code === 'KeyA' || e.code === 'KeyD') && this.mine() && this.mine().st === 'carried') {
         if (e.code !== this.lastWigKey) { this.lastWigKey = e.code; this.send({ t: 'act', a: 'wig' }); this.wigFlash = 0.15; }
@@ -510,6 +517,7 @@ export class Game {
       if (e.code === 'KeyT') { const b = this.takeoverTarget(); if (b) this.send({ t: 'act', a: 'takeover', id: b.id }); }
     } else {
       this.keys.delete(e.code);
+      if (e.code === 'KeyV' && this.swapHeld) { this.swapHeld = false; this.send({ t: 'act', a: 'bodyswap' }); }
       if (e.code === 'KeyG' && this.creepHeld) { this.creepHeld = false; const t = this.creepSel; if (t) this.send({ t: 'act', a: 'creep', kind: t.kind, id: t.id }); this.clearCreep(); }
     }
   }
@@ -596,7 +604,7 @@ export class Game {
         if (!this.me || p.tp !== this.myTp || forced) {
           this.myTp = p.tp;
           this.me = { x: p.x, z: p.z, yaw: this.me ? this.me.yaw : p.yaw, pitch: this.me ? this.me.pitch : 0, vault: null, mv: 0, cr: 0, fl: p.fl || 0, sp: p.sp };
-          if (forced) this.me.yaw = p.yaw;
+          if (forced && !p.dash) this.me.yaw = p.yaw; // (during a Bat Rush she still steers with her own aim)
         }
         Object.assign(p, this.me);
         if (this.t < this.pred.atk && !p.atk) p.atk = 1;
@@ -626,7 +634,6 @@ export class Game {
     this.updateChests(S, dt);
     this.updateZaps(S, dt);
     if (this.execTrap && !S.players.some(o => o.st === 'exec')) { this.execTrapT = (this.execTrapT || 0) + dt; if (this.execTrapT > 6) { this.scene.remove(this.execTrap); this.execTrap = null; this.execTrapT = 0; } } else this.execTrapT = 0;
-    this.updateSlendrina(dt, S, me);
     this.updateSpiderMom(dt, S);
     this.updateCreep(S, me);
     this.updateSlime(S);
@@ -923,7 +930,7 @@ export class Game {
     if (this.view && me) {
       const c = this.chars.get(me.id), cs = (c && c.st) || {};
       animateView(this.view, { atk: me.dash ? 1 : me.atk, atkF: me.dash ? Math.min(1, me.dash.t / me.dash.d) : cs.atkF, atkHit: me.atkHit, recF: cs.recF, aim: me.aim, stun: me.stun > 0, rampage: me.char === 'butcher' && me.ab === 1, carry: me.carry != null, act: me.act && me.act.k !== 'execute', speed: c ? c.spd : 0, t: this.t, tele: !!me.tele, saw: me.char === 'bateman' && me.ammo > 0 }, dt);
-      this.view.visible = !(me.act && me.act.k === 'execute');
+      this.view.visible = !(me.act && me.act.k === 'execute') && !(this.swapHeld && this.t - this.swapT > 0.18); // (hidden while looking through Spider Mom's eyes)
       const faded = me.char === 'wisp' && me.ab !== 0;
       if (faded !== this.viewFaded) { this.viewFaded = faded; this.view.traverse(o => { if (o.isMesh) { o.material.transparent = faded || o.userData.op < 1; o.material.opacity = faded ? 0.35 : o.userData.op; } }); }
       // swing trail
@@ -1177,6 +1184,16 @@ export class Game {
     this.shake = Math.max(0, this.shake - dt * 1.5);
     const sx = (Math.random() - 0.5) * shake * 0.15, sy = (Math.random() - 0.5) * shake * 0.15;
     const tpv = me.role === 'killer' && isTpv(me);
+    if (me.role === 'killer' && this.swapHeld && this.t - this.swapT > 0.18 && this.spider && S.spider) {
+      // looking through Spider Mom's eyes: low to the floor, wherever she is
+      const P = this.spider;
+      cam.position.set(P.x + Math.sin(me.yaw) * 0.3, 0.55, P.z + Math.cos(me.yaw) * 0.3);
+      cam.rotation.set(me.pitch * 0.6, me.yaw + Math.PI, 0);
+      cam.fov = 95; cam.updateProjectionMatrix();
+      this.teleFx = Math.max(this.teleFx || 0, 0.35);
+      sound.listener(P.x, P.z, me.yaw);
+      return;
+    }
     if (me.role === 'killer' && !tpv) {
       const c = this.chars.get(me.id);
       const eye = me.char === 'butcher' ? 2.15 : me.char === 'wisp' ? 2.1 + Math.sin(this.t * 2) * 0.04 : 2.0;
@@ -1446,7 +1463,6 @@ export class Game {
     M.cages.forEach(c => { if (!S.cageBroken[c.id]) out.push({ kind: 'hook', id: c.id, x: c.x, z: c.z, y: 2.2, n: 'Hook' }); });
     M.windows.forEach(w => out.push({ kind: 'win', id: w.id, x: w.x, z: w.z, y: 1.2, n: 'Window' }));
     M.bars.forEach(b => { if (S.bars[b.id] !== 2) out.push({ kind: 'bar', id: b.id, x: b.x, z: b.z, y: 1.0, n: 'Pallet' }); });
-    if (S.spider) out.push({ kind: 'spider', id: 0, x: S.spider.x, z: S.spider.z, y: 1.2, n: 'Spider Mom' });
     return out;
   }
   updateCreep(S, me) {
@@ -1481,40 +1497,13 @@ export class Game {
     const P = this.spider, R = P.R;
     R.root.visible = true;
     const k = 1 - Math.exp(-dt * 10), moved = Math.hypot(sp.x - P.x, sp.z - P.z);
-    P.x += (sp.x - P.x) * k; P.z += (sp.z - P.z) * k;
+    if (moved > 4) { P.x = sp.x; P.z = sp.z; } else { P.x += (sp.x - P.x) * k; P.z += (sp.z - P.z) * k; }
     P.yaw += Math.atan2(Math.sin(sp.yaw - P.yaw), Math.cos(sp.yaw - P.yaw)) * Math.min(1, dt * 6);
     R.root.position.set(P.x, 0, P.z); R.root.rotation.y = P.yaw;
     R.play(sp.st === 2 ? 'eat' : moved > 0.02 || sp.st === 0 ? 'walk' : 'idle', dt);
   }
 
-  // ---------------- Slendrina ----------------
-  updateSlendrina(dt, S, me) {
-    const sl = S.slend;
-    if (!sl) {
-      if (this.slend) { this.slend.R.root.visible = false; this.slend.id = null; }
-      this.slendLook = 0;
-      return;
-    }
-    if (!this.slend && slendrinaReady()) { const R = makeSlendrina(this.settings.quality === 'potato' || this.settings.quality === 'low'); if (R) { this.scene.add(R.root); this.slend = { R, id: null }; } }
-    if (!this.slend) return;
-    const R = this.slend.R;
-    if (this.slend.id !== sl.id) { this.slend.id = sl.id; this.slendLook = 0; this.slendSent = false; this.slend.born = this.t; }
-    R.root.visible = true; R.root.position.set(sl.x, this.M.stairs ? heightAt(this.M, sl) : 0, sl.z); R.root.rotation.y = sl.yaw;
-    R.update(dt);
-    // she flickers in and out of being there
-    const age = this.t - this.slend.born, life = sl.dur;
-    const o = Math.min(1, age * 3) * Math.min(1, Math.max(0, (life - age) * 2.5)) * (0.82 + Math.sin(this.t * 37) * 0.08 + (Math.random() < 0.06 ? -0.5 : 0));
-    R.setOpacity(Math.max(0.05, Math.min(1, o)));
-    // looking at her: on screen, near the middle, with a clear line of sight
-    if (me && me.role === 'survivor' && me.st === 'ok' && !this.slendSent) {
-      const v = new THREE.Vector3(sl.x, 1.5, sl.z).project(this.camera);
-      const d = Math.hypot(me.x - sl.x, me.z - sl.z);
-      const looking = v.z < 1 && Math.abs(v.x) < 0.38 && Math.abs(v.y) < 0.5 && d < 24 && !losBlocked(this.M, me.x, me.z, sl.x, sl.z);
-      this.slendLook = looking ? this.slendLook + dt : Math.max(0, this.slendLook - dt * 2);
-      this.teleFx = Math.max(this.teleFx || 0, Math.min(0.85, this.slendLook * 1.6)); // the screen darkens as you stare
-      if (this.slendLook >= 0.5) { this.slendSent = true; this.send({ t: 'act', a: 'slend' }); }
-    }
-  }
+
 
   updateTraps(S) {
     this.trapMeshes ||= new Map();
@@ -1800,7 +1789,6 @@ export class Game {
           else if (this.mine() && this.mine().role === 'survivor') { this.feed('Granny is listening… keep quiet.', 'big'); sound.play('fade', p ? p.x : e.x, p ? p.z : e.z, { on: true }); }
           break;
         }
-        case 'slendrina': sound.play('fade', e.x, e.z, { on: true }); break;
         case 'rush': {
           sound.play('swing', e.x, e.z); sound.play('roar', e.x, e.z, { pitch: 1.3 });
           if (e.id === this.myId) this.shake = 0.25 + (e.charge || 0) * 0.3;
@@ -1809,6 +1797,21 @@ export class Game {
         case 'rushhit': {
           sound.play('thunk', e.x, e.z); this.blood.spawn(e.x, 1.1, e.z, 40, 0x6a0303, 2.6, 1.2, -9.8, 0.8);
           if (e.id === this.myId) { this.shake = 0.8; if (this.view) this.view.userData.bloody = 1; }
+          break;
+        }
+        case 'bodyswap': {
+          for (const [x, z] of [[e.x0, e.z0], [e.x1, e.z1]]) { this.smoke.spawn(x, 0.8, z, 22, 0x0a0a0a, 1.0, 1.8, 0.4, 0.9); sound.play('fade', x, z, { on: true }); }
+          if (e.id === this.myId) { this.teleFx = 1; this.feed('Body Swap!'); }
+          else if (this.mine() && this.mine().role === 'survivor' && Math.hypot(this.mine().x - e.x1, this.mine().z - e.z1) < 20) this.feed('Granny crawled out of nowhere…', 'big');
+          break;
+        }
+        case 'rushvault': sound.play('break', e.x, e.z); this.sparks.spawn(e.x, 1.2, e.z, 20, 0xc8b090, 2, 0.6, -8, 0.6); if (e.id === this.myId) this.shake = 0.5; break;
+        case 'rushsmash': this.sparks.spawn(e.x, 0.8, e.z, 30, 0xb08858, 2.5, 0.8, -9, 0.8); if (e.id === this.myId) this.shake = 0.6; break;
+        case 'slam': {
+          sound.play('thud', e.x, e.z); sound.play('kick', e.x, e.z);
+          this.smoke.spawn(e.x, 0.3, e.z, 30, 0x6a5a48, 2.2, 1.2, 0.2, 1.4);
+          if (e.id === this.myId) { this.shake = 1.0; this.flash = 0.25; this.feed(e.hit.length ? `Ground Slam! ${e.hit.length} struck.` : 'Ground Slam!'); }
+          else if (this.mine() && e.hit.includes(this.myId)) this.shake = 0.8;
           break;
         }
         case 'rushwall': {
@@ -1827,12 +1830,6 @@ export class Game {
           if (e.id === this.myId) { this.feed('Spider Mom saw you and webbed you! Granny knows where you are.', 'big'); this.shake = 0.25; }
           else if (me2 && me2.role === 'killer' && me2.char === 'granny') this.feed('Spider Mom found ' + name(e.id) + ' at a generator.');
           { const t = S && playerById(S, e.id); if (t) this.smoke.spawn(t.x, 0.8, t.z, 18, 0xe8e8e0, 0.8, 1.2, 0.2, 0.6); }
-          break;
-        }
-        case 'slendhit': {
-          sound.play('scream', e.x, e.z, { pitch: 1.6, len: 0.9 });
-          if (e.id === this.myId) { this.feed('You looked at Slendrina.', 'big'); this.flash = 0.9; this.shake = 0.8; this.teleFx = 1; }
-          this.petReact(e.id, 'panic', 2);
           break;
         }
         case 'laugh': {
@@ -2007,7 +2004,9 @@ export class Game {
       const heard = this.S ? this.S.players.filter(o => o.role === 'survivor' && o.heard > 0).length : 0;
       sub = me.dash ? 'Rushing!' : me.aim ? (me.abT < def.minCharge ? 'Winding up…' : `Release! ${Math.round(def.minDist + charge * (def.maxDist - def.minDist))}m`) : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready · hold RMB';
       if (heard) sub += ` · ${heard} Heard`;
-      extra = (me.tele ? 'Creeping…' : me.teleCd > 0 ? `${kbd('item')} Creep ${Math.ceil(me.teleCd)}s` : `Hold ${kbd('item')} Creep (teleport) ready`) + ' · ' + (me.ab === 1 ? 'Listening…' : me.ab2Cd > 0 ? `${kbd('ability2')} I Hear You ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' I Hear You ready');
+      const SW = K.swap;
+      const swapTxt = !this.S.spider ? '' : this.swapHeld ? ' · Spider Mom\'s eyes: release V to swap' : me.swapCd > 0 ? ` · <kbd>V</kbd> ${SW.name} ${Math.ceil(me.swapCd)}s` : ` · <kbd>V</kbd> ${SW.name} ready`;
+      extra = (me.tele ? 'Creeping…' : me.teleCd > 0 ? `${kbd('item')} Creep ${Math.ceil(me.teleCd)}s` : `Hold ${kbd('item')} Creep (teleport) ready`) + ' · ' + (me.ab === 1 ? 'Listening…' : me.ab2Cd > 0 ? `${kbd('ability2')} I Hear You ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' I Hear You ready') + swapTxt;
       void T;
     } else if (me.char === 'slimer') {
       const n = (this.S.slime || []).length;

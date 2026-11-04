@@ -14,7 +14,7 @@ import { loadTed } from './sidekicks.js';
 import { loadRealism } from './realism.js';
 import { loadStatic } from './glbModels.js';
 import { loadScene, sceneReady } from './sceneGlb.js';
-import { loadGranny, loadSlendrina, grannyReady, slendrinaReady, onGrannyReady, loadGrandpa, loadSpiderMom } from './grannyGlb.js';
+import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom } from './grannyGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
@@ -144,7 +144,6 @@ loadStatic('ghosttrap');
 loadStatic('beartrap'); loadStatic('taser');
 loadScene('granny_map');
 loadGranny().then(m => { if (m) { forgetArt('granny'); if (menu && menu.killerChar === 'granny') menu.setKiller('granny', menu.killerSkin); } });
-loadSlendrina();
 loadGrandpa().then(m => { if (m) forgetArt('granny'); });
 loadSpiderMom();
 loadStatic('slimer').then(m => { if (!m) return; forgetArt('slimer'); if (menu && menu.killerChar === 'slimer') menu.setKiller('slimer', menu.killerSkin); });
@@ -164,7 +163,7 @@ async function waitForModels(need) {
   // the Granny's House scenery (a big model) must be in before any match can use the map
   if (!sceneReady('granny_map')) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([loadScene('granny_map'), new Promise(r => setTimeout(r, 25000))]); }
   // Granny and her granddaughter, when she's in the match
-  if (need === 'granny' || (need && need.granny)) { if (!grannyReady() || !slendrinaReady() || !spiderOk()) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([loadGranny(), loadSlendrina(), loadGrandpa(), loadSpiderMom()]), new Promise(r => setTimeout(r, 25000))]); } }
+  if (need === 'granny' || (need && need.granny)) { if (!grannyReady() || !spiderOk()) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([loadGranny(), loadGrandpa(), loadSpiderMom()]), new Promise(r => setTimeout(r, 25000))]); } }
   if (need && need.granny) need = need.chucky;
   if (!need || chuckyReady()) return;
   loading(true, "Waking Chucky up…");
@@ -1218,10 +1217,10 @@ const AN_GRANNY = `<div class="an-bg granny"></div><div class="an-inner">
   <div class="an-kicker">Chapter VIII · New chapter · Available now</div>
   <div class="an-banner"><div class="an-img granny-art"></div><div class="an-scan"></div></div>
   <div class="an-x">× <span>Nightbound</span></div>
-  <p class="an-sub">You wake up in her house. She hears every creak of the floorboards, appears at any generator or hook she likes, <b>Spider Mom</b> crawls the generators looking for you, and her granddaughter <b>Slendrina</b> waits in the dark. Don't look at her. Escape <b>Granny's House</b>, a brand new map, before she finds you.</p>
-  <ul class="an-list"><li>New killer: <b>Granny</b> (Bat Rush, I Hear You, Creep)</li><li>Her helpers: <b>Slendrina</b> and <b>Spider Mom</b></li><li>New map: <b>Granny's House</b> (free for everyone)</li><li>New execution: <b>Bedtime Trap</b></li></ul>
+  <p class="an-sub">You wake up in her house. She hears every creak of the floorboards, appears at any generator or hook she likes, <b>Spider Mom</b> crawls the generators looking for you, and Granny can switch bodies with her in an instant. Escape <b>Granny's House</b>, a brand new map, before she finds you.</p>
+  <ul class="an-list"><li>New killer: <b>Granny</b> (Bat Rush, I Hear You, Creep, Body Swap)</li><li>Her helper: <b>Spider Mom</b></li><li>New map: <b>Granny's House</b> (free for everyone)</li><li>New execution: <b>Bedtime Trap</b></li></ul>
   <div class="an-actions"><button class="btn primary big" id="an-store">Get the Chapter</button><button class="btn big" id="an-play">Play Granny's House</button><button class="btn" id="an-trailer">Watch Trailer</button><button class="btn" id="an-close">Close</button></div>
-  <p class="gb-note">Fan-made crossover. Granny and Slendrina are characters by DVloper; not affiliated with or endorsed by them.</p></div>`;
+  <p class="gb-note">Fan-made crossover. Granny and Spider Mom are characters by DVloper; not affiliated with or endorsed by them.</p></div>`;
 function showAnnounce(kind = 'offal') {
   closePanel();
   const A = $('announce'); A.innerHTML = kind === 'gb' ? AN_GB : kind === 'granny' ? AN_GRANNY : AN_OFFAL; A.classList.remove('hidden');

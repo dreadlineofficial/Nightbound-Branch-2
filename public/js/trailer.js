@@ -1,7 +1,7 @@
-// The Granny chapter trailer: a short in-engine cinematic (the real house, Granny, Slendrina and a
+// The Granny chapter trailer: a short in-engine cinematic (the real house, Granny, Spider Mom and a
 // bear trap model), letterboxed, with captions, sound and a title card. Skippable at any time.
 import * as THREE from 'three';
-import { loadGranny, makeGrannyGlb, animateGranny, loadSlendrina, makeSlendrina } from './grannyGlb.js';
+import { loadGranny, makeGrannyGlb, animateGranny, loadSpiderMom, makeSpiderMom } from './grannyGlb.js';
 import { loadScene, cloneScene } from './sceneGlb.js';
 import { sound } from './audio.js';
 import { cloneStatic, loadStatic } from './glbModels.js';
@@ -15,7 +15,7 @@ const SHOTS = [
   { d: 5, text: 'You wake up in her house.', cam: [V(0, 1.6, 29.5), V(0, 2.2, 24)], look: [V(0, 4.5, 0), V(0, 5, 0)] },
   { d: 4.5, text: 'She hears everything.', cam: [V(-7.5, 1.0, 26.5), V(-4.5, 1.0, 26.5)], look: [V(-2, 1.2, 21), V(1, 1.2, 21)], granny: 'walk' },
   { d: 3.2, text: 'Every creak of the floor.', cam: [V(0.9, 0.55, 23.4), V(0.75, 0.45, 23.1)], look: [V(0, 0.05, 22), V(0, 0.05, 22)], trap: true },
-  { d: 4.5, text: "And whatever you do... don't look at her.", cam: [V(-9, 1.5, 29.5), V(-9, 1.55, 28.6)], look: [V(-9, 1.5, 20), V(-9, 1.55, 20)], slend: true },
+  { d: 4.5, text: "And Spider Mom is always watching.", cam: [V(-9, 0.7, 29.5), V(-9, 0.6, 28.6)], look: [V(-9, 0.5, 20), V(-9, 0.5, 20)], spider: true },
   { d: 3, text: '', cam: [V(0.2, 1.5, 24.8), V(0.15, 1.55, 25.2)], look: [V(0, 1.6, 22.5), V(0, 1.7, 22.5)], granny: 'swing' },
   { d: 6.5, title: true, cam: [V(0, 2.2, 29.5), V(0, 2.6, 27.5)], look: [V(0, 6, 0), V(0, 6.3, 0)] },
 ];
@@ -49,7 +49,7 @@ function stop() {
 async function play(T, done) {
   const loadingEl = document.createElement('div'); loadingEl.className = 'tr-text show'; loadingEl.textContent = '…';
   T.appendChild(loadingEl);
-  const ok = await Promise.race([Promise.all([loadGranny(), loadSlendrina(), loadScene('granny_map'), loadStatic('beartrap').then(() => true)]).then(a => a.every(Boolean)), new Promise(r => setTimeout(() => r(false), 20000))]);
+  const ok = await Promise.race([Promise.all([loadGranny(), loadSpiderMom(), loadScene('granny_map'), loadStatic('beartrap').then(() => true)]).then(a => a.every(Boolean)), new Promise(r => setTimeout(() => r(false), 20000))]);
   if (!ok) { done(); return; }
   T.innerHTML = '';
   const r = new THREE.WebGLRenderer({ antialias: true });
@@ -62,10 +62,10 @@ async function play(T, done) {
   const stat = document.createElement('div'); stat.className = 'tr-static'; T.appendChild(stat);
   const flash = document.createElement('div'); flash.className = 'tr-flash'; T.appendChild(flash);
   const title = document.createElement('div'); title.className = 'tr-title';
-  title.innerHTML = '<p>Chapter VIII</p><div class="tr-logo"></div><h1 class="tr-x"><i>×</i>Nightbound</h1><p>Available now</p><ul><li>New killer: Granny</li><li>Her helper: Slendrina</li><li>New map: Granny\'s House</li></ul>';
+  title.innerHTML = '<p>Chapter VIII</p><div class="tr-logo"></div><h1 class="tr-x"><i>×</i>Nightbound</h1><p>Available now</p><ul><li>New killer: Granny</li><li>Her helper: Spider Mom</li><li>New map: Granny\'s House</li></ul>';
   T.appendChild(title);
   const skip = document.createElement('button'); skip.className = 'btn tr-skip'; skip.textContent = 'Skip ▸'; skip.onclick = done; T.appendChild(skip);
-  // static noise texture for the Slendrina shot
+  // static noise texture for the Spider Mom shot
   const nc = document.createElement('canvas'); nc.width = nc.height = 128; const nx = nc.getContext('2d');
 
   // ---------- the set ----------
@@ -77,7 +77,7 @@ async function play(T, done) {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), new THREE.MeshStandardMaterial({ color: 0x1a1e14, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; sc.add(ground);
   for (const [x, y, z, c, i] of [[1, 3, 15, 0xffa850, 25], [-6, 2.5, 8, 0xff9a40, 10], [6, 2.5, 4, 0xffa850, 10]]) { const l = new THREE.PointLight(c, i, 16, 1.5); l.position.set(x, y, z); sc.add(l); }
   const G = makeGrannyGlb({}); sc.add(G.root); G.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  const S = makeSlendrina(false); sc.add(S.root); S.root.visible = false;
+  const S = makeSpiderMom(false); if (S) { sc.add(S.root); S.root.visible = false; }
   const sLight = new THREE.PointLight(0xc8d8ff, 0, 6, 1.6); sc.add(sLight);
   // a bear trap (two serrated jaws)
   const trap = new THREE.Group(); trap.position.set(0, 0.02, 22); sc.add(trap);
@@ -140,15 +140,16 @@ async function play(T, done) {
     for (const [j, sd] of jaws) j.rotation.x = sh.trap && f > snapAt ? sd * 0.05 : sd * 1.25;
     if (trapClose) trapClose(sh.trap && f > snapAt ? Math.min(1, (f - snapAt) / 0.04) : 0);
     if (sh.trap && f > snapAt) once('snap', () => { sound.play('thunk'); sound.play('scream', undefined, undefined, { pitch: 1.2, len: 1.0 }); flash.style.background = '#600'; flash.style.opacity = '0.6'; setTimeout(() => { flash.style.opacity = '0'; }, 120); });
-    // shot 4: Slendrina, flickering in the dark, closer every flicker
-    if (sh.slend) {
-      S.root.visible = Math.random() > 0.08; S.root.position.set(-9, 0, 21 + e * 3.2); S.root.rotation.y = 0; S.update(dt);
-      S.setOpacity(0.6 + Math.random() * 0.4); sLight.position.set(-9, 1.6, 22.6 + e * 3.2); sLight.intensity = 5;
+    // shot 4: Spider Mom, scuttling out of the dark straight at the camera, then screeching
+    if (S) S.root.visible = !!sh.spider;
+    if (sh.spider && S) {
+      S.root.position.set(-9, 0, 20.5 + e * 6.2); S.root.rotation.y = 0; S.play(f > 0.85 ? 'eat' : 'walk', dt);
+      sLight.position.set(-9, 1.2, 22.6 + e * 6); sLight.intensity = 4;
       const img = nx.createImageData(128, 128); for (let k = 0; k < img.data.length; k += 4) { const v = Math.random() * 255; img.data[k] = img.data[k + 1] = img.data[k + 2] = v; img.data[k + 3] = 255; }
-      nx.putImageData(img, 0, 0); stat.style.backgroundImage = `url(${nc.toDataURL()})`; stat.style.opacity = (0.08 + e * 0.35).toFixed(2);
-      once('whisper', () => sound.play('fade', undefined, undefined, { on: true }));
-      if (f > 0.93) once('scare', () => { sound.play('scream', undefined, undefined, { pitch: 1.7, len: 0.8 }); flash.style.background = '#fff'; flash.style.opacity = '0.85'; setTimeout(() => { flash.style.opacity = '0'; }, 90); });
-    }
+      nx.putImageData(img, 0, 0); stat.style.backgroundImage = `url(${nc.toDataURL()})`; stat.style.opacity = (0.04 + e * 0.2).toFixed(2);
+      once('skitter', () => sound.play('fade', undefined, undefined, { on: true }));
+      if (f > 0.85) once('scare', () => { sound.play('scream', undefined, undefined, { pitch: 2.2, len: 0.8 }); flash.style.background = '#fff'; flash.style.opacity = '0.8'; setTimeout(() => { flash.style.opacity = '0'; }, 90); });
+    } else stat.style.opacity = '0';
     if (sh.title) once('title', () => sound.play('caged'));
     r.render(sc, cam);
     playing.raf = requestAnimationFrame(frame);

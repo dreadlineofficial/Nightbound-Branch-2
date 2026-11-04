@@ -6,8 +6,6 @@
 //    skeleton: the clips play on an invisible copy of that skeleton and every bone of the model
 //    follows it (world-space rotation from rest), so she moves with her own animations: idle, Walk,
 //    Hit (bat swing), arrowHit (staggered), pepperHit (blinded), freezeTrap, Look, lookBed (bending).
-// Slendrina (her helper): "DVloper - Slendrina (Official Model)" by danielthesecond
-// (sketchfab.com/danielthesecond), CC BY 4.0, with her one clip, SlendrinaMoves.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -25,7 +23,7 @@ async function bytes(name) {
   throw last;
 }
 // height (m) and which way the raw model faces
-const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, slendrina: { h: 1.78, yaw: 0 }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 } };
+const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 } };
 function load(name) {
   if (loading[name]) return loading[name];
   loading[name] = bytes(name).then(buf => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))).then(g => {
@@ -67,7 +65,6 @@ function seatHair(probe, scene) {
   void w;
 }
 export const loadGranny = () => Promise.all([load('granny'), load('granny_anims')]).then(() => M.granny);
-export const loadSlendrina = () => load('slendrina');
 // Grandpa (outfit): "Grandpa Shotgun (G3 And Recaptured)" by DVUnit (sketchfab.com/DVUnit), CC BY 4.0, with his own clips
 export const loadGrandpa = () => load('grandpa');
 // Spider Mom (helper): "Spider Mom - Granny" by DVUnit (sketchfab.com/DVUnit), CC BY 4.0, with her own clips
@@ -75,7 +72,6 @@ export const loadSpiderMom = () => load('spidermom');
 export const spiderMomReady = () => !!M.spidermom;
 export const grandpaReady = () => !!M.grandpa;
 export const grannyReady = () => !!(M.granny && M.granny_anims);
-export const slendrinaReady = () => !!M.slendrina;
 export function onGrannyReady(cb) { if (grannyReady()) cb(); else loadGranny().then(() => grannyReady() && cb()); }
 
 class AnimRig {
@@ -205,15 +201,6 @@ export function makeSpiderMom(lite = false) {
     for (const n in R.acts) { const t = n === name ? 1 : 0; R.w[n] += (t - R.w[n]) * k; R.acts[n].setEffectiveWeight(R.w[n]); R.acts[n].paused = false; }
     R.mixer.update(dt);
   };
-  return R;
-}
-// Slendrina, as a standalone apparition (not a player)
-export function makeSlendrina(lite = false) {
-  if (!M.slendrina) return null;
-  const R = new AnimRig('slendrina', {}, lite);
-  R.kind = 'npc';
-  if (R.acts.SlendrinaMoves) { R.w.SlendrinaMoves = 1; R.acts.SlendrinaMoves.setEffectiveWeight(1); }
-  R.update = dt => R.mixer.update(dt);
   return R;
 }
 

@@ -70,7 +70,7 @@ export class Sim {
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
         ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: 0, zap: 0, spied: 0, fl: 0, sp: 0, heard: 0, webbed: 0, dash: null,
+        item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: 0, zap: 0, spied: 0, fl: 0, sp: 0, heard: 0, webbed: 0, dash: null, swapCd: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: typeof r.pet === 'string' && ['ted', 'rosy'].includes(r.pet) ? r.pet : '',
@@ -318,9 +318,23 @@ export class Sim {
         p.aim = false;
         if (p.abT < D.minCharge) return;
         const yaw = num(m.yaw, p.yaw), f = fwd(yaw), len = D.minDist + k * (D.maxDist - D.minDist);
-        p.yaw = yaw; p.dash = { t: 0, d: len / D.speed, dx: f.x, dz: f.z };
+        p.yaw = yaw; p.dash = { t: 0, d: len / D.speed, dx: f.x, dz: f.z, full: p.abT >= D.maxCharge - 0.02 };
         p.abCd = D.cooldown; p.abT = 0;
         this.ev({ k: 'rush', id: p.id, x: p.x, z: p.z, charge: +k.toFixed(2) });
+        break;
+      }
+      case 'bodyswap': {
+        // Body Swap: Granny and Spider Mom trade places, any time
+        const sp = S.spider;
+        if (p.role !== 'killer' || p.char !== 'granny' || !sp || (p.swapCd || 0) > 0 || p.stun > 0 || p.act || p.dash || p.tele || p.carry != null || p.vault) return;
+        const ox = p.x, oz = p.z, ofl = p.fl || 0;
+        const to = this.safeSpot(sp.x, sp.z, sp.x, sp.z, 0);
+        p.x = to.x; p.z = to.z; p.fl = 0; p.sp = undefined; p.tp++; p.aim = false; p.ab = 0;
+        const back = this.safeSpot(ox, oz, ox, oz, 0);
+        sp.x = back.x; sp.z = back.z; sp.st = 0; sp.jump = (sp.jump || 0) + 1;
+        if (this.spiderState) { this.spiderState.path = null; this.spiderState.wait = 1.2; }
+        p.swapCd = KILLERS.granny.swap.cooldown;
+        this.ev({ k: 'bodyswap', id: p.id, x0: ox, z0: oz, x1: p.x, z1: p.z, fl0: ofl });
         break;
       }
       case 'creep': {
@@ -404,7 +418,6 @@ export class Sim {
         break;
       }
       case 'sc': this.skillResult(p, m.r); break;
-      case 'slend': { const sl = this.S.slend; if (sl && p.role === 'survivor' && p.st === 'ok' && Math.hypot(sl.x - p.x, sl.z - p.z) < 30) this.slendHit(p); break; }
       case 'vault-start': {
         // killer / survivor started a vault locally (bots call this directly)
         break;
@@ -542,6 +555,7 @@ export class Sim {
       if (p.spied > 0) p.spied = Math.max(0, p.spied - dt);
       if (p.heard > 0) { p.heard = Math.max(0, p.heard - dt); if (p.st !== 'ok') p.heard = 0; }
       if (p.webbed > 0) p.webbed = Math.max(0, p.webbed - dt);
+      if (p.swapCd > 0) p.swapCd = Math.max(0, p.swapCd - dt);
       if (p.abCd > 0) p.abCd = Math.max(0, p.abCd - dt);
       if (p.ab2Cd > 0) p.ab2Cd = Math.max(0, p.ab2Cd - dt);
       if (p.teleCd > 0) p.teleCd = Math.max(0, p.teleCd - dt);
@@ -1285,12 +1299,12 @@ export class Sim {
   }
 
   // Patrick Bateman's thrown chainsaw
-  // ---------------- Granny: bear traps, listening, sharp ears; Slendrina ----------------
+  // ---------------- Granny: Bat Rush, listening, sharp ears, Spider Mom ----------------
   updateGranny(dt) {
     const S = this.S, M = this.M;
     const Gs = S.players.filter(p => p.role === 'killer' && p.char === 'granny');
     for (const p of S.players) if (p.snare > 0) { p.snare = Math.max(0, p.snare - dt); if (p.st !== 'ok') p.snare = 0; }
-    if (!Gs.length && !S.slend && !S.spider) return;
+    if (!Gs.length && !S.spider) return;
     const D = KILLERS.granny.ability, T = KILLERS.granny.teleport;
     for (const K of Gs) {
       // listening (I Hear You): stands still for a moment
@@ -1311,19 +1325,35 @@ export class Sim {
       for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && s.mv === 2 && dist(s, K) < 22) s.reveal = Math.max(s.reveal || 0, 0.6);
     }
     this.updateSpiderMom(dt, Gs);
-    this.updateSlendrina(dt, Gs);
   }
-  // Bat Rush in motion: through dropped pallets, into the first survivor, or into a wall
+  // Bat Rush in motion: steered by her aim, through windows and dropped pallets, into the first
+  // survivor, or into a wall; fully wound up, it ends in a Ground Slam
   updateRush(K, dt) {
     const S = this.S, M = this.M, D = KILLERS.granny.ability, R = K.dash;
     if (K.stun > 0 || K.carry != null) { K.dash = null; return; }
     R.t += dt;
+    // steering: turn toward where she is looking, at a limited rate
+    const want = Math.atan2(R.dx, R.dz) + Math.max(-D.turn * dt, Math.min(D.turn * dt, angDiff(Math.atan2(R.dx, R.dz), K.yaw)));
+    R.dx = Math.sin(want); R.dz = Math.cos(want);
     const step = D.speed * dt;
-    // a dropped pallet in the way splinters
-    for (const b of M.bars) if (S.bars[b.id] === 1 && !K.fl && Math.hypot(K.x + R.dx * 0.9 - b.x, K.z + R.dz * 0.9 - b.z) < b.half + 0.5) { S.bars[b.id] = 2; this.ev({ k: 'break', id: b.id }); }
+    if (!K.fl) {
+      // a dropped pallet in the way splinters, and carries her further
+      for (const b of M.bars) if (S.bars[b.id] === 1 && Math.hypot(K.x + R.dx * 0.9 - b.x, K.z + R.dz * 0.9 - b.z) < b.half + 0.5) { S.bars[b.id] = 2; R.d += D.palletBonus / D.speed; this.ev({ k: 'break', id: b.id }); this.ev({ k: 'rushsmash', id: K.id, x: b.x, z: b.z }); }
+      // a window in the way: straight through it
+      for (const w of M.windows) {
+        const cross = w.axis === 'x' ? K.x - w.x : K.z - w.z, lat = w.axis === 'x' ? K.z - w.z : K.x - w.x;
+        const toward = (w.axis === 'x' ? R.dx : R.dz) * -Math.sign(cross);
+        if (Math.abs(cross) < 0.95 && Math.abs(lat) < w.half - 0.15 && toward > 0.45) {
+          const side = Math.sign(cross) || 1;
+          if (w.axis === 'x') K.x = w.x - side * 0.85; else K.z = w.z - side * 0.85;
+          K.tp++; this.ev({ k: 'rushvault', id: K.id, x: w.x, z: w.z });
+          break;
+        }
+      }
+    }
     const L = levelOf(M, K.fl), r = moveCircle(L, K.fl ? null : S, K.x, K.z, R.dx * step, R.dz * step, 0.45);
     const moved = Math.hypot(r.x - K.x, r.z - K.z);
-    K.x = r.x; K.z = r.z; K.yaw = Math.atan2(R.dx, R.dz);
+    K.x = r.x; K.z = r.z;
     if (M.stairs) levelStep(M, K);
     // the first survivor in her way
     for (const s of S.players) {
@@ -1332,6 +1362,7 @@ export class Sim {
       const dx = s.x - K.x, dz = s.z - K.z, d = Math.hypot(dx, dz);
       if (d < 1.25 && (d < 0.5 || (dx * R.dx + dz * R.dz) / d > 0.2) && !losL(M, K, s, 1.0)) {
         this.damage(s, K, false);
+        if (R.full) this.groundSlam(K, s.id);
         K.dash = null; K.atk = 2; K.atkHit = true; K.atkT = RULES.hitCooldown; K.tp++;
         this.ev({ k: 'rushhit', id: K.id, to: s.id, x: s.x, z: s.z });
         return;
@@ -1343,7 +1374,23 @@ export class Sim {
       this.ev({ k: 'rushwall', id: K.id, x: K.x, z: K.z });
       return;
     }
-    if (R.t >= R.d) { K.dash = null; K.atk = 2; K.atkHit = false; K.atkT = 0.7; K.tp++; }
+    if (R.t >= R.d) {
+      K.dash = null; K.tp++;
+      if (R.full) { this.groundSlam(K, null); K.atk = 2; K.atkHit = true; K.atkT = 0.9; }
+      else { K.atk = 2; K.atkHit = false; K.atkT = 0.7; }
+    }
+  }
+  // the end of a fully wound-up Bat Rush: the bat comes down on the floor; everyone close is struck,
+  // and a generator next to her loses some of its progress
+  groundSlam(K, skip) {
+    const S = this.S, M = this.M, D = KILLERS.granny.ability, hit = [];
+    for (const s of S.players) {
+      if (s.id === skip || s.role !== 'survivor' || s.st !== 'ok' || !levelsMeet(K, s)) continue;
+      if (M.stairs && Math.abs(heightAt(M, K) - heightAt(M, s)) > 1.7) continue;
+      if (Math.hypot(s.x - K.x, s.z - K.z) < D.slamRadius && !losL(M, K, s, 1.0)) { this.damage(s, K, false); hit.push(s.id); }
+    }
+    if (!K.fl) for (const g of M.gens) { const gs = S.gens[g.id]; if (!gs.done && gs.p > 0 && Math.hypot(g.x - K.x, g.z - K.z) < D.slamRadius + 0.8) { gs.p = Math.max(0, gs.p - D.slamGen); gs.reg = true; this.ev({ k: 'kick', id: g.id }); } }
+    this.ev({ k: 'slam', id: K.id, x: K.x, z: K.z, hit });
   }
   // Spider Mom: crawls from generator to generator; anyone she finds repairing one is shown to Granny
   updateSpiderMom(dt, Gs) {
@@ -1382,52 +1429,7 @@ export class Sim {
       break;
     }
   }
-  // Slendrina: a brief apparition in front of a survivor, now and then early on and constantly once
-  // the exit gates are powered. Looking at her for half a second injures you.
-  updateSlendrina(dt, Gs) {
-    const S = this.S, M = this.M;
-    if (!Gs.length) { S.slend = null; return; }
-    const sl = S.slend;
-    if (sl) {
-      sl.t += dt;
-      // bots: a bot facing her with a clear view gets caught too
-      for (const s of S.players) if (s.bot && s.role === 'survivor' && s.st === 'ok') {
-        const dx = sl.x - s.x, dz = sl.z - s.z, d = Math.hypot(dx, dz);
-        const facing = d < 18 && Math.abs(angDiff(s.yaw, Math.atan2(dx, dz))) < 0.45 && !losBlocked(M, s.x, s.z, sl.x, sl.z);
-        sl.look ||= {}; sl.look[s.id] = facing ? (sl.look[s.id] || 0) + dt : 0;
-        if (sl.look[s.id] >= 0.5) { this.slendHit(s); return; }
-      }
-      if (sl.t >= sl.dur) S.slend = null;
-      return;
-    }
-    // when she comes next
-    this.slendT = (this.slendT ?? 25 + Math.random() * 20) - dt;
-    if (this.slendT > 0) return;
-    const end = S.gatesPowered, early = S.t < 150;
-    this.slendT = end ? 9 + Math.random() * 8 : early ? 35 + Math.random() * 30 : 80 + Math.random() * 60;
-    const prey = S.players.filter(p => p.role === 'survivor' && p.st === 'ok');
-    if (!prey.length) return;
-    const s = prey[Math.floor(Math.random() * prey.length)];
-    // somewhere ahead of them, in plain view
-    for (let tries = 0; tries < 12; tries++) {
-      const a = s.yaw + (Math.random() - 0.5) * 1.4, d = 5 + Math.random() * 6;
-      const x = s.x + Math.sin(a) * d, z = s.z + Math.cos(a) * d;
-      const sfl = (s.fl || 0) >= 10 ? s.fl - 10 : (s.fl || 0), L = levelOf(M, sfl);
-      if (!L.grid || L.grid.type[cellOf(M, x, z)] === 1 || Math.abs(x) > (M.half || HALF) - 1 || Math.abs(z) > (M.half || HALF) - 1 || losBlocked(L, s.x, s.z, x, z)) continue;
-      S.slend = { id: ++S.tid, x, z, fl: sfl, yaw: Math.atan2(s.x - x, s.z - z), t: 0, dur: end ? 4 : 5, tgt: s.id };
-      this.ev({ k: 'slendrina', x, z, tgt: s.id });
-      return;
-    }
-  }
-  slendHit(s) {
-    const S = this.S;
-    if (!S.slend) return;
-    const x = S.slend.x, z = S.slend.z;
-    S.slend = null;
-    if (s.st !== 'ok') return;
-    if (s.hp === 2) { s.hp = 1; s.boost = 1.5; s.boostMul = SPEED.hitBoost; }
-    this.ev({ k: 'slendhit', id: s.id, x, z });
-  }
+
 
   updateSaws(dt) {
     const S = this.S, M = this.M;

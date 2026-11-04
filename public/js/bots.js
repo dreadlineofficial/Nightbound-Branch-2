@@ -626,8 +626,8 @@ export class Bots {
         }
         // a long chase: listen, so the next hit downs
         if (target && !target.heard && d > 7 && p.ab2Cd <= 0 && !p.ab && !b.aim && target.mv === 2 && Math.random() < dt * 0.5) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
-        // Spider Mom found someone: creep to her
-        if (!target && sim.S.spider && sim.S.spider.st === 2 && p.teleCd <= 0 && !p.ab && p.carry == null && Math.hypot(sim.S.spider.x - p.x, sim.S.spider.z - p.z) > 15) sim.onMsg(p.id, { t: 'act', a: 'creep', kind: 'spider', id: 0 });
+        // Spider Mom found someone: switch bodies with her
+        if (!target && sim.S.spider && sim.S.spider.st === 2 && !(p.swapCd > 0) && !p.ab && !b.aim && p.carry == null && Math.hypot(sim.S.spider.x - p.x, sim.S.spider.z - p.z) > 12) sim.onMsg(p.id, { t: 'act', a: 'bodyswap' });
         // nobody around: listen for them...
         if (!target && p.ab2Cd <= 0 && !p.ab && Math.random() < dt * 0.12) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
         // ...and creep to a generator someone is working on, far away
