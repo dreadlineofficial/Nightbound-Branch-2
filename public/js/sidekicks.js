@@ -265,8 +265,15 @@ export const TED_LINES = {
   thunder: '♪ Ted sings the Thunder Buddies song ♪',
 };
 
+// Timed subtitles for longer clips: line -> [[seconds into the clip, caption], ...]. When a line
+// has an entry here, its subtitle follows these captions instead of the single TED_LINES text.
+// (The Thunder Buddies song ships with a description only; fill in your own captions here.)
+export const TED_CAPTIONS = {
+  thunder: [],
+};
+
 // lines Ted can say again; every other line is said at most once a match
-const TED_REPEAT = new Set(['bringit', 'shit', 'cock', 'arfh', 'fuckme']);
+const TED_REPEAT = new Set(['bringit', 'shit', 'cock', 'arfh']);
 // one voice channel for every Ted in the match (on this screen): they never talk over each
 // other, and a once-a-match line said by one Ted is never said again by another
 const VOICE = { busyUntil: 0, said: new Set() };

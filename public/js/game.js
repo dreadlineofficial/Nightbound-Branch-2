@@ -9,7 +9,7 @@ import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
-import { Sidekick, TED_LINES, resetVoices } from './sidekicks.js';
+import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
 let KB_SETTINGS = null;
 const kbd = id => `<kbd>${keyLabel(KB_SETTINGS, id).replace(/[<>&]/g, '')}</kbd>`;
@@ -1017,8 +1017,12 @@ export class Game {
     if (this.settings.subs === false) return len;
     let el = document.getElementById('subs');
     if (!el) { el = document.createElement('div'); el.id = 'subs'; this.hud.appendChild(el); }
-    el.innerHTML = `<b>Ted:</b> ${TED_LINES[line].replace(/[<>&]/g, '')}`;
-    el.classList.add('show');
+    const show = txt => { el.innerHTML = `<b>Ted:</b> ${String(txt).replace(/[<>&]/g, '')}`; el.classList.add('show'); };
+    for (const h of this.capT || []) clearTimeout(h);
+    this.capT = [];
+    const caps = TED_CAPTIONS[line];
+    if (caps && caps.length) for (const [at, txt] of caps) this.capT.push(setTimeout(() => show(txt), at * 1000));
+    else show(TED_LINES[line]);
     clearTimeout(this.subsT); this.subsT = setTimeout(() => el.classList.remove('show'), (len + 0.8) * 1000);
     return len;
   }

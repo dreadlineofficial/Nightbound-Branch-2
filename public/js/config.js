@@ -366,8 +366,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.20.1';
+export const VERSION = '2.20.2';
 export const INBOX = [
+  {
+    id: 'v2.20.2', version: '2.20.2', date: 'Nov 2026', title: 'Ted: Once Is Enough', tag: 'Update',
+    body: ['Ted\'s "Fuck me." now only comes up once a match (his "Arfh!" still plays every time you go down).', 'Ted\'s longer clips can now show timed, line-by-line subtitles.'],
+  },
   {
     id: 'v2.20.1', version: '2.20.1', date: 'Nov 2026', title: 'Custom Keybinds', tag: 'Update',
     body: ['Every key can now be rebound: Settings > Keybinds, click an action and press a key (Esc cancels). Pick a key another action already uses and the two swap. Reset keybinds puts everything back.', 'The on-screen hints and prompts show your keys.'],
