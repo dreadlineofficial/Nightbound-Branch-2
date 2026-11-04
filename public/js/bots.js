@@ -1,5 +1,5 @@
 // Bot brains (host only). Bots act through the same channels as human players.
-import { findPath, cellPos, cellOf, losBlocked, barBox, moveCircle } from './map.js';
+import { findPath, cellPos, cellOf, losBlocked, barBox, moveCircle, levelOf, losL, levelsMeet, heightAt } from './map.js';
 import { stepMover, startVault } from './movement.js';
 import { dist, fwd, angDiff, killerOf, killersOf, nearestKiller, modeOf, findSpace, findInteraction, vaultDuration, terrorRadius, playerById, canExecuteTarget, findExecute, itemCharge } from './rules.js';
 import { HALF, KILLERS } from './config.js';
@@ -106,7 +106,16 @@ export class Bots {
     return (t, r) => t === 1 ? Infinity : t === 2 ? 3 : t === 3 ? (S.bars[r] === 1 ? 3.5 : 1) : t === 4 ? (S.gates[r].open ? 1 : Infinity) : 1;
   }
   goTo(p, b, x, z, key, dt, sprint = true, every = 1.2) {
-    const M = this.sim.M;
+    const M0 = this.sim.M;
+    // floors: b.goalFl is the level the goal is on (set just before the call; the ground otherwise)
+    const tfl = b.goalFl || 0; b.goalFl = 0;
+    if (M0.stairs && ((p.fl || 0) >= 10 || (p.fl || 0) !== tfl)) {
+      const w = this.stairWay(p, tfl, x, z);
+      // on the stairs, or right at the foot / top of them: walk straight on
+      if ((p.fl || 0) >= 10 || Math.hypot(w.x - p.x, w.z - p.z) < 1.8) { b.path = null; this.move(p, b, w.x - p.x, w.z - p.z, dt, sprint); return; }
+      x = w.x; z = w.z; key = 'stairs' + (p.fl || 0);
+    }
+    const M = levelOf(M0, p.fl);
     b.repath -= dt;
     if (key !== b.goalKey || b.repath <= 0 || !b.path) {
       b.goalKey = key; b.repath = every + Math.random() * 0.3;
@@ -117,12 +126,12 @@ export class Bots {
     return this.follow(p, b, dt, sprint);
   }
   follow(p, b, dt, sprint) {
-    const sim = this.sim, M = sim.M, S = sim.S, g = M.grid;
+    const sim = this.sim, M = levelOf(sim.M, p.fl), S = sim.S, g = M.grid;
     if (b.side > 0) {
       // unstick: step toward whichever nearby direction is actually open
       if (b.sideDir == null) {
         let bestA = 0, bestD = -1;
-        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const r = moveCircle(this.sim.M, this.sim.S, p.x, p.z, Math.sin(a) * 0.8, Math.cos(a) * 0.8, 0.38); const d = Math.hypot(r.x - p.x, r.z - p.z); if (d > bestD) { bestD = d; bestA = a; } }
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const r = moveCircle(M, p.fl ? null : this.sim.S, p.x, p.z, Math.sin(a) * 0.8, Math.cos(a) * 0.8, 0.38); const d = Math.hypot(r.x - p.x, r.z - p.z); if (d > bestD) { bestD = d; bestA = a; } }
         b.sideDir = bestA;
       }
       b.side -= dt; if (b.side <= 0) b.sideDir = null;
@@ -141,7 +150,7 @@ export class Bots {
       const t = g.type[b.path[k]];
       if (t === 2 || (t === 3 && S.bars[g.ref[b.path[k]]] === 1)) { ti = k; break; }
       const c = cellPos(M, b.path[k]);
-      if (this.clearLine(p.x, p.z, c.x, c.z)) ti = k; else break;
+      if (this.clearLine(p.x, p.z, c.x, c.z, p.fl)) ti = k; else break;
     }
     const tk = b.path[ti], tc = cellPos(M, tk), tt = g.type[tk];
     // special cells: windows / dropped barricades
@@ -179,8 +188,8 @@ export class Bots {
     this.move(p, b, dx / d, dz / d, dt, sprint);
     return false;
   }
-  clearLine(x0, z0, x1, z1) {
-    const M = this.sim.M, g = M.grid, S = this.sim.S;
+  clearLine(x0, z0, x1, z1, fl) {
+    const M = levelOf(this.sim.M, fl), g = M.grid, S = this.sim.S;
     const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 0.25);
     for (let i = 1; i <= n; i++) {
       const k = cellOf(M, x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n), t = g.type[k];
@@ -189,6 +198,27 @@ export class Bots {
       if (t === 4 && !S.gates[g.ref[k]].open) return false;
     }
     return true;
+  }
+  // the next point on the way to another floor: the foot or the top of the stairs, then up or down them
+  stairWay(p, tfl, tx, tz) {
+    const M = this.sim.M, fl = p.fl || 0;
+    const foot = k => { const S = M.stairs[k]; if (S.kind === 'lane') return { x: -0.35, z: -4.7 }; const t = (S.a0 + 4) * Math.PI / 180; return { x: S.cx + Math.cos(t) * 0.95, z: S.cz + Math.sin(t) * 0.95 }; };
+    const top = k => { const S = M.stairs[k]; if (S.kind === 'lane') return { x: 2.9, z: -8.75 }; const t = (S.a1 - 4) * Math.PI / 180; return { x: S.cx + Math.cos(t) * 0.95, z: S.cz + Math.sin(t) * 0.95 }; };
+    if (fl < 10) {
+      if (tfl >= 10) { const k = tfl - 10; if (k === fl) return foot(k); if (k + 1 === fl) return top(k); return k > fl ? foot(fl) : top(fl - 1); }
+      return tfl > fl ? foot(fl) : top(fl - 1);
+    }
+    if (tfl === fl) return { x: tx, z: tz };
+    const k = fl - 10, S = M.stairs[k], up = tfl >= 10 ? tfl > fl : tfl > k;
+    if (S.kind === 'lane') {
+      if (up) return p.x < 0.6 && p.z > -8.2 ? { x: -0.35, z: -8.75 } : { x: 3.95, z: -8.75 };
+      return p.x > 0.1 && p.z < -7.0 ? { x: -0.4, z: -8.6 } : { x: -0.35, z: -3.55 };
+    }
+    // spiral: keep walking round, then step off at the end
+    const sp = p.sp ?? S.a0;
+    const a = up ? (sp > S.a1 - 15 ? S.a1 : sp + 40) : (sp < S.a0 + 15 ? S.a0 : sp - 40);
+    const r = (up ? sp > S.a1 - 15 : sp < S.a0 + 15) ? 1.8 : 0.8, t = a * Math.PI / 180;
+    return { x: S.cx + Math.cos(t) * r, z: S.cz + Math.sin(t) * r };
   }
   move(p, b, mx, mz, dt, sprint) {
     const S = this.sim.S, M = this.sim.M;
@@ -467,7 +497,9 @@ export class Bots {
       this.setE(p, b, false);
       b.target = null;
       let best = null, bd = 1e9;
-      for (const c of M.cages) if (S.cages[c.id] == null && !S.cageBroken[c.id]) { const d = Math.hypot(c.x - p.x, c.z - p.z); if (d < bd) { bd = d; best = c; } }
+      // (stick with the hook already chosen unless another is clearly closer: no flip-flopping on ties)
+      for (const c of M.cages) if (S.cages[c.id] == null && !S.cageBroken[c.id]) { const d = Math.hypot(c.x - p.x, c.z - p.z) - (c.id === b.hookGoal ? 4 : 0); if (d < bd) { bd = d; best = c; } }
+      if (best) b.hookGoal = best.id;
       if (!best) { sim.onMsg(p.id, { t: 'act', a: 'drop-carry' }); return; }
       const it = findInteraction(M, S, p);
       if (it && it.k === 'cage') { p.yaw = Math.atan2(best.x - p.x, best.z - p.z); this.setE(p, b, true); this.move(p, b, 0, 0, dt, false); b.leaveCage = { x: best.x, z: best.z, t: 14 }; b.target = null; b.search = null; return; }
@@ -487,7 +519,7 @@ export class Bots {
       if (s.role !== 'survivor' || s.st !== 'ok') continue;
       const d = dist(p, s);
       const sight = s.cr && !s.mv ? D.sight * 0.45 : s.cr ? D.sight * 0.7 : D.sight;
-      const vis = d < sight && !losBlocked(M, p.x, p.z, s.x, s.z);
+      const vis = d < sight && !losL(M, p, s);
       const facingOk = d < 7 || Math.abs(angDiff(p.yaw, Math.atan2(s.x - p.x, s.z - p.z))) < 1.4 || b.target === s.id;
       const scent = s.hp === 1 && p.perks.includes('scent') && d < 24;
       const heard = (s.mv === 2 && !s.cr && d < 16 && !s.perks.includes('hushed')) || (s.hp === 1 && d < 9 && !s.perks.includes('hushed'));
@@ -502,12 +534,12 @@ export class Bots {
     // drop a chase that has gone on too long without a hit
     if (target && b.target === target.id) { b.chaseT = (b.chaseT || 0) + dt; if (b.chaseT > 25 + D.react * 10 && target.hp === 2) { b.ignore = { id: target.id, t: 12 }; b.chaseT = 0; } } else if (target) b.chaseT = 0;
     if (b.ignore) { b.ignore.t -= dt; if (b.ignore.t <= 0) b.ignore = null; else if (target && target.id === b.ignore.id && dist(p, target) > 3) target = null; }
-    if (target) { b.target = target.id; b.lastSeen = { x: target.x, z: target.z }; b.lastVel = { ...(b.vel[target.id] || { x: 0, z: 0 }) }; b.lostT = 0; }
+    if (target) { b.target = target.id; b.lastSeen = { x: target.x, z: target.z, fl: target.fl || 0 }; b.lastVel = { ...(b.vel[target.id] || { x: 0, z: 0 }) }; b.lostT = 0; }
     else if (b.target != null) {
       b.lostT += dt;
       // follow where they were heading
       if (b.lostT < 2.5 && b.lastVel) { b.lastSeen.x += b.lastVel.x * dt * 0.8; b.lastSeen.z += b.lastVel.z * dt * 0.8; }
-      if (b.lostT > 7) { b.target = null; b.search = { x: b.lastSeen.x, z: b.lastSeen.z, t: 6 }; }
+      if (b.lostT > 7) { b.target = null; b.search = { x: b.lastSeen.x, z: b.lastSeen.z, fl: b.lastSeen.fl || 0, t: 6 }; }
     }
 
     // pick up downed survivors (if not mid-chase with someone close)
@@ -536,6 +568,7 @@ export class Bots {
       const it = findInteraction(M, S, p);
       if (it && it.k === 'pickup') { p.yaw = Math.atan2(downed.x - p.x, downed.z - p.z); this.setE(p, b, true); this.move(p, b, 0, 0, dt, false); return; }
       this.setE(p, b, false);
+      b.goalFl = downed.fl || 0;
       this.goTo(p, b, downed.x, downed.z, 'down' + downed.id, dt, true, 0.5);
       return;
     }
@@ -552,14 +585,19 @@ export class Bots {
     if (chaseT && chaseT.st === 'ok') {
       let tx = target ? target.x : b.lastSeen.x, tz = target ? target.z : b.lastSeen.z;
       const d = Math.hypot(tx - p.x, tz - p.z);
+      // another floor (or well above / below on the stairs): take the stairs first
+      if (M.stairs) {
+        const T = target || b.lastSeen, tfl = T.fl || 0;
+        if (!levelsMeet(p, T) || Math.abs(heightAt(M, p) - heightAt(M, T)) > 1.7 || ((p.fl || 0) >= 10 && tfl !== p.fl && d > 2.2)) { b.goalFl = tfl; this.goTo(p, b, tx, tz, 'climb' + tfl + ':' + Math.round(tx) + ',' + Math.round(tz), dt, true, 0.6); return; }
+      }
       // intercept: aim ahead of a running survivor
       const tv = target ? (b.vel[target.id] || { x: 0, z: 0 }) : { x: 0, z: 0 };
       const lead = Math.min(1.1, d / 5) * D.aim;
       let px = tx + tv.x * lead, pz = tz + tv.z * lead;
-      if (M.grid.type[cellOf(M, px, pz)] === 1) { px = tx; pz = tz; }
+      if (levelOf(M, chaseT.fl).grid.type[cellOf(M, px, pz)] === 1) { px = tx; pz = tz; }
       // mind games: if they keep looping the same obstacle, double back to cut them off
       if (target && d < 10 && losBlocked(M, p.x, p.z, tx, tz)) b.loopT = (b.loopT || 0) + dt; else b.loopT = Math.max(0, (b.loopT || 0) - dt * 2);
-      if (b.loopT > 4.5 && target) { const vl = Math.hypot(tv.x, tv.z) || 1; px = tx + tv.x / vl * 4; pz = tz + tv.z / vl * 4; if (M.grid.type[cellOf(M, px, pz)] === 1) { px = tx; pz = tz; } if (b.loopT > 8) b.loopT = 0; }
+      if (b.loopT > 4.5 && target) { const vl = Math.hypot(tv.x, tv.z) || 1; px = tx + tv.x / vl * 4; pz = tz + tv.z / vl * 4; if (levelOf(M, chaseT.fl).grid.type[cellOf(M, px, pz)] === 1) { px = tx; pz = tz; } if (b.loopT > 8) b.loopT = 0; }
       const ang = Math.atan2(tx - p.x, tz - p.z);
       const los = target && !losBlocked(M, p.x, p.z, tx, tz, 1.0);
       // abilities
@@ -637,8 +675,9 @@ export class Bots {
         const myS = Math.sign(bar.axis === 'x' ? p.x - bar.x : p.z - bar.z), tS = Math.sign(bar.axis === 'x' ? tx - bar.x : tz - bar.z);
         if (myS !== tS && d < 10) { p.yaw = Math.atan2(bar.x - p.x, bar.z - p.z); this.setE(p, b, true); return; }
       }
+      b.goalFl = target ? (target.fl || 0) : (b.lastSeen.fl || 0);
       this.goTo(p, b, px, pz, 'chase' + chaseT.id + ':' + Math.round(px / 2) + ',' + Math.round(pz / 2), dt, true, 0.3);
-      if (!target && Math.hypot(b.lastSeen.x - p.x, b.lastSeen.z - p.z) < 1.5) { b.target = null; }
+      if (!target && Math.hypot(b.lastSeen.x - p.x, b.lastSeen.z - p.z) < 1.5 && (p.fl || 0) === (b.lastSeen.fl || 0)) { b.target = null; }
       return;
     }
 
@@ -662,6 +701,7 @@ export class Bots {
         const a = Math.random() * 6.28, r = 3 + Math.random() * 7;
         b.search.pt = { x: b.search.x + Math.cos(a) * r, z: b.search.z + Math.sin(a) * r };
       }
+      b.goalFl = b.search.fl || 0;
       this.goTo(p, b, b.search.pt.x, b.search.pt.z, 'search' + Math.round(b.search.pt.x) + Math.round(b.search.pt.z), dt, true, 1);
       return;
     }

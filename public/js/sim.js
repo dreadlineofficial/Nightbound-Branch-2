@@ -1,6 +1,6 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
 import { RULES, KILLERS, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS } from './config.js';
-import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos } from './map.js';
+import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos, levelOf, levelsMeet, losL, heightAt } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute, angDiff,
 } from './rules.js';
@@ -70,7 +70,7 @@ export class Sim {
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
         ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: 0, zap: 0, spied: 0,
+        item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: 0, zap: 0, spied: 0, fl: 0, sp: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: typeof r.pet === 'string' && ['ted', 'rosy'].includes(r.pet) ? r.pet : '',
@@ -230,8 +230,8 @@ export class Sim {
         // the victim is dragged in front of the killer
         const ang = Math.atan2(s.x - p.x, s.z - p.z);
         p.yaw = ang;
-        const spot = this.safeSpot(p.x + Math.sin(ang) * 1.05, p.z + Math.cos(ang) * 1.05, p.x, p.z);
-        s.x = spot.x; s.z = spot.z; s.yaw = ang + Math.PI; s.tp++;
+        const spot = this.safeSpot(p.x + Math.sin(ang) * 1.05, p.z + Math.cos(ang) * 1.05, p.x, p.z, p.fl || 0);
+        s.x = spot.x; s.z = spot.z; s.fl = p.fl || 0; s.sp = p.sp; s.yaw = ang + Math.PI; s.tp++;
         p.act = { k: 'execute', id: s.id, t: 0 }; p.prog = 0;
         this.ev({ k: 'exec', id: s.id, by: p.id, char: p.char });
         this.ev({ k: 'msg', text: p.name + ' is executing ' + s.name + '!' });
@@ -443,8 +443,8 @@ export class Sim {
     if (!s) return;
     s.carriedBy = null; s.wig = 0;
     const f = fwd(k.yaw);
-    const spot = this.safeSpot(k.x - f.x * 0.9, k.z - f.z * 0.9, k.x, k.z);
-    s.x = spot.x; s.z = spot.z; s.tp++;
+    const spot = this.safeSpot(k.x - f.x * 0.9, k.z - f.z * 0.9, k.x, k.z, k.fl || 0);
+    s.x = spot.x; s.z = spot.z; s.fl = k.fl || 0; s.sp = k.sp; s.tp++;
     if (escaped) {
       s.st = 'ok'; s.hp = 1; s.boost = 1.5; s.boostMul = SPEED.hitBoost;
       k.stun = Math.max(k.stun, 2.6);
@@ -453,9 +453,9 @@ export class Sim {
     } else { s.st = 'down'; s.healP = 0; }
   }
 
-  safeSpot(x, z, fx, fz) {
-    // pick a reachable point near (x,z), falling back to (fx,fz)
-    const M = this.M;
+  safeSpot(x, z, fx, fz, fl = 0) {
+    // pick a reachable point near (x,z), falling back to (fx,fz) (on the given floor)
+    const M = levelOf(this.M, fl);
     for (const [ox, oz] of [[0, 0], [0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6], [0.9, 0.9], [-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9]]) {
       const px = x + ox, pz = z + oz;
       let ok = !losBlocked(M, fx, fz, px, pz, 0.5);
@@ -561,7 +561,7 @@ export class Sim {
       if (p.role !== 'survivor') continue;
       if (p.st === 'carried') {
         const k = this.P(p.carriedBy);
-        if (k) { const f = fwd(k.yaw); p.x = k.x + f.x * 0.25; p.z = k.z + f.z * 0.25; p.yaw = k.yaw; }
+        if (k) { const f = fwd(k.yaw); p.x = k.x + f.x * 0.25; p.z = k.z + f.z * 0.25; p.yaw = k.yaw; p.fl = k.fl || 0; p.sp = k.sp; }
       } else if (p.st === 'caged') {
         const c = M.cages[p.cage];
         p.x = c.x; p.z = c.z;
@@ -766,10 +766,13 @@ export class Sim {
         if (d > range) return false;
         const dot = d > 0.01 ? (dx * f.x + dz * f.z) / d : 1;
         if (dot < 0.62 && d > 0.9) return false;
-        return !losBlocked(M, K.x, K.z, sx, sz, 1.0);
+        return !losL(M, K, { x: sx, z: sz, fl: cur.fl }, 1.0);
       };
+      let cur = null;
       for (const s of S.players) {
         if (s.role !== 'survivor' || s.st !== 'ok') continue;
+        if (!levelsMeet(K, s) || (M.stairs && Math.abs(heightAt(M, K) - heightAt(M, s)) > 1.7)) continue;
+        cur = s;
         let ok = inReach(s.x, s.z);
         const rewind = (this.rw && this.rw.get(K.id)) || 0;
         if (!ok && rewind > 0) { const h = this.posAt(s.id, S.t - rewind); ok = !!h && inReach(h.x, h.z); }
@@ -819,7 +822,7 @@ export class Sim {
         if (!L) K.tele = null;
         else if (K.tele.t >= RULES.teleTime) {
           const spot = this.safeSpot(L.x + 0.9, L.z, L.x, L.z);
-          K.x = spot.x; K.z = spot.z; K.tp++;
+          K.x = spot.x; K.z = spot.z; K.fl = 0; K.tp++;
           K.tele = null; K.teleCd = RULES.teleCd;
           this.ev({ k: 'tele-end', id: K.id, x: K.x, z: K.z });
         }
@@ -836,7 +839,8 @@ export class Sim {
   }
 
   damage(s, K, instantDown) {
-    if (K && K.harmless) return; // Chucky's empty doll can chase, but not hurt
+    if (K && K.harmless) return;
+    if (K && (!levelsMeet(K, s) || (this.M.stairs && Math.abs(heightAt(this.M, K) - heightAt(this.M, s)) > 1.7))) return; // a floor apart // Chucky's empty doll can chase, but not hurt
     if (s.st === 'ghost') return;
     if (K && K.char === 'foreman' && K.ab === 1 && !this.chainDmg) instantDown = true;
     // (slimed survivors are slowed and revealed, not one-shot: that made him unbeatable) // one strike from the hook, in the dark
@@ -891,7 +895,7 @@ export class Sim {
     if (by) { ox = by.x - c.x; oz = by.z - c.z; } else if (k) { ox = c.x - k.x; oz = c.z - k.z; }
     const d = Math.hypot(ox, oz) || 1;
     const spot = this.safeSpot(c.x + ox / d * 1.25, c.z + oz / d * 1.25, by ? by.x : c.x + 1.3, by ? by.z : c.z);
-    p.x = spot.x; p.z = spot.z; p.tp++;
+    p.x = spot.x; p.z = spot.z; p.fl = 0; p.tp++;
     if (has(p, 'lastwind')) { p.boost = 5; p.boostMul = 1.4; }
     this.ev({ k: 'rescued', id: p.id, by: by ? by.id : -1 });
   }
@@ -1036,7 +1040,7 @@ export class Sim {
         p.carry = null;
         s.carriedBy = null; s.wig = 0;
         s.stage++;
-        s.cage = a.id; S.cages[a.id] = s.id;
+        s.cage = a.id; S.cages[a.id] = s.id; s.fl = 0;
         p.score.hooks = (p.score.hooks || 0) + 1; s.hookedBy = p.id;
         s.st = 'caged'; s.esc = 0; s.tp++;
         p.score.d += 500;
@@ -1112,7 +1116,7 @@ export class Sim {
           const px = c.x, pz = c.z, cp = c.cp ?? 1, sp = c.sp ?? 0;
           c.x += c.dx * cp * step / n; c.z += c.dz * cp * step / n; c.y = (c.y ?? 1.55) + sp * step / n; c.d += step / n;
           for (const s of S.players) {
-            if (s.role !== 'survivor' || s.st !== 'ok' || s.reel) continue;
+            if (s.role !== 'survivor' || s.st !== 'ok' || s.reel || !levelsMeet(K, s)) continue;
             if (Math.hypot(s.x - c.x, s.z - c.z) < 0.45 && c.y > 0.1 && c.y < (s.cr ? 1.2 : 1.95)) {
               this.chainDmg = true; this.damage(s, K, false); this.chainDmg = false;
               if (s.st === 'ok') { const dd = Math.hypot(s.x - K.x, s.z - K.z) || 1, keep = Math.max(2.6, dd * 0.55); const tx = K.x + (s.x - K.x) / dd * keep, tz = K.z + (s.z - K.z) / dd * keep; const spot = this.safeSpot(tx, tz, s.x, s.z); s.reel = { t: 0, x0: s.x, z0: s.z, x1: spot.x, z1: spot.z }; s.act = null; s.tp++; }
@@ -1223,7 +1227,7 @@ export class Sim {
     const want = Math.hypot(tx - K.x, tz - K.z);
     // airborne: sails over fences, pallets, crates and rocks (anything under 1.6m); walls still stop him,
     // and Ghost Traps still catch him (they are checked against his position every tick)
-    const r = moveCircle(M, S, K.x, K.z, tx - K.x, tz - K.z, 0.3, 1.6);
+    const r = moveCircle(levelOf(M, K.fl), K.fl ? null : S, K.x, K.z, tx - K.x, tz - K.z, 0.3, 1.6);
     const blocked = want > 0.05 && Math.hypot(r.x - K.x, r.z - K.z) < want * 0.4;
     K.x = r.x; K.z = r.z;
     for (const s of S.players) {
@@ -1276,7 +1280,7 @@ export class Sim {
         K.tele.t += dt;
         if (K.tele.t >= T.time) {
           const spot = this.safeSpot(K.tele.x + 1.1, K.tele.z, K.tele.x, K.tele.z);
-          K.x = spot.x; K.z = spot.z; K.tp++; K.tele = null; K.teleCd = T.cooldown;
+          K.x = spot.x; K.z = spot.z; K.fl = 0; K.tp++; K.tele = null; K.teleCd = T.cooldown;
           this.ev({ k: 'tele-end', id: K.id, x: K.x, z: K.z });
         }
       }
@@ -1353,8 +1357,9 @@ export class Sim {
     for (let tries = 0; tries < 12; tries++) {
       const a = s.yaw + (Math.random() - 0.5) * 1.4, d = 5 + Math.random() * 6;
       const x = s.x + Math.sin(a) * d, z = s.z + Math.cos(a) * d;
-      if (!M.grid || M.grid.type[cellOf(M, x, z)] === 1 || Math.abs(x) > (M.half || HALF) - 1 || Math.abs(z) > (M.half || HALF) - 1 || losBlocked(M, s.x, s.z, x, z)) continue;
-      S.slend = { id: ++S.tid, x, z, yaw: Math.atan2(s.x - x, s.z - z), t: 0, dur: end ? 4 : 5, tgt: s.id };
+      const sfl = (s.fl || 0) >= 10 ? s.fl - 10 : (s.fl || 0), L = levelOf(M, sfl);
+      if (!L.grid || L.grid.type[cellOf(M, x, z)] === 1 || Math.abs(x) > (M.half || HALF) - 1 || Math.abs(z) > (M.half || HALF) - 1 || losBlocked(L, s.x, s.z, x, z)) continue;
+      S.slend = { id: ++S.tid, x, z, fl: sfl, yaw: Math.atan2(s.x - x, s.z - z), t: 0, dur: end ? 4 : 5, tgt: s.id };
       this.ev({ k: 'slendrina', x, z, tgt: s.id });
       return;
     }

@@ -3,8 +3,8 @@
 // walled yard. Only the ground floor and the yard are played on; the floors above are scenery.
 // Collision comes from the model itself (see grannygrid.js); generators, hooks, exit gates and a
 // few pallet loops are laid out here.
-import { rng, makeCtx, addGates, buildGrid, freePoint, cellOf } from './map.js';
-import { GRANNY_BOXES } from './grannygrid.js';
+import { rng, makeCtx, addGates, buildGrid, freePoint, cellOf, makeLevel } from './map.js';
+import { GRANNY_BOXES, GRANNY_FLOORS } from './grannygrid.js';
 
 export const GRANNY_HALF = 31.6;
 // the house's footprint (no grass or lamp posts inside), the shed's too
@@ -22,7 +22,38 @@ export function buildGrannyHouse(seed) {
     visual: [], trees: [], rocks: [], spawns: { survivors: [], killer: null },
   };
   // walls and furniture from the model (invisible: the model draws them)
-  for (const [x, z, hx, hz] of GRANNY_BOXES) M.boxes.push({ x, z, hx, hz, h: 3.2, kind: 'mesh', style: 'none', nocast: true });
+  // (minus the steps of the first flight: the stairs have their own collision, see below)
+  for (const [x, z, hx, hz] of GRANNY_BOXES) if (!(x + hx > -1.55 && x - hx < 0.8 && z + hz > -7.4 && z - hz < -3.9)) M.boxes.push({ x, z, hx, hz, h: 3.2, kind: 'mesh', style: 'none', nocast: true });
+  // ---------- the floors above, and the stairs between them ----------
+  // Two straight staircases, one above the other, climb from the hall (flight 1 north to a landing,
+  // flight 2 east) to the first and second floors; a spiral staircase in the middle of the second
+  // floor winds up to the tower room.
+  const L = M.lane = { f1: { x0: -1.6, x1: 0.85, z0: -7.4, z1: -3.9 }, f2: { x0: 0.85, x1: 3.45, z0: -10.1, z1: -7.4 } };
+  M.floorY = [0, ...GRANNY_FLOORS.map(f => f.y)];
+  M.stairs = [
+    { kind: 'lane', y0: 0, mid: 2.39, y1: M.floorY[1] },
+    { kind: 'lane', y0: M.floorY[1], mid: 6.51, y1: M.floorY[2] },
+    { kind: 'spiral', y0: M.floorY[2], y1: M.floorY[3], cx: 2.5, cz: 0, a0: 25, a1: 530, rIn: 0.42, rOut: 1.2, rEnter: 1.25, rExit: 1.38, win: 35,
+      // measured from the model: angle round the pole (degrees, unwrapped) -> height of the step
+      table: [[25, 8.25], [50, 8.42], [97, 8.74], [150, 9.06], [185, 9.39], [210, 9.71], [231, 10.04], [251, 10.36], [270, 10.69], [290, 11.01], [310, 11.34], [330, 11.66], [351, 11.99], [376, 12.31], [410, 12.64], [457, 12.96], [506, 13.29], [520, 13.37]] },
+  ];
+  const box = ([x0, x1, z0, z1]) => ({ x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, h: 3.2, kind: 'mesh', style: 'none', nocast: true });
+  // on the ground you can't walk through the first flight (only step onto its bottom)
+  M.boxes.push(box([L.f1.x0, L.f1.x1, -7.4, -4.6]));
+  // generators, hooks and chests keep the foot of the stairs and the landing clear
+  M.keepClear = [{ x: -0.35, z: -3.2, r: 3 }, { x: 2, z: -8.7, r: 3 }];
+  const fence = [[-34, -14, -21, 30], [16, 36, -21, 30], [-34, 36, -34, -14], [-34, 36, 19, 34]].map(box);
+  const floors = GRANNY_FLOORS.map(f => f.boxes.map(([x, z, hx, hz]) => ({ x, z, hx, hz, h: 3.2, kind: 'mesh', style: 'none', nocast: true })).concat(fence));
+  // around the spiral on the second floor: its pole and the steps above head height, except at its foot
+  const S2 = M.stairs[2], ring = [];
+  for (let a = 0; a < 360; a += 24) { const d = ((a - S2.a0 + 540) % 360) - 180; if (Math.abs(d) > S2.win + 10) ring.push({ x: S2.cx + Math.cos(a * Math.PI / 180) * 0.85, z: S2.cz + Math.sin(a * Math.PI / 180) * 0.85, r: 0.42, h: 3, kind: 'mesh', nocast: true }); }
+  ring.push({ x: S2.cx, z: S2.cz, r: 0.45, h: 3, kind: 'mesh', nocast: true });
+  // a straight staircase: a walled lane, open at the bottom and at the top
+  const lane = [[-2.6, -1.6, -11.1, -2.4], [-2.6, 5.0, -11.1, -10.1], [0.85, 1.85, -7.4, -2.4], [0.85, 5.0, -7.4, -6.4], [-2.6, 1.85, -2.4, -1.4], [4.6, 5.6, -11.1, -6.4]].map(box);
+  M.levels = { 1: makeLevel(M, floors[0]), 2: makeLevel(M, floors[1], ring), 3: makeLevel(M, floors[2]), 10: makeLevel(M, lane), 11: makeLevel(M, lane), 12: makeLevel(M, []) };
+  // ...and on the first floor, flight 1 of the stairs above
+  M.levels[1].boxes.push(box([L.f1.x0, L.f1.x1, -7.4, -4.6])); M.levels[1].hash = null; buildGrid(M.levels[1]);
+
   // the outer wall's diagonal corners have gaps (one is the old bridge gate): seal them
   const seal = (x1, z1, x2, z2) => { const n = Math.ceil(Math.hypot(x2 - x1, z2 - z1) / 0.6); for (let i = 0; i <= n; i++) M.circles.push({ x: x1 + (x2 - x1) * i / n, z: z1 + (z2 - z1) * i / n, r: 0.5, h: 4, kind: 'mesh', nocast: true }); };
   seal(-30.25, -21.5, -21.5, -29.9); seal(24.1, -29.9, 31, -23.4); seal(31, 21, 20.4, 31); seal(-30.25, 21, -20.9, 31);
@@ -45,7 +76,7 @@ export function buildGrannyHouse(seed) {
   // ---------- generators and hooks ----------
   // Each one needs open ground around it (so it never plugs a doorway or a gap between walls), and is
   // only kept if the map stays connected with it in place (checked on the bots' walking grid).
-  const solidNear = (x, z, r) => M.boxes.some(b => Math.abs(x - b.x) < b.hx + r && Math.abs(z - b.z) < b.hz + r) || M.circles.some(c => Math.hypot(x - c.x, z - c.z) < c.r + r);
+  const solidNear = (x, z, r) => M.keepClear.some(k => Math.hypot(x - k.x, z - k.z) < k.r + r) || M.boxes.some(b => Math.abs(x - b.x) < b.hx + r && Math.abs(z - b.z) < b.hz + r) || M.circles.some(c => Math.hypot(x - c.x, z - c.z) < c.r + r);
   const reach = () => {
     buildGrid(M);
     const g = M.grid, N = g.N, seen = new Uint8Array(N * N), q = [];

@@ -104,7 +104,7 @@ function addChests(M, seed) {
   const R = rng(seed * 31 + 7), half = M.half || HALF, n = half > 60 ? 7 : 4;
   M.chests = [];
   if (!M.grid) buildGrid(M);
-  const away = (x, z) => [...M.gens, ...M.cages].every(o => Math.hypot(o.x - x, o.z - z) > 6) && M.gates.every(g => Math.hypot(g.x - x, g.z - z) > 8)
+  const away = (x, z) => (M.keepClear || []).every(k => Math.hypot(k.x - x, k.z - z) > k.r) && [...M.gens, ...M.cages].every(o => Math.hypot(o.x - x, o.z - z) > 6) && M.gates.every(g => Math.hypot(g.x - x, g.z - z) > 8)
     && M.chests.every(c => Math.hypot(c.x - x, c.z - z) > half * 0.55) && M.spawns.survivors.every(s => Math.hypot(s.x - x, s.z - z) > 5);
   for (let tries = 0; tries < 400 && M.chests.length < n; tries++) {
     const p = freePoint(M, (R() * 2 - 1) * half * 0.85, (R() * 2 - 1) * half * 0.85, 1.0);
@@ -577,4 +577,109 @@ class Heap {
     }
     return top;
   }
+}
+
+// ---------------- floors (Granny's House) ----------------
+// A map may have several walkable floors. p.fl is the floor (0 = ground, 1, 2, ...) or, on a
+// staircase, 10 + k for the stairs between floor k and floor k + 1. Every level has its own
+// collision (M.levels[fl], a map-like object with boxes/circles/grid; the ground is M itself).
+// M.floorY[k] is each floor's height; M.stairs[k] describes the stairs above floor k:
+//   { kind: 'lane', y0, mid, y1 } climbs M.lane (flight 1 north to a landing, flight 2 east), or
+//   { kind: 'spiral', y0, y1, cx, cz, a0, a1 } winds around (cx, cz) from angle a0 to a1 (degrees,
+//   unwrapped), where p.sp tracks how far round you are.
+export const isStair = fl => (fl || 0) >= 10;
+export const levelOf = (M, fl) => (fl && M.levels && M.levels[fl]) || M;
+const cl01 = v => Math.max(0, Math.min(1, v));
+// how high someone stands
+export function heightAt(M, p) {
+  const fl = p.fl || 0;
+  if (!M.floorY || !fl) return 0;
+  if (fl < 10) return M.floorY[fl] || 0;
+  const S = M.stairs[fl - 10];
+  if (!S) return 0;
+  if (S.kind === 'spiral') {
+    const a = p.sp ?? S.a0, T = S.table;
+    if (!T) return S.y0 + cl01((a - S.a0) / (S.a1 - S.a0)) * (S.y1 - S.y0);
+    if (a <= T[0][0]) return T[0][1];
+    for (let i = 1; i < T.length; i++) if (a <= T[i][0]) return T[i - 1][1] + (a - T[i - 1][0]) / (T[i][0] - T[i - 1][0]) * (T[i][1] - T[i - 1][1]);
+    return T[T.length - 1][1];
+  }
+  const { f1, f2 } = M.lane;
+  if (p.x > f1.x1) return S.mid + cl01((p.x - f2.x0) / (f2.x1 - f2.x0)) * (S.y1 - S.mid);
+  if (p.z < f1.z0) return S.mid;
+  return S.y0 + cl01((f1.z1 - p.z) / (f1.z1 - f1.z0)) * (S.mid - S.y0);
+}
+const deg = (x, z, S) => Math.atan2(z - S.cz, x - S.cx) * 180 / Math.PI;
+const near = (a, ref) => { while (a < ref - 180) a += 360; while (a > ref + 180) a -= 360; return a; };
+// step onto / off the stairs at either end
+export function levelStep(M, p) {
+  if (!M.stairs) return;
+  const fl = p.fl || 0, L = M.lane;
+  if (fl < 10) {
+    for (let k = 0; k < M.stairs.length; k++) {
+      const S = M.stairs[k];
+      if (k !== fl && k + 1 !== fl) continue;
+      const up = k === fl; // standing at the foot of these stairs
+      if (S.kind === 'lane') {
+        const { f1, f2 } = L;
+        if (up && p.x > f1.x0 && p.x < f1.x1 && p.z < f1.z1 - 0.1 && p.z > f1.z1 - 0.8) { p.fl = 10 + k; return; }
+        if (!up && p.z > f2.z0 && p.z < f2.z1 && p.x < f2.x1 - 0.1 && p.x > f2.x1 - 0.8) { p.fl = 10 + k; return; }
+      } else {
+        const r = Math.hypot(p.x - S.cx, p.z - S.cz);
+        if (r > S.rEnter) continue;
+        const a = up ? near(deg(p.x, p.z, S), S.a0) : near(deg(p.x, p.z, S), S.a1);
+        if (up ? Math.abs(a - S.a0) < S.win : Math.abs(a - S.a1) < S.win) { p.fl = 10 + k; p.sp = a; return; }
+      }
+    }
+    return;
+  }
+  const k = fl - 10, S = M.stairs[k];
+  if (!S) { p.fl = 0; return; }
+  if (S.kind === 'lane') {
+    const { f1, f2 } = L;
+    if (p.x > f1.x0 && p.x < f1.x1 && p.z > f1.z1 - 0.05) p.fl = k;
+    else if (p.z > f2.z0 && p.z < f2.z1 && p.x > f2.x1 + 0.05) p.fl = k + 1;
+    return;
+  }
+  // spiral: follow the angle round, then step off at either end
+  p.sp = near(deg(p.x, p.z, S), p.sp ?? S.a0);
+  const r = Math.hypot(p.x - S.cx, p.z - S.cz);
+  if (r > S.rExit) { if (p.sp < S.a0 + S.win) p.fl = k; else if (p.sp > S.a1 - S.win) p.fl = k + 1; }
+}
+// keep someone on a spiral staircase between its pole and its outer edge (and its two ends); they
+// can only leave through the gap at whichever end they are at
+export function spiralClamp(M, p, ox, oz) {
+  const S = M.stairs[(p.fl || 0) - 10];
+  if (!S || S.kind !== 'spiral') return;
+  const a = near(deg(p.x, p.z, S), p.sp ?? S.a0);
+  if (a < S.a0 - S.win || a > S.a1 + S.win * 0.5) { p.x = ox; p.z = oz; return; }
+  const atEnd = a < S.a0 + S.win || a > S.a1 - S.win;
+  let r = Math.hypot(p.x - S.cx, p.z - S.cz);
+  const r1 = atEnd ? S.rExit + 0.4 : S.rOut;
+  if (r < S.rIn || r > r1) {
+    r = Math.max(S.rIn, Math.min(r1, r)) || S.rIn;
+    const t = a * Math.PI / 180;
+    p.x = S.cx + Math.cos(t) * r; p.z = S.cz + Math.sin(t) * r;
+  }
+}
+// levels that can see / reach each other: the same one, or a staircase and either of its floors
+export const levelsMeet = (a, b) => {
+  const x = a.fl || 0, y = b.fl || 0;
+  if (x === y) return true;
+  if (x >= 10 && y < 10) return y === x - 10 || y === x - 9;
+  if (y >= 10 && x < 10) return x === y - 10 || x === y - 9;
+  return false;
+};
+// line of sight between two characters, through the walls of the level they share
+export function losL(M, a, b, minH) {
+  if (!M.levels) return losBlocked(M, a.x, a.z, b.x, b.z, minH);
+  if (!levelsMeet(a, b)) return true;
+  const fa = a.fl || 0, fb = b.fl || 0, L = levelOf(M, fa >= 10 ? fb : fa);
+  return losBlocked(L, a.x, a.z, b.x, b.z, minH);
+}
+// a map-like object for one extra level: collision boxes, a hash and a walking grid
+export function makeLevel(M, boxes, circles = []) {
+  const L = { half: M.half, navR: M.navR, boxes, circles, windows: [], bars: [], gens: [], cages: [], gates: [], level: true };
+  buildGrid(L);
+  return L;
 }

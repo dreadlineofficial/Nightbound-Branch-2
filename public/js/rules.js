@@ -4,7 +4,15 @@ import { barBox } from './map.js';
 
 export const has = (p, perk) => p.perks && p.perks.includes(perk);
 export const fwd = yaw => ({ x: Math.sin(yaw), z: Math.cos(yaw) });
-export const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+// on maps with floors, someone a floor above or below is out of reach (the stairs touch both)
+const apart = (a, b) => {
+  const x = a.fl || 0, y = b.fl || 0;
+  if (x === y) return false;
+  if (x >= 10 && y < 10) return !(y === x - 10 || y === x - 9);
+  if (y >= 10 && x < 10) return !(x === y - 10 || x === y - 9);
+  return true;
+};
+export const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z) + (apart(a, b) ? 1000 : 0);
 export const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
 
 export function killerOf(S) { return S.players.find(p => p.role === 'killer'); }
@@ -172,7 +180,7 @@ export function actionTime(k, p, S) {
 
 // Space bar context: barricade drop (survivor) or vault. Returns {k:'drop'|'vault', ...}
 export function findSpace(M, S, p) {
-  if (p.act || p.vault || p.stun > 0) return null;
+  if (p.act || p.vault || p.stun > 0 || p.fl) return null;
   if (p.role === 'survivor' && p.st !== 'ok') return null;
   if (p.role === 'killer' && (p.atk || p.ab === 1 && p.char === 'butcher')) return null;
   const f = fwd(p.yaw);

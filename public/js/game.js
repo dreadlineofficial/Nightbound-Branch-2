@@ -20,7 +20,7 @@ import { staticReady, cloneStatic } from './glbModels.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat, HOOK_Y } from './models.js';
 import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
-import { losBlocked } from './map.js';
+import { losBlocked, heightAt, levelOf } from './map.js';
 import { sound } from './audio.js';
 import { tex } from './textures.js';
 import { icon, STATE_ICON, POWER_ICON } from './icons.js';
@@ -787,7 +787,7 @@ export class Game {
       c.spd += (spd - c.spd) * Math.min(1, dt * 8);
       c.yaw += angDiff(c.yaw, tyaw) * (local ? 1 : 1 - Math.exp(-dt * (interp ? 30 : 12)));
       // scratch marks: a running survivor leaves a trail every half metre or so, scattered either side
-      if (p.role === 'survivor' && p.st === 'ok' && !p.disguise && !p.vault && (p.mv === 2 || c.spd > 3.2) && jump <= 4) {
+      if (p.role === 'survivor' && p.st === 'ok' && !p.disguise && !p.vault && !p.fl && (p.mv === 2 || c.spd > 3.2) && jump <= 4) {
         c.scratchD = (c.scratchD || 0) + Math.hypot(c.x - ox, c.z - oz);
         if (c.scratchD > 0.55) {
           c.scratchD = 0;
@@ -797,6 +797,9 @@ export class Game {
       } else c.scratchD = 0;
       // the Foreman flung up to a high hook point, then dropping back down
       c.lift = (c.lift || 0) + (pullLift(p) + leapLift(p) - (c.lift || 0)) * Math.min(1, dt * 20);
+      // floors (Granny's House): how high they stand, eased so a level change never pops
+      const hTo = this.M.stairs ? heightAt(this.M, { x: c.x, z: c.z, fl: p.fl, sp: p.sp }) : 0;
+      c.h = c.h == null || jump > 4 ? hTo : c.h + (hTo - c.h) * Math.min(1, dt * 14);
       if (hidden) continue;
       // footsteps of others
       if (!local && p.mv && !p.cr && !(p.role === 'killer' && (p.char === 'wisp' || p.char === 'slimer' || p.char === 'chucky'))) {
@@ -846,7 +849,7 @@ export class Game {
       st.flash = flashOn;
       animate(R, st, dt);
       // placement
-      R.root.position.set(c.x, y + c.lift, c.z);
+      R.root.position.set(c.x, y + c.lift + c.h, c.z);
       R.root.rotation.set(0, c.yaw, 0);
       if (anim === 'carried') {
         const CK = playerById(S, p.carriedBy) || K;
@@ -855,7 +858,7 @@ export class Game {
           const f = fwd(kc.yaw), rgt = { x: -Math.cos(kc.yaw), z: Math.sin(kc.yaw) };
           // lying poses pivot at the feet: offset the root so the hips rest on the killer's shoulder
           const sh = CK.char === 'butcher' ? 1.78 : CK.char === 'chucky' ? 1.12 : 1.62;
-          R.root.position.set(kc.x + f.x * 0.12 + rgt.x * 0.7, sh, kc.z + f.z * 0.12 + rgt.z * 0.7);
+          R.root.position.set(kc.x + f.x * 0.12 + rgt.x * 0.7, sh + (kc.h || 0), kc.z + f.z * 0.12 + rgt.z * 0.7);
           R.root.rotation.set(0, kc.yaw + Math.PI / 2, 0);
           if (local) R.root.visible = true;
         }
@@ -878,6 +881,7 @@ export class Game {
           if (!c.execFrom) { c.execFrom = R.root.position.clone(); c.execBlend = 0; }
           c.execBlend = Math.min(1, c.execBlend + dt * 3.5);
           const eb = c.execBlend * c.execBlend * (3 - 2 * c.execBlend);
+          yy += kc.h || 0;
           R.root.position.set(c.execFrom.x + (ex - c.execFrom.x) * eb, c.execFrom.y + (yy - c.execFrom.y) * eb, c.execFrom.z + (ez - c.execFrom.z) * eb);
           R.root.rotation.set(0, ch === 'harrower' && f > 0.42 && f < 0.86 ? kc.yaw + Math.PI / 2 : ch === 'granny' ? kc.yaw : kc.yaw + Math.PI, 0);
           if (ch === 'wisp') R.setOpacity(f > 0.78 ? Math.max(0.02, 1 - (f - 0.78) / 0.2) : 1);
@@ -1174,7 +1178,7 @@ export class Game {
       if (me.vault) { const v = me.vault; vy = Math.sin(Math.min(1, v.t / v.d) * Math.PI) * 0.4; }
       const stunTilt = me.stun > 0 ? Math.sin(this.t * 6) * 0.08 : 0;
       const lift = (this.chars.get(me.id) || {}).lift || 0;
-      cam.position.set(me.x, eye + bob + vy + lift, me.z);
+      cam.position.set(me.x, eye + bob + vy + lift + ((c && c.h) || 0), me.z);
       cam.rotation.set(me.pitch + sy, me.yaw + Math.PI + sx, stunTilt);
       cam.fov = (this.settings.fov || 75) + (me.char === 'butcher' && me.ab === 1 ? 14 : 0) + (me.atk === 1 ? 4 : 0);
       cam.updateProjectionMatrix();
@@ -1190,6 +1194,8 @@ export class Game {
     if (target.disguise) h = 1.5;
     // Chucky is played over the shoulder: the camera follows his facing, mouse pitch tilts it
     if (tpv) h = (me.disguise ? 1.5 : 1.05) + (tc && tc.lift || 0);
+    const floorH = (tc && tc.h) || 0, camL = levelOf(this.M, target.fl);
+    h += floorH;
     const yaw = tpv ? me.yaw : this.camYaw, pitch = tpv ? Math.max(-0.35, Math.min(1.0, 0.28 - me.pitch * 0.8)) : this.camPitch;
     // player camera placement (Settings > Camera): shoulder, distance, height, orbit angle
     const cs = this.settings, side = cs.camSide ?? 1, orbit = (cs.camAngle || 0) * Math.PI / 180;
@@ -1203,11 +1209,11 @@ export class Game {
     // pull in if a wall is in the way
     let dd = dist;
     for (let d = 0.3; d <= dist; d += 0.15) {
-      if (pointBlocked(this.M, piv.x + back.x * d, piv.y + back.y * d, piv.z + back.z * d)) { dd = Math.max(0.35, d - 0.25); break; }
+      if (pointBlocked(camL, piv.x + back.x * d, piv.y + back.y * d - floorH, piv.z + back.z * d)) { dd = Math.max(0.35, d - 0.25); break; }
     }
     this.camDist = this.camDist === undefined ? dd : (dd < this.camDist ? dd : this.camDist + (dd - this.camDist) * Math.min(1, dt * 4));
     const d = this.camDist;
-    cam.position.set(piv.x + back.x * d + sx, Math.max(0.25, piv.y + back.y * d) + sy, piv.z + back.z * d);
+    cam.position.set(piv.x + back.x * d + sx, Math.max(0.25 + floorH, piv.y + back.y * d) + sy, piv.z + back.z * d);
     cam.lookAt(piv.x, piv.y + 0.05, piv.z);
     cam.fov = this.settings.fov || 75; cam.updateProjectionMatrix();
     sound.listener(fx, fz, yaw);
@@ -1485,7 +1491,7 @@ export class Game {
     if (!this.slend) return;
     const R = this.slend.R;
     if (this.slend.id !== sl.id) { this.slend.id = sl.id; this.slendLook = 0; this.slendSent = false; this.slend.born = this.t; }
-    R.root.visible = true; R.root.position.set(sl.x, 0, sl.z); R.root.rotation.y = sl.yaw;
+    R.root.visible = true; R.root.position.set(sl.x, this.M.stairs ? heightAt(this.M, sl) : 0, sl.z); R.root.rotation.y = sl.yaw;
     R.update(dt);
     // she flickers in and out of being there
     const age = this.t - this.slend.born, life = sl.dur;

@@ -399,8 +399,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.23.0';
+export const VERSION = '2.24.0';
 export const INBOX = [
+  {
+    id: 'v2.24.0', version: '2.24.0', date: 'Nov 2026', title: "Granny's House: Every Floor", tag: 'Map',
+    body: ["The whole of Granny's House is open. Take the stairs in the hall up to the first and second floors, then the spiral staircase up to the tower room.", 'Hits, pick-ups and line of sight respect floors: nobody can be hit through a ceiling, and you can hide upstairs, but the killer will follow you up (bots too) and carry you back down to a hook.', 'Bots no longer get stuck carrying a survivor between two hooks that are the same distance away.'],
+  },
   {
     id: 'v2.23.0', version: '2.23.0', date: 'Nov 2026', title: 'Chests, the Taser & Your Own Hands', tag: 'Update',
     body: ['Chests now sit on every map. Hold E to search one: inside is a fresh flashlight, ghost traps or, one time in five, the new Taser. Hold E at an open chest to swap your item for what it holds, even a used-up one.', 'New item, the Taser (chests only): click RMB to fire. A killer you hit is electrocuted and frozen for 3s, and drops whoever he is carrying. 3 shots.', 'Killers now see their own hands in first person: Granny\'s real arm and bloody bat, Grandpa\'s shotgun, the Dark Knight\'s gauntlets, the Slimer\'s slimy arms, and your outfit\'s colours on every other killer.', 'Spider Mom: survivors she finds are outlined in purple for Granny.', "Granny's Bedtime Trap uses a new bear trap model, in the execution and the trailer.", "Granny's House can now be picked from the map lists (bots and online lobbies)."],
