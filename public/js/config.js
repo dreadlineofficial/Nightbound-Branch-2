@@ -125,10 +125,10 @@ export const KILLERS = {
     id: 'granny', name: 'Granny', speed: 4.7, terror: 32, weapon: 'Baseball Bat', crossover: 'Granny (fan-made)',
     lore: 'She has kept you in her house for five days. She hears every creak of the floorboards, and she does not like guests leaving early.',
     exec: { name: 'Bedtime Trap', desc: 'Forces the survivor to their knees, sets a bear trap in front of them, and shoves their face into it.' },
-    ability: { name: 'Frenzy', cooldown: 22, duration: 5, sense: 16, speed: 1.35, desc: 'She snaps. For 5s she moves 35% faster, senses every survivor within 16m through the walls, and her first hit puts a survivor straight down.' },
-    ability2: { name: 'I Hear You', key: 'R', cooldown: 25, reveal: 6, desc: 'Stop and listen. Every survivor who is running, repairing, healing or unhooking anywhere on the map is revealed to you for 6s.' },
-    teleport: { name: 'Creep', key: 'G', cooldown: 30, time: 1.4, desc: 'Hold G: every window, pallet, generator and hook on the map is marked. Release to vanish and reappear at the one in your sights.' },
-    feature: { name: 'Sharp Ears, Slendrina & Spider Mom', desc: 'She hears everything: survivors who run within 22m of her are revealed, and a failed skill check is heard anywhere. Spider Mom crawls between the generators and shows Granny anyone she finds repairing one. Slendrina haunts the trial, now and then early on and constantly once the exit gates are powered: look at her for half a second and you are injured.' },
+    ability: { name: 'Bat Rush', cooldown: 8, minCharge: 0.25, maxCharge: 1.0, minDist: 3, maxDist: 8, speed: 13, wallStun: 0.9, desc: 'Hold to wind up the bat (slowed), release to rush forward 3 to 8m, further the longer you wound up. She smashes straight through dropped pallets and strikes the first survivor in her way; a survivor she has Heard goes straight down. Rushing into a wall stuns her.' },
+    ability2: { name: 'I Hear You', key: 'R', cooldown: 25, reveal: 6, heard: 15, desc: 'Stop and listen. Every survivor who is running, repairing, healing or unhooking anywhere on the map is revealed for 6s and Heard for 15s: her next hit on a Heard survivor puts them straight down.' },
+    teleport: { name: 'Creep', key: 'G', cooldown: 25, time: 1.2, haste: 3, desc: 'Hold G: every window, pallet, generator and hook on the map, and Spider Mom, is marked. Release to vanish and reappear at the one in your sights, with a short burst of speed.' },
+    feature: { name: 'Sharp Ears, Slendrina & Spider Mom', desc: 'She hears everything: survivors who run within 22m of her are revealed, and a failed skill check is heard anywhere. Spider Mom crawls between the generators; anyone she finds repairing is shown to Granny and webbed (slowed for 3s). Slendrina haunts the trial, now and then early on and constantly once the exit gates are powered: look at her for half a second and you are injured.' },
     color: 0xd8d0c0,
   },
   bateman: {
@@ -357,8 +357,6 @@ export const SKINS = {
     { id: 'default', name: 'Good Guy', price: 0, desc: 'Denim overalls, striped shirt, red hair and a kitchen knife. Hi, I\'m Chucky. Wanna play?' },
     { id: 'charred', name: 'Burnt Out', price: 2500, tint: 0x141210, tintK: 0.88, glow: 0x6a1400, glowK: 0.12, desc: 'Pulled from the toy factory fire. Charred black and still smouldering.' },
     { id: 'voodoo', name: 'Voodoo', price: 4500, tint: 0x7aff8a, tintK: 0.3, glow: 0x0a6a1a, glowK: 0.7, desc: 'Ade due Damballa. A sickly green glow from the inside.' },
-    { id: 'scarred', name: 'Scarred Chucky', price: 5500, outfit: 'chucky_scarred', desc: 'Stitched back together after Bride of Chucky: a face full of scars and staples, and a bloody butcher knife.' },
-    { id: 'dbd', name: 'Chucky DBD', price: 6000, outfit: 'chucky_dbd', desc: 'The Good Guy as he appears in Dead by Daylight, overalls, striped shirt and all. (Fan-made outfit; not affiliated with Behaviour Interactive.)' },
   ],
   granny: [
     { id: 'default', name: 'House Dress', price: 0, desc: 'Her grey nightgown, her bloody bat, and the stare. You know the one.' },
@@ -385,7 +383,7 @@ export const SKINS = {
 export const CHAPTERS = [
   { id: 'granny', num: 'VIII', name: 'Granny', sub: '× Nightbound', price: 5000, killer: 'granny', map: 'granny', banner: 'granny', isNew: true,
     tagline: 'You have five days. She hears everything.',
-    contents: ['Granny: Frenzy, Creep (teleport), I Hear You, Sharp Ears', 'Her helpers: Slendrina and Spider Mom', 'Execution: Bedtime Trap', "Map: Granny's House (free for everyone)", '2 Granny outfits in the Store'] },
+    contents: ['Granny: Bat Rush, I Hear You, Creep (teleport), Sharp Ears', 'Her helpers: Slendrina and Spider Mom', 'Execution: Bedtime Trap', "Map: Granny's House (free for everyone)", '2 Granny outfits in the Store'] },
   { id: 'offal', num: 'V', name: 'OFFAL', sub: '× Nightbound', price: 5000, killer: 'foreman', map: 'meatworks', banner: 'offal',
     tagline: 'Night shift at the Hollow Pines Meatworks. Headcount must be maintained.',
     contents: ['The Foreman: Chain Hook, Lights Out and Hunts by Sound', 'Execution: Reassignment', 'Map: Hollow Pines Meatworks (free for everyone)', '3 Foreman outfits in the Store'] },
@@ -401,8 +399,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.25.0';
+export const VERSION = '2.26.0';
 export const INBOX = [
+  {
+    id: 'v2.26.0', version: '2.26.0', date: 'Nov 2026', title: 'Granny Rework, Online Fixes', tag: 'Update',
+    body: ['Granny, reworked to be more fun and more dangerous. New power, Bat Rush (hold RMB, release): wind up the bat and charge 3 to 8m, smashing through dropped pallets; the first survivor in her way is struck. Rush into a wall and she is stunned. Frenzy is gone.', 'I Hear You (R) now marks everyone it reveals as Heard for 15s: her next hit on a Heard survivor, bat or Bat Rush, puts them straight down.', 'Creep (G) can now take her to Spider Mom, and she arrives with a burst of speed. Spider Mom webs the survivors she finds (slowed for 3s).', 'Online: players who end up on the slower relay keep trying for a direct connection in the background and switch over mid-match when it works. More relay servers help direct connections succeed in the first place.', 'Online: key presses can no longer get lost on the relay, held keys (E, aim, flashlight) can no longer get stuck, and a laggy killer\'s hits now count (lag compensation up to 0.8s).', "Online: on Granny's House, a player who joined now really is on the floor they climbed to, so hits upstairs work.", 'Removed the Scarred Chucky and Chucky DBD outfits (they glitched). Anyone who bought one got their embers back.'],
+  },
   {
     id: 'v2.25.0', version: '2.25.0', date: 'Nov 2026', title: 'Two New Chucky Outfits', tag: 'Store',
     body: ['Scarred Chucky (5,500 embers): stitched back together after Bride of Chucky, scars, staples and a bloody butcher knife.', 'Chucky DBD (6,000 embers): the Good Guy as he looks in Dead by Daylight.', "Both are fitted to Chucky's own skeleton, so they play all of his animations, knife included."],

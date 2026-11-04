@@ -9,7 +9,7 @@ import { setDetail } from './models.js';
 import { setStyle, realistic, nightEnv } from './gfx.js';
 import { MenuScene } from './menu.js';
 import { loadForeman, onForemanReady, loadBatman } from './foremanGlb.js';
-import { loadChucky, onChuckyReady, chuckyReady, loadChuckyOutfit } from './chuckyGlb.js';
+import { loadChucky, onChuckyReady, chuckyReady } from './chuckyGlb.js';
 import { loadTed } from './sidekicks.js';
 import { loadRealism } from './realism.js';
 import { loadStatic } from './glbModels.js';
@@ -57,6 +57,12 @@ const profile = Object.assign({
   owned: {}, skins: {}, claimed: {}, readInbox: {},
 }, store.get('profile', {}));
 profile.owned ||= {}; profile.skins ||= {}; profile.claimed ||= {}; profile.readInbox ||= {}; profile.dlc ||= {}; profile.seen ||= {};
+// the Scarred Chucky and Chucky DBD outfits were withdrawn (v2.25.1): anyone who bought one gets the embers back
+for (const [id, price] of [['scarred', 5500], ['dbd', 6000]]) if (profile.owned['chucky:' + id]) {
+  delete profile.owned['chucky:' + id]; profile.stats = profile.stats || {}; profile.stats.embers = (profile.stats.embers || 0) + price;
+  if (profile.skins.chucky === id) profile.skins.chucky = 'default';
+  setTimeout(() => { try { saveProfile(); } catch (_) {} }, 0);
+}
 // players who already bought a Foreman outfit before he became a chapter keep him
 if (Object.keys(profile.owned).some(k => k.startsWith('foreman:'))) profile.dlc.offal = true;
 const skinId = char => (profile.skins[char] && (profile.owned[char + ':' + profile.skins[char]] || profile.skins[char] === 'default')) ? profile.skins[char] : 'default';
@@ -131,7 +137,6 @@ function startBG() {
 loadForeman();
 loadBatman().then(m => { if (m) { forgetArt('foreman'); if (menu && menu.killerChar === 'foreman') menu.setKiller('foreman', menu.killerSkin); } });
 loadChucky();
-loadChuckyOutfit('chucky_scarred'); loadChuckyOutfit('chucky_dbd');
 loadTed();
 for (const n of ['bringit', 'email', 'weak', 'cock', 'shit', 'idle', 'arfh', 'teddy', 'problems', 'fuckme', 'listen', 'pussy', 'thunder']) loadClip('ted/' + n);
 loadStatic('axe').then(m => { if (m) forgetArt('bateman'); });
@@ -822,7 +827,16 @@ class ClientSession {
     if (e && e.length) { if (this.game) this.game.onEvents(e); else this.queued.push(...e); }
   }
   state() { if (this.S) this.reader.interpolate(this.S, this.myId); return this.S; }
-  send(m) { if (m.t === 'act' && this.reader.rt != null) m.rt = +this.reader.rt.toFixed(3); this.net.send(m, m.t === 'pos'); }
+  send(m) {
+    if (m.t === 'act') {
+      if (this.reader.rt != null) m.rt = +this.reader.rt.toFixed(3);
+      m.aid = this.aid = (this.aid || 0) + 1;
+      // the public relay can drop a message now and then: send key presses twice more (the host
+      // acts on each one once)
+      if (String(this.net.label || '').includes('relay')) for (const ms of [120, 300]) setTimeout(() => { try { this.net.send(m, false); } catch (_) {} }, ms);
+    }
+    this.net.send(m, m.t === 'pos');
+  }
   tick(dt) {
     if (!this.S) return;
     if (!this.game) {
@@ -1205,7 +1219,7 @@ const AN_GRANNY = `<div class="an-bg granny"></div><div class="an-inner">
   <div class="an-banner"><div class="an-img granny-art"></div><div class="an-scan"></div></div>
   <div class="an-x">× <span>Nightbound</span></div>
   <p class="an-sub">You wake up in her house. She hears every creak of the floorboards, appears at any generator or hook she likes, <b>Spider Mom</b> crawls the generators looking for you, and her granddaughter <b>Slendrina</b> waits in the dark. Don't look at her. Escape <b>Granny's House</b>, a brand new map, before she finds you.</p>
-  <ul class="an-list"><li>New killer: <b>Granny</b> (Frenzy, Creep, I Hear You)</li><li>Her helpers: <b>Slendrina</b> and <b>Spider Mom</b></li><li>New map: <b>Granny's House</b> (free for everyone)</li><li>New execution: <b>Bedtime Trap</b></li></ul>
+  <ul class="an-list"><li>New killer: <b>Granny</b> (Bat Rush, I Hear You, Creep)</li><li>Her helpers: <b>Slendrina</b> and <b>Spider Mom</b></li><li>New map: <b>Granny's House</b> (free for everyone)</li><li>New execution: <b>Bedtime Trap</b></li></ul>
   <div class="an-actions"><button class="btn primary big" id="an-store">Get the Chapter</button><button class="btn big" id="an-play">Play Granny's House</button><button class="btn" id="an-trailer">Watch Trailer</button><button class="btn" id="an-close">Close</button></div>
   <p class="gb-note">Fan-made crossover. Granny and Slendrina are characters by DVloper; not affiliated with or endorsed by them.</p></div>`;
 function showAnnounce(kind = 'offal') {

@@ -227,6 +227,8 @@ export function animateGranny(R, s, dt) {
     const f = s.exec.f;
     if (f < 0.34) { want = 'lookBed'; rate = 1.2; } else if (f < 0.6) { want = 'Hit'; scrub = 0.25 + (f - 0.34) / 0.26 * 0.6; fast = true; } else want = 'Look';
   }
+  else if (s.dash) { want = 'Hit'; scrub = 0.45; fast = true; }        // Bat Rush: mid-swing, charging forward
+  else if (s.aim) { want = 'Hit'; scrub = 0.18; fast = true; }         // winding up the bat
   else if (s.blind) { want = 'pepperHit'; rate = 1; fast = true; }
   else if (s.frozen) { want = 'freezeTrap'; rate = 1; fast = true; }
   else if (s.stun) { want = 'arrowHit'; rate = 0.9; fast = true; }

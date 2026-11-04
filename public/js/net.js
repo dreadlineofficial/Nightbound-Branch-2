@@ -18,6 +18,9 @@ const ICE = [
   { urls: 'turn:us-0.turn.peerjs.com:3478', username: 'peerjs', credential: 'peerjsp' },
   { urls: 'turn:eu-0.turn.peerjs.com:443?transport=tcp', username: 'peerjs', credential: 'peerjsp' },
   { urls: 'turn:us-0.turn.peerjs.com:443?transport=tcp', username: 'peerjs', credential: 'peerjsp' },
+  // Open Relay (public TURN): UDP 80, TCP 443 and TLS 443, for networks that block everything else
+  { urls: 'stun:stun.relay.metered.ca:80' },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp', 'turns:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
 ];
 const peerOpts = () => Object.assign({ debug: 0, config: { iceServers: ICE } }, (typeof window !== 'undefined' && window.__nbPeerServer) || {});
 
@@ -188,19 +191,24 @@ export async function hostRoom(mode) {
     peer = new Peer(PEER_PREFIX + code, peerOpts());
     await timeout(new Promise((res, rej) => { peer.on('open', res); peer.on('error', rej); }), 8000, 'WebRTC broker timed out');
     peer.on('connection', conn => {
+      // a player already in through the relay who has now managed a direct link keeps their id
+      const mig = conn.metadata && typeof conn.metadata.mq === 'string' ? 'mq:' + conn.metadata.mq : null;
+      const id = mig || conn.peer;
       conn.on('open', () => {
-        if (route.get(conn.peer) === 'mq') return;
-        conns.set(conn.peer, conn); route.set(conn.peer, 'rtc');
-        const ch = openFast(conn, m => { if (conns.get(conn.peer) === conn) H.emit('msg', conn.peer, m); });
-        if (ch) fast.set(conn.peer, ch);
-        H.emit('join', conn.peer);
+        if (mig) { if (route.get(id) !== 'mq') { try { conn.close(); } catch {} return; } }
+        else if (route.get(id) === 'mq') return;
+        conns.set(id, conn); route.set(id, 'rtc');
+        const ch = openFast(conn, m => { if (conns.get(id) === conn) H.emit('msg', id, m); });
+        if (ch) fast.set(id, ch);
+        if (!mig) H.emit('join', id);
+        else conn.send({ t: 'net-upgraded' });
       });
-      conn.on('data', d => H.emit('msg', conn.peer, d));
+      conn.on('data', d => { if (conns.get(id) === conn) H.emit('msg', id, d); });
       conn.on('close', () => {
-        if (conns.get(conn.peer) !== conn) return;
-        conns.delete(conn.peer);
-        const ch = fast.get(conn.peer); fast.delete(conn.peer); try { ch && ch.close(); } catch {}
-        if (route.get(conn.peer) === 'rtc') { route.delete(conn.peer); H.emit('leave', conn.peer); }
+        if (conns.get(id) !== conn) return;
+        conns.delete(id);
+        const ch = fast.get(id); fast.delete(id); try { ch && ch.close(); } catch {}
+        if (route.get(id) === 'rtc') { route.delete(id); H.emit('leave', id); }
       });
       conn.on('error', () => {});
     });
@@ -285,9 +293,54 @@ export async function joinRoom(mode, code) {
   // 1) try a direct WebRTC connection
   // (a direct or TURN-relayed WebRTC link is far quicker than the MQTT relay: give it time)
   try { return await timeout(joinRTC(code, C), 15000, 'WebRTC timed out'); }
-  catch (e) { console.warn('WebRTC join failed, using relay:', e.message); try { C.peer && C.peer.destroy(); } catch {} }
-  // 2) fall back to the MQTT relay
-  return joinMQ(code, new Emitter());
+  catch (e) { console.warn('WebRTC join failed, using relay:', e.message); C.whyErr = e; try { C.peer && C.peer.destroy(); } catch {} }
+  // 2) fall back to the MQTT relay, and keep trying for a direct link in the background
+  const why = C.why = String((C.whyErr && C.whyErr.message) || 'WebRTC failed');
+  const R = await joinMQ(code, new Emitter());
+  R.why = why;
+  upgradeLater(code, R);
+  return R;
+}
+
+// A player on the relay keeps trying to reach the host directly (networks often allow it on a
+// second try, once a TURN server answers). On success every message switches over, the player keeps
+// their id and the relay is dropped without a goodbye.
+function upgradeLater(code, C) {
+  let tries = 0, stop = false;
+  const prevClose = C.close;
+  C.close = () => { stop = true; prevClose(); };
+  const attempt = async () => {
+    if (stop || C.mode !== 'online' || !C.mqId) return;
+    tries++;
+    let peer = null;
+    try {
+      const Peer = await loadPeer();
+      peer = new Peer(peerOpts());
+      await timeout(new Promise((res, rej) => { peer.on('open', res); peer.on('error', e => rej(new Error('P2P: ' + (e.type || e)))); }), 10000, 'broker timeout');
+      const conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: 'json', metadata: { mq: C.mqId } });
+      await timeout(new Promise((res, rej) => { conn.on('open', res); peer.on('error', e => rej(new Error('P2P: ' + (e.type || e)))); }), 20000, 'ICE timeout');
+      // the host confirms it moved us over
+      await timeout(new Promise(res => conn.on('data', d => { if (d && d.t === 'net-upgraded') res(); })), 5000, 'host did not confirm');
+      if (stop) { peer.destroy(); return; }
+      const ch = openFast(conn, m => C.emit('msg', m));
+      conn.on('data', d => { if (!(d && d.t === 'net-upgraded')) C.emit('msg', d); });
+      let closed = false;
+      conn.on('close', () => { if (!closed) { closed = true; C.emit('closed', 'The host left the game'); } });
+      C.dropRelay && C.dropRelay();
+      C.send = (d, fast) => {
+        if (!conn.open) return;
+        if (fast) { if (sendFast(ch, JSON.stringify(d), true)) return; if (relBacked(conn)) return; }
+        conn.send(d);
+      };
+      C.close = () => { closed = true; stop = true; try { ch && ch.close(); } catch {} try { peer.destroy(); } catch {} };
+      C.label = 'direct (WebRTC)'; C.why = '';
+      C.emit('upgraded');
+    } catch (e) {
+      try { peer && peer.destroy(); } catch {}
+      if (!stop && tries < 6) setTimeout(attempt, 8000 + tries * 4000);
+    }
+  };
+  setTimeout(attempt, 3000);
 }
 
 async function joinRTC(code, C) {
@@ -330,13 +383,16 @@ async function joinMQ(code, C) {
   try { await welcomed; } finally { clearInterval(iv); }
   let closed = false;
   mq.on('message', (topic, text) => {
+    if (C.mqDropped) return;
     if (topic !== base + 'all' && topic !== base + 'c/' + me) return;
     let m; try { m = JSON.parse(text); } catch { return; }
     if (topic === base + 'all') C.emit('msg', m); else if (m.op === 'd') C.emit('msg', m.d);
   });
   const keep = setInterval(() => mq.publish(base + 'h', JSON.stringify({ op: 'd', f: me, d: { t: 'ping' } })), 4000);
   mq.on('closed', () => { if (!closed) { closed = true; clearInterval(keep); C.emit('closed', 'Lost the connection to the online relay'); } });
-  C.id = 'mq:' + me;
+  C.id = 'mq:' + me; C.mqId = me;
+  // switched to a direct link: stop listening to the relay (no 'leave': the host keeps us)
+  C.dropRelay = () => { closed = true; clearInterval(keep); C.mqDropped = true; setTimeout(() => { try { mq.close(); } catch {} }, 1500); };
   let last = 0;
   C.send = (d, fast) => {
     if (fast) { const now = performance.now(); if (now - last < 60) return; last = now; }

@@ -618,8 +618,16 @@ export class Bots {
       }
       if (p.char === 'chucky' && !p.harmless && !target && p.ab2Cd <= 0 && Math.random() < dt * 0.15) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
       if (p.char === 'granny' && !p.tele) {
-        // closing in on someone: Frenzy (the first hit downs)
-        if (target && los && d < 12 && p.abCd <= 0 && !p.ab && !p.atk) sim.onMsg(p.id, { t: 'act', a: 'ability' });
+        // Bat Rush: wind up just long enough to reach them, then charge
+        const RB = KILLERS.granny.ability;
+        if (target && los && !b.aim && !p.dash && p.abCd <= 0 && !p.ab && !p.atk && d > 3.2 && d < RB.maxDist + 0.5 && this.clearLine(p.x, p.z, tx, tz, p.fl)) {
+          const k = Math.max(0, Math.min(1, (d + 0.8 - RB.minDist) / (RB.maxDist - RB.minDist)));
+          b.aim = true; b.aimT = RB.minCharge + k * (RB.maxCharge - RB.minCharge) + 0.05 + D.react * 0.15; sim.onMsg(p.id, { t: 'in', e: false, aim: true });
+        }
+        // a long chase: listen, so the next hit downs
+        if (target && !target.heard && d > 7 && p.ab2Cd <= 0 && !p.ab && !b.aim && target.mv === 2 && Math.random() < dt * 0.5) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
+        // Spider Mom found someone: creep to her
+        if (!target && sim.S.spider && sim.S.spider.st === 2 && p.teleCd <= 0 && !p.ab && p.carry == null && Math.hypot(sim.S.spider.x - p.x, sim.S.spider.z - p.z) > 15) sim.onMsg(p.id, { t: 'act', a: 'creep', kind: 'spider', id: 0 });
         // nobody around: listen for them...
         if (!target && p.ab2Cd <= 0 && !p.ab && Math.random() < dt * 0.12) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
         // ...and creep to a generator someone is working on, far away
@@ -636,7 +644,7 @@ export class Bots {
       if (b.aim) {
         b.aimT -= dt;
         // lead the target
-        const lead = d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : 32);
+        const lead = d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'granny' ? 13 : 32);
         const vx = target ? (target.x - (b.prevTX ?? target.x)) / Math.max(dt, 1e-3) : 0, vz = target ? (target.z - (b.prevTZ ?? target.z)) / Math.max(dt, 1e-3) : 0;
         const ax = tx + vx * lead * D.aim, az = tz + vz * lead * D.aim;
         p.yaw = Math.atan2(ax - p.x, az - p.z) + (Math.random() - 0.5) * (1 - D.aim) * 0.25;
@@ -644,6 +652,8 @@ export class Bots {
           b.aim = false;
           if (target && p.char === 'chucky') {
             sim.onMsg(p.id, { t: 'act', a: 'pounce', yaw: p.yaw });
+          } else if (p.char === 'granny') {
+            sim.onMsg(p.id, { t: 'act', a: 'rush', yaw: p.yaw });
           } else if (target && p.char === 'bateman') {
             // flat, fast throw: aim low enough that the arc still crosses chest height at the target
             const ft = Math.hypot(ax - p.x, az - p.z) / 26, vy = (1.1 - 1.3 + 4.5 * ft * ft) / Math.max(0.05, ft) - 2.2;

@@ -8,7 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
-import { chuckyReady, chuckyOutfitReady } from './chuckyGlb.js';
+import { chuckyReady } from './chuckyGlb.js';
 import { grannyReady, grandpaReady, slendrinaReady, makeSlendrina, spiderMomReady, makeSpiderMom } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
@@ -534,6 +534,9 @@ export class Game {
         } else if (me.char === 'bateman') {
           if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'sawthrow', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
+        } else if (me.char === 'granny') {
+          if (down && me.abCd <= 0 && !me.dash && !me.tele && me.carry == null) { this.aimHeld = true; this.sendIn(); }
+          else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'rush', yaw: me.yaw }); this.sendIn(); }
         } else if (me.char === 'harrower') {
           if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'throw', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
@@ -589,10 +592,10 @@ export class Game {
       this.lastSnap = S;
       const p = playerById(S, this.myId);
       if (p) {
-        const forced = (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') || !!p.reel || !!p.pull || !!p.leap;
+        const forced = (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') || !!p.reel || !!p.pull || !!p.leap || !!p.dash;
         if (!this.me || p.tp !== this.myTp || forced) {
           this.myTp = p.tp;
-          this.me = { x: p.x, z: p.z, yaw: this.me ? this.me.yaw : p.yaw, pitch: this.me ? this.me.pitch : 0, vault: null, mv: 0, cr: 0 };
+          this.me = { x: p.x, z: p.z, yaw: this.me ? this.me.yaw : p.yaw, pitch: this.me ? this.me.pitch : 0, vault: null, mv: 0, cr: 0, fl: p.fl || 0, sp: p.sp };
           if (forced) this.me.yaw = p.yaw;
         }
         Object.assign(p, this.me);
@@ -692,12 +695,16 @@ export class Game {
       if (this.myStep > (sprint ? 1.6 : 1.2) && !(me.cr) && !has(me, 'hushed')) { this.myStep = 0; sound.play('step', me.x, me.z, { run: sprint, vol: me.role === 'killer' ? 0.35 : 0.18 }); }
     }
     if (!this.isHost) {
-      this.me = { x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, vault: me.vault, mv: me.mv, cr: me.cr, hop: me.hop };
+      this.me = { x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, vault: me.vault, mv: me.mv, cr: me.cr, hop: me.hop, fl: me.fl || 0, sp: me.sp };
+      // held keys (E, aim, flashlight) are only sent when they change: repeat them every half second
+      // so one lost message can't leave a key stuck down or up on the host
+      this.inTimer = (this.inTimer ?? 0.5) - dt;
+      if (this.inTimer <= 0) { this.inTimer = 0.5; this.sendIn(); }
       this.posTimer -= dt;
       if (this.posTimer <= 0) {
         // 30/s on a steady cadence; ct (my clock) lets the host order and smooth the updates
         this.posTimer = Math.max(0, this.posTimer + 1 / 30);
-        this.send({ t: 'pos', x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), mv: me.mv, cr: me.cr, v: me.vault ? 1 : 0, h: me.hop ? +(me.hop.t / me.hop.d).toFixed(2) : 0, tp: this.myTp, ct: +(performance.now() / 1000).toFixed(3) });
+        this.send({ t: 'pos', x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), mv: me.mv, cr: me.cr, v: me.vault ? 1 : 0, h: me.hop ? +(me.hop.t / me.hop.d).toFixed(2) : 0, fl: me.fl || 0, sp: me.sp != null ? +me.sp.toFixed(1) : undefined, tp: this.myTp, ct: +(performance.now() / 1000).toFixed(3) });
       }
     }
     // skill checks
@@ -762,7 +769,7 @@ export class Game {
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && c.rig.chucky && skinOf('chucky', p.skin).outfit && c.rig.outfit !== skinOf('chucky', p.skin).outfit && chuckyOutfitReady(skinOf('chucky', p.skin).outfit)) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && (p.skin === 'grandpa' ? grandpaReady() : grannyReady())) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && (p.skin === 'grandpa' ? grandpaReady() : grannyReady())) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
@@ -836,7 +843,7 @@ export class Game {
         if (vaulting) { const d = p.vault.d || 1.7; y = Math.sin(Math.min(1, c.vaultT / d) * Math.PI) * 0.5; }
         if (execing) st.exec = { f: p.act.t / RULES.execTime, char: p.char, role: 'killer' };
         st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0; st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
-        if (p.char === 'granny') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = false; }
+        if (p.char === 'granny') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; }
         if (p.atk === 1) { c.atkT = (c.atkPrev === 1 ? c.atkT + dt : 0); st.atkF = c.atkT / (RULES.lungeTime * (p.atkAmbush ? 1.4 : 1)); }
         c.atkPrev = p.atk;
         st.atkHit = p.atkHit; st.tele = !!p.tele; st.dark = p.char === 'foreman' && p.ab === 1;
@@ -915,7 +922,7 @@ export class Game {
     }
     if (this.view && me) {
       const c = this.chars.get(me.id), cs = (c && c.st) || {};
-      animateView(this.view, { atk: me.atk, atkF: cs.atkF, atkHit: me.atkHit, recF: cs.recF, aim: me.aim, stun: me.stun > 0, rampage: me.char === 'butcher' && me.ab === 1, carry: me.carry != null, act: me.act && me.act.k !== 'execute', speed: c ? c.spd : 0, t: this.t, tele: !!me.tele, saw: me.char === 'bateman' && me.ammo > 0 }, dt);
+      animateView(this.view, { atk: me.dash ? 1 : me.atk, atkF: me.dash ? Math.min(1, me.dash.t / me.dash.d) : cs.atkF, atkHit: me.atkHit, recF: cs.recF, aim: me.aim, stun: me.stun > 0, rampage: me.char === 'butcher' && me.ab === 1, carry: me.carry != null, act: me.act && me.act.k !== 'execute', speed: c ? c.spd : 0, t: this.t, tele: !!me.tele, saw: me.char === 'bateman' && me.ammo > 0 }, dt);
       this.view.visible = !(me.act && me.act.k === 'execute');
       const faded = me.char === 'wisp' && me.ab !== 0;
       if (faded !== this.viewFaded) { this.viewFaded = faded; this.view.traverse(o => { if (o.isMesh) { o.material.transparent = faded || o.userData.op < 1; o.material.opacity = faded ? 0.35 : o.userData.op; } }); }
@@ -1439,6 +1446,7 @@ export class Game {
     M.cages.forEach(c => { if (!S.cageBroken[c.id]) out.push({ kind: 'hook', id: c.id, x: c.x, z: c.z, y: 2.2, n: 'Hook' }); });
     M.windows.forEach(w => out.push({ kind: 'win', id: w.id, x: w.x, z: w.z, y: 1.2, n: 'Window' }));
     M.bars.forEach(b => { if (S.bars[b.id] !== 2) out.push({ kind: 'bar', id: b.id, x: b.x, z: b.z, y: 1.0, n: 'Pallet' }); });
+    if (S.spider) out.push({ kind: 'spider', id: 0, x: S.spider.x, z: S.spider.z, y: 1.2, n: 'Spider Mom' });
     return out;
   }
   updateCreep(S, me) {
@@ -1787,15 +1795,25 @@ export class Game {
         }
         case 'hearyou': {
           const p = S && playerById(S, e.id);
-          if (e.id === this.myId) this.feed(e.ids.length ? `You hear ${e.ids.length} of them.` : 'Silence. For now.');
+          if (e.id === this.myId) this.feed(e.ids.length ? `You hear ${e.ids.length} of them. Your next hit on them puts them down.` : 'Silence. For now.');
+          else if (this.mine() && e.ids.includes(this.myId)) { this.feed('Granny heard you! Her next hit will put you down.', 'big'); this.shake = 0.3; sound.play('fade', e.x, e.z, { on: true }); }
           else if (this.mine() && this.mine().role === 'survivor') { this.feed('Granny is listening… keep quiet.', 'big'); sound.play('fade', p ? p.x : e.x, p ? p.z : e.z, { on: true }); }
           break;
         }
         case 'slendrina': sound.play('fade', e.x, e.z, { on: true }); break;
-        case 'frenzy': {
-          sound.play('scream', e.x, e.z, { pitch: 0.55, len: 0.8 });
-          if (e.id === this.myId) { this.feed('Frenzy! Your next hit puts them down.', 'big'); this.shake = 0.3; }
-          else if (this.mine() && this.mine().role === 'survivor' && Math.hypot(this.mine().x - e.x, this.mine().z - e.z) < 30) this.feed('Granny is in a frenzy. Run.', 'big');
+        case 'rush': {
+          sound.play('swing', e.x, e.z); sound.play('roar', e.x, e.z, { pitch: 1.3 });
+          if (e.id === this.myId) this.shake = 0.25 + (e.charge || 0) * 0.3;
+          break;
+        }
+        case 'rushhit': {
+          sound.play('thunk', e.x, e.z); this.blood.spawn(e.x, 1.1, e.z, 40, 0x6a0303, 2.6, 1.2, -9.8, 0.8);
+          if (e.id === this.myId) { this.shake = 0.8; if (this.view) this.view.userData.bloody = 1; }
+          break;
+        }
+        case 'rushwall': {
+          sound.play('thud', e.x, e.z); sound.play('stun', e.x, e.z);
+          if (e.id === this.myId) { this.feed('Into the wall!'); this.shake = 0.9; }
           break;
         }
         case 'creep': {
@@ -1806,8 +1824,9 @@ export class Game {
         case 'spidermom': {
           sound.play('scream', e.x, e.z, { pitch: 2.2, len: 0.5 });
           const me2 = this.mine();
-          if (e.id === this.myId) { this.feed('Spider Mom saw you! Granny knows where you are.', 'big'); this.shake = 0.25; }
+          if (e.id === this.myId) { this.feed('Spider Mom saw you and webbed you! Granny knows where you are.', 'big'); this.shake = 0.25; }
           else if (me2 && me2.role === 'killer' && me2.char === 'granny') this.feed('Spider Mom found ' + name(e.id) + ' at a generator.');
+          { const t = S && playerById(S, e.id); if (t) this.smoke.spawn(t.x, 0.8, t.z, 18, 0xe8e8e0, 0.8, 1.2, 0.2, 0.6); }
           break;
         }
         case 'slendhit': {
@@ -1983,8 +2002,11 @@ export class Game {
       extra = me.haste > 0 ? `Morning Routine · +12% speed` : me.ab2Cd > 0 ? `${kbd('ability2')} Business Card ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Business Card ready';
     } else if (me.char === 'granny') {
       const T = K.teleport;
-      ready = me.abCd <= 0 && !me.ab; pct = me.ab === 2 ? 1 - me.abT / def.duration : me.abCd / def.cooldown;
-      sub = me.ab === 2 ? `Frenzy! ${me.abT.toFixed(1)}s · next hit downs` : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
+      const charge = Math.max(0, Math.min(1, (me.abT - def.minCharge) / (def.maxCharge - def.minCharge)));
+      ready = me.abCd <= 0 && !me.dash; pct = me.aim ? 1 - charge : me.abCd / def.cooldown;
+      const heard = this.S ? this.S.players.filter(o => o.role === 'survivor' && o.heard > 0).length : 0;
+      sub = me.dash ? 'Rushing!' : me.aim ? (me.abT < def.minCharge ? 'Winding up…' : `Release! ${Math.round(def.minDist + charge * (def.maxDist - def.minDist))}m`) : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready · hold RMB';
+      if (heard) sub += ` · ${heard} Heard`;
       extra = (me.tele ? 'Creeping…' : me.teleCd > 0 ? `${kbd('item')} Creep ${Math.ceil(me.teleCd)}s` : `Hold ${kbd('item')} Creep (teleport) ready`) + ' · ' + (me.ab === 1 ? 'Listening…' : me.ab2Cd > 0 ? `${kbd('ability2')} I Hear You ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' I Hear You ready');
       void T;
     } else if (me.char === 'slimer') {

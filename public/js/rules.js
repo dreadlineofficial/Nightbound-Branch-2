@@ -55,6 +55,7 @@ export function speedOf(p, S, sprint, crouch) {
     if (p.boost > 0) s *= p.boostMul || SPEED.hitBoost;
     if (p.slimed > 0) s *= 0.7;
     if (p.card > 0) s *= 0.8; // intimidated by a business card
+    if (p.webbed > 0) s *= 0.65; // caught in Spider Mom's web
     return s;
   }
   const K = KILLERS[p.char];
@@ -69,7 +70,8 @@ export function speedOf(p, S, sprint, crouch) {
   if (p.char === 'wisp') { if (p.ab === 1) s *= 1.15; else if (p.ab === 2 || p.ab === 3) s *= 0.4; }
   // (Chucky keeps full speed while coiling a pounce)
   if (p.char === 'granny' && p.ab === 1) return 0; // listening
-  if (p.char === 'granny' && p.ab === 2) s *= KILLERS.granny.ability.speed; // Frenzy
+  if (p.char === 'granny' && p.dash) return 0; // (the rush moves her itself)
+  if (p.char === 'granny' && p.aim) s *= 0.55;  // winding up the bat
   if ((p.char === 'harrower' || p.char === 'foreman' || p.char === 'bateman') && p.aim) s *= p.char === 'foreman' ? 0.75 : p.char === 'bateman' ? 0.6 : SPEED.aimSlow;
   if (p.diffMul) s *= p.diffMul;
   return s;
