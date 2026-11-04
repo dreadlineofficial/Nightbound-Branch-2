@@ -792,14 +792,19 @@ export class Sim {
     if (K && K.char === 'foreman' && K.ab === 1 && !this.chainDmg) instantDown = true;
     // (slimed survivors are slowed and revealed, not one-shot: that made him unbeatable) // one strike from the hook, in the dark
     s.act = null; s.prog = 0;
+    const wasHp = s.hp;
     s.hp = instantDown ? 0 : s.hp - 1;
     K.score.a += 300;
+    // damage tally for the end screen: health states taken, hits, downs
+    K.score.hits = (K.score.hits || 0) + 1; K.score.dmg = (K.score.dmg || 0) + Math.max(1, wasHp - s.hp);
+    s.lastHitBy = K.id;
     if (this.mode === 'rush') K.haste = Math.max(K.haste || 0, 2.5);
     if (K.char === 'bateman') K.haste = Math.max(K.haste || 0, 4); // Morning Routine
     if (s.hp <= 0) {
       s.hp = 0; s.st = 'down'; s.bleed = RULES.bleedout; s.healP = 0; s.boost = 0;
       if (this.mode === 'infection') s.turn = 3;
       K.score.c += 500;
+      K.score.downs = (K.score.downs || 0) + 1;
       if (K.disguise) K.pdowns++;
       this.ev({ k: 'hit', id: s.id, by: K.id, x: s.x, z: s.z, down: true });
       this.ev({ k: 'msg', text: s.name + ' is down!' });
@@ -814,6 +819,11 @@ export class Sim {
     const K = (p.st === 'carried' && this.P(p.carriedBy)) || (p.st === 'exec' && this.P(p.execBy)) || nearestKiller(S, p);
     if (p.st === 'caged') { S.cageBroken[p.cage] = true; S.cages[p.cage] = null; }
     if (p.st === 'carried' && K && K.carry === p.id) K.carry = null;
+    // who gets the kill on the end screen: the executioner, whoever hooked them, or whoever downed them
+    if (p.role === 'survivor') {
+      const by = this.P(how === 'executed' ? (p.killedBy || p.execBy) : how === 'sacrificed' ? p.hookedBy : how === 'bled out' ? p.lastHitBy : null);
+      if (by && by.role === 'killer') { by.score.kills = (by.score.kills || 0) + 1; if (how === 'executed') by.score.execs = (by.score.execs || 0) + 1; }
+    }
     p.st = 'dead'; p.outcome = how; p.act = null;
     if (K && how !== 'executed') { K.score.d += how === 'sacrificed' ? 1000 : 400; }
     this.ev({ k: 'died', id: p.id, how, x: p.x, z: p.z, cage: p.cage });
@@ -871,7 +881,7 @@ export class Sim {
       if (v) { v.x = p.x + Math.sin(p.yaw) * 1.05; v.z = p.z + Math.cos(p.yaw) * 1.05; }
       if (p.act.t >= RULES.execTime) {
         this.cancelAct(p);
-        if (v && v.st === 'exec') { p.score.d += 1500; this.kill(v, 'executed'); }
+        if (v && v.st === 'exec') { p.score.d += 1500; v.killedBy = p.id; this.kill(v, 'executed'); }
       }
       return;
     }
@@ -977,6 +987,7 @@ export class Sim {
         s.carriedBy = null; s.wig = 0;
         s.stage++;
         s.cage = a.id; S.cages[a.id] = s.id;
+        p.score.hooks = (p.score.hooks || 0) + 1; s.hookedBy = p.id;
         s.st = 'caged'; s.esc = 0; s.tp++;
         p.score.d += 500;
         if (p.disguise) p.pcages++;

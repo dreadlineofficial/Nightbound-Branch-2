@@ -366,8 +366,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.20.2';
+export const VERSION = '2.20.3';
 export const INBOX = [
+  {
+    id: 'v2.20.3', version: '2.20.3', date: 'Nov 2026', title: 'Killer Damage Report', tag: 'Update',
+    body: ['The end screen now shows how much damage each killer did: health states taken, hits, downs, hooks and kills (executions noted), and crowns the killer who did the most.', 'Online: players who joined a room now see their connection and ping in the top-right corner. "Relay (slower)" means a direct link to the host couldn\'t be made. Direct connections also get more time to succeed before falling back to the relay, which should mean less lag for more players.'],
+  },
   {
     id: 'v2.20.2', version: '2.20.2', date: 'Nov 2026', title: 'Ted: Once Is Enough', tag: 'Update',
     body: ['Ted\'s "Fuck me." now only comes up once a match (his "Arfh!" still plays every time you go down).', 'Ted\'s longer clips can now show timed, line-by-line subtitles.'],

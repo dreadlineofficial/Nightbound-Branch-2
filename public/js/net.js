@@ -16,7 +16,8 @@ const ICE = [
   { urls: 'stun:stun.cloudflare.com:3478' },
   { urls: 'turn:eu-0.turn.peerjs.com:3478', username: 'peerjs', credential: 'peerjsp' },
   { urls: 'turn:us-0.turn.peerjs.com:3478', username: 'peerjs', credential: 'peerjsp' },
-  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:eu-0.turn.peerjs.com:443?transport=tcp', username: 'peerjs', credential: 'peerjsp' },
+  { urls: 'turn:us-0.turn.peerjs.com:443?transport=tcp', username: 'peerjs', credential: 'peerjsp' },
 ];
 const peerOpts = () => Object.assign({ debug: 0, config: { iceServers: ICE } }, (typeof window !== 'undefined' && window.__nbPeerServer) || {});
 
@@ -282,7 +283,8 @@ export async function joinRoom(mode, code) {
     return C;
   }
   // 1) try a direct WebRTC connection
-  try { return await timeout(joinRTC(code, C), 9000, 'WebRTC timed out'); }
+  // (a direct or TURN-relayed WebRTC link is far quicker than the MQTT relay: give it time)
+  try { return await timeout(joinRTC(code, C), 15000, 'WebRTC timed out'); }
   catch (e) { console.warn('WebRTC join failed, using relay:', e.message); try { C.peer && C.peer.destroy(); } catch {} }
   // 2) fall back to the MQTT relay
   return joinMQ(code, new Emitter());

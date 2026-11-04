@@ -606,3 +606,16 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .kb-key.changed { border-color: #d9a441; color: #f2d58a; }
 .kb-key.listening { background: #7a1412; border-color: #ff5a3a; animation: kbpulse .9s infinite alternate; }
 @keyframes kbpulse { from { opacity: 1; } to { opacity: .6; } }
+.netstat { position: absolute; right: 10px; top: 26px; font-family: var(--cond); font-size: 13px; color: #9f9; text-shadow: 0 1px 2px #000; pointer-events: auto; cursor: default; }
+.netstat.warn { color: #f2d06a; }
+.netstat.bad { color: #ff7a5a; }
+.netstat.hidden { display: none; }
+.killer-report { margin-top: 14px; padding: 12px 14px; background: rgba(90,10,8,.25); border: 1px solid rgba(179,32,30,.4); }
+.killer-report h3 { margin: 0 0 4px; font-family: var(--display); letter-spacing: .08em; font-size: 20px; color: #f0d8c8; }
+.killer-report p { margin: 0 0 8px; color: #d9c2b2; font-size: 14px; }
+.killer-report table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.killer-report th { text-align: left; font-weight: 600; color: #a89888; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.killer-report td { padding: 4px 6px; color: #e8e0d4; border-bottom: 1px solid rgba(255,255,255,.05); }
+.killer-report td small { color: #a89888; }
+.killer-report tr.top td { color: #ffd780; font-weight: 600; }
+.killer-report tr.me td:first-child { text-decoration: underline; text-decoration-color: rgba(255,255,255,.3); }

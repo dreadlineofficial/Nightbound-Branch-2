@@ -920,6 +920,7 @@ function cleanSkin(char, skin) { return (SKINS[char] || []).some(s => s.id === s
 }
 function hostMsg(id, m) {
   if (!m || typeof m !== 'object') return;
+  if (m.t === 'ping') { lobby.net.send(id, { t: 'pong', c: m.c }, true); return; }
   if (lobby.inGame && session && session.isHost) {
     if (m.t === 'hello') lobby.net.send(id, { t: 'reject', reason: 'A match is in progress. Try again when it ends.' });
     else session.remote(id, m);
@@ -1001,9 +1002,24 @@ function clientMsg(m) {
     case 'chat': addChat(m.name, m.text); break;
     case 'start': startClientMatch(m); break;
     case 's': case 'ev': if (session && !session.isHost) session.onMsg(m); break;
+    case 'pong': if (typeof m.c === 'number') { const rtt = performance.now() - m.c; netStat.ping = netStat.ping == null ? rtt : netStat.ping + (rtt - netStat.ping) * 0.3; } break;
     case 'tolobby': if (session) { endSession(); stopBG(); } lobby.inGame = false; showLobby(); break;
   }
 }
+// connection quality for players who joined: round-trip time to the host and how we're connected
+const netStat = { ping: null };
+setInterval(() => {
+  const el = $('netstat');
+  if (!lobby || !lobby.net || lobby.isHost) { if (el) el.classList.add('hidden'); netStat.ping = null; return; }
+  try { lobby.net.send({ t: 'ping', c: performance.now() }, true); } catch {}
+  if (!el) return;
+  const relay = (lobby.net.label || '').includes('relay') || lobby.net.mode === 'relay';
+  const ms = netStat.ping == null ? '…' : Math.round(netStat.ping) + ' ms';
+  el.className = 'netstat' + (netStat.ping > 180 || (relay && lobby.net.mode !== 'relay') ? ' bad' : netStat.ping > 100 ? ' warn' : '');
+  el.textContent = `${lobby.net.mode === 'relay' ? 'Game server' : relay ? 'Relay (slower)' : 'Direct'} · ${ms}`;
+  el.title = relay && lobby.net.mode !== 'relay' ? "A direct connection to the host couldn't be made, so the game is going through a public relay, which adds delay. A different network, or the host running node server.js, usually fixes this." : '';
+}, 2000);
+
 async function startClientMatch(m) {
   loading(true, 'Entering the fog…');
   await nextFrame();

@@ -1895,9 +1895,26 @@ export class Game {
     let title = 'Match Over';
     if (me) title = me.role === 'killer' ? me.outcome : me.outcome === 'escaped' ? 'You Escaped' : me.outcome === 'executed' ? 'You Were Executed' : 'You Were Sacrificed';
     $('results-title').textContent = title;
-    $('results-list').innerHTML = rows;
+    $('results-list').innerHTML = rows + this.killerReport(S);
     $('results').classList.remove('hidden');
     if (this.o.onEnd) this.o.onEnd(S, me);
+  }
+
+  // end screen: how much damage each killer did, and who did the most
+  killerReport(S) {
+    const Ks = S.players.filter(p => p.role === 'killer' || (p.score && (p.score.hits || p.score.hooks)));
+    if (!Ks.length) return '';
+    const st = p => { const c = p.score || {}; return { dmg: c.dmg || 0, hits: c.hits || 0, downs: c.downs || 0, hooks: c.hooks || 0, kills: c.kills || 0, execs: c.execs || 0 }; };
+    // ranking: kills first, then damage dealt, then hooks
+    const rank = Ks.map(p => ({ p, s: st(p) })).sort((a, b) => b.s.kills - a.s.kills || b.s.dmg - a.s.dmg || b.s.hooks - a.s.hooks);
+    const best = rank[0], tie = rank.length > 1 && rank[1].s.kills === best.s.kills && rank[1].s.dmg === best.s.dmg && rank[1].s.hooks === best.s.hooks;
+    const name = p => esc(p.name) + (p.role === 'killer' && KILLERS[p.char] && p.name !== KILLERS[p.char].name ? ` <small>${esc(KILLERS[p.char].name)}</small>` : '');
+    const rowsK = rank.map(({ p, s }, i) => `<tr class="${i === 0 && !tie && (s.dmg || s.kills) ? 'top' : ''}${p.id === this.myId ? ' me' : ''}"><td>${i === 0 && !tie && (s.dmg || s.kills) ? '👑 ' : ''}${name(p)}</td><td>${s.dmg}</td><td>${s.hits}</td><td>${s.downs}</td><td>${s.hooks}</td><td>${s.kills}${s.execs ? ` <small>(${s.execs} exec)</small>` : ''}</td></tr>`).join('');
+    const verdict = !best.s.dmg && !best.s.kills ? 'No killer drew blood this match.'
+      : tie ? 'Dead even: no killer did more than the others.'
+      : rank.length > 1 ? `${esc(best.p.name)} did the most damage${best.s.kills ? ` and took ${best.s.kills} ${best.s.kills === 1 ? 'life' : 'lives'}` : ''}.`
+      : `${esc(best.p.name)} dealt ${best.s.dmg} damage${best.s.kills ? ` and took ${best.s.kills} ${best.s.kills === 1 ? 'life' : 'lives'}` : ''}.`;
+    return `<div class="killer-report"><h3>Killer damage</h3><p>${verdict}</p><table><thead><tr><th>Killer</th><th title="Health states taken from survivors">Damage</th><th>Hits</th><th>Downs</th><th>Hooks</th><th>Kills</th></tr></thead><tbody>${rowsK}</tbody></table></div>`;
   }
 
   onResize() {
