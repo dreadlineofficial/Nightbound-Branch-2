@@ -731,6 +731,16 @@ export function animate(R, s, dt) {
           P.shL = -2.2 * alive + Math.sin(t * 11) * 0.3 * alive; P.elL = -1.6 * alive; P.shR = -1.9 * alive; P.elR = -1.5 * alive;
           P.lgL = Math.sin(t * 13) * 0.5 * alive - 0.1; P.lgR = -Math.sin(t * 13) * 0.5 * alive - 0.1; P.knL = 0.5; P.knR = 0.4;
         }
+      } else if (ch === 'granny') {
+        // hauled onto their knees, then pushed face-first into the trap in front of them
+        if (f < 0.1) downPose();
+        else {
+          const push = ramp(0.36, 0.55), alive = 1 - ramp(0.6, 0.85);
+          P.tiltX = push * 0.35; P.hipsY = -0.48; P.lgL = P.lgR = 0.05; P.knL = P.knR = 1.55;
+          P.spineX = 0.15 + push * 1.05; P.headX = -0.35 + push * 0.6;
+          if (f < 0.36) { P.shL = -0.9 + Math.sin(t * 10) * 0.25; P.shR = -0.8 - Math.sin(t * 9) * 0.25; P.elL = P.elR = -1.2; }
+          else { P.shL = -1.6 * alive - 0.2 + Math.sin(t * 17) * 0.4 * alive; P.shR = -1.5 * alive - 0.2 - Math.sin(t * 15) * 0.4 * alive; P.elL = P.elR = -0.3; }
+        }
       } else if (ch === 'chucky') {
         downPose();
         if (f > 0.28 && f < 0.85) { P.shL = -2.6 + Math.sin(t * 18) * 0.35; P.shR = -2.5 - Math.sin(t * 15) * 0.35; P.knL = 0.5 + Math.sin(t * 13) * 0.3; P.headX = -0.7 + Math.sin(t * 20) * 0.1; }

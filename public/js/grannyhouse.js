@@ -3,7 +3,7 @@
 // walled yard. Only the ground floor and the yard are played on; the floors above are scenery.
 // Collision comes from the model itself (see grannygrid.js); generators, hooks, exit gates and a
 // few pallet loops are laid out here.
-import { rng, makeCtx, addGates, buildGrid, freePoint } from './map.js';
+import { rng, makeCtx, addGates, buildGrid, freePoint, cellOf } from './map.js';
 import { GRANNY_BOXES } from './grannygrid.js';
 
 export const GRANNY_HALF = 31.6;
@@ -42,31 +42,40 @@ export function buildGrannyHouse(seed) {
   ];
   for (const [x, z, rot, fn] of loops) fn(makeCtx(M, R, x, z, rot));
 
-  // ---------- generators: two in the house, the rest across the yard ----------
-  const spots = (list, n, minD, r) => {
+  // ---------- generators and hooks ----------
+  // Each one needs open ground around it (so it never plugs a doorway or a gap between walls), and is
+  // only kept if the map stays connected with it in place (checked on the bots' walking grid).
+  const solidNear = (x, z, r) => M.boxes.some(b => Math.abs(x - b.x) < b.hx + r && Math.abs(z - b.z) < b.hz + r) || M.circles.some(c => Math.hypot(x - c.x, z - c.z) < c.r + r);
+  const reach = () => {
+    buildGrid(M);
+    const g = M.grid, N = g.N, seen = new Uint8Array(N * N), q = [];
+    const start = cellOf(M, 0, 24); seen[start] = 1; q.push(start);
+    let n = 0;
+    while (q.length) { const k = q.pop(); n++; const i = k % N, j = (k / N) | 0; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue; const nk = nj * N + ni; if (!seen[nk] && g.type[nk] !== 1) { seen[nk] = 1; q.push(nk); } } }
+    return n;
+  };
+  let base = reach();
+  const place = (list, n, minD, clear, add) => {
     const out = [];
-    for (let d = minD; out.length < n && d >= 0; d -= 3)
-      for (const [x, z] of R.shuffle(list.slice())) {
+    for (let d = minD; out.length < n && d >= 4; d -= 3)
+      for (const [x0, z0] of R.shuffle(list.slice())) {
         if (out.length >= n) break;
-        const p = freePoint(M, x, z, r);
-        if (out.some(o => Math.hypot(o.x - p.x, o.z - p.z) < d)) continue;
-        out.push(p);
+        // nearest spot with enough room around it
+        let p = null;
+        for (let rad = 0; rad < 5 && !p; rad += 0.5) for (let a = 0; a < 12 && !p; a++) { const x = x0 + Math.cos(a / 12 * 6.283) * rad, z = z0 + Math.sin(a / 12 * 6.283) * rad; if (!solidNear(x, z, clear)) p = { x, z }; if (rad === 0) break; }
+        if (!p || out.some(o => Math.hypot(o.x - p.x, o.z - p.z) < d) || [...M.gens, ...M.cages].some(o => Math.hypot(o.x - p.x, o.z - p.z) < 4)) continue;
+        const undo = add(p);
+        const now = reach();
+        if (now < base - 30) { undo(); continue; } // it cut part of the map off
+        base = now; out.push(p);
       }
     return out;
   };
-  const houseGen = spots([[-7.5, 1], [-7.5, 10], [2, -4], [9, -8], [-3, -8]], 2, 8, 1.3);
-  const yardGen = spots([[0, -25], [-18, -24], [16, -24], [-26, 6], [27, -4], [26, 14], [-14, 26], [12, 25], [-24, -14], [18, 6], [-17, 20]], 5, 13, 1.3);
-  for (const p of [...houseGen, ...yardGen]) {
-    M.gens.push({ id: M.gens.length, x: p.x, z: p.z, rot: R.int(0, 3) * Math.PI / 2 });
-    M.boxes.push({ x: p.x, z: p.z, hx: 0.62, hz: 0.62, h: 1.25, kind: 'gen', style: 'metal', nocast: true });
-  }
-  // ---------- hooks ----------
-  const hookList = spots([[-8, -24], [10, -26], [-27, -10], [28, 0], [-27, 12], [22, 26], [-2, 28], [16, -8], [-17, -2], [6, 20], [-6, 5]], 7, 12, 1.4)
-    .filter(p => !M.gens.some(g => Math.hypot(g.x - p.x, g.z - p.z) < 3));
-  for (const p of hookList) {
-    M.cages.push({ id: M.cages.length, x: p.x, z: p.z });
-    M.circles.push({ x: p.x, z: p.z, r: 0.75, h: 2.6, kind: 'cage', nocast: true });
-  }
+  const addGen = p => { const g = { id: M.gens.length, x: p.x, z: p.z, rot: R.int(0, 3) * Math.PI / 2 }, b = { x: p.x, z: p.z, hx: 0.62, hz: 0.62, h: 1.25, kind: 'gen', style: 'metal', nocast: true }; M.gens.push(g); M.boxes.push(b); return () => { M.gens.pop(); M.boxes.splice(M.boxes.indexOf(b), 1); }; };
+  const addHook = p => { const h = { id: M.cages.length, x: p.x, z: p.z }, c = { x: p.x, z: p.z, r: 0.75, h: 2.6, kind: 'cage', nocast: true }; M.cages.push(h); M.circles.push(c); return () => { M.cages.pop(); M.circles.splice(M.circles.indexOf(c), 1); }; };
+  place([[-7.5, 1], [-7.5, 10], [2, -4], [9, -8], [-3, -8], [-7, -5]], 2, 8, 1.55, addGen);           // inside the house
+  place([[0, -25], [-18, -24], [16, -24], [-26, 6], [27, -4], [26, 14], [-14, 26], [12, 25], [-24, -14], [18, 6], [-17, 20], [-2, 22]], 7 - M.gens.length, 13, 2.4, addGen);
+  place([[-8, -24], [10, -26], [-27, -10], [28, 0], [-27, 12], [22, 26], [-2, 28], [16, -8], [-17, -2], [6, 20], [20, -22], [-20, 26]], 7, 12, 2.2, addHook);
 
   // ---------- spawns: survivors on one side of the yard, Granny on the other ----------
   const side = R() < 0.5 ? 1 : -1;

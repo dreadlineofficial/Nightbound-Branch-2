@@ -25,7 +25,7 @@ async function bytes(name) {
   throw last;
 }
 // height (m) and which way the raw model faces
-const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, slendrina: { h: 1.78, yaw: 0 } };
+const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, slendrina: { h: 1.78, yaw: 0 }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 } };
 function load(name) {
   if (loading[name]) return loading[name];
   loading[name] = bytes(name).then(buf => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))).then(g => {
@@ -68,6 +68,12 @@ function seatHair(probe, scene) {
 }
 export const loadGranny = () => Promise.all([load('granny'), load('granny_anims')]).then(() => M.granny);
 export const loadSlendrina = () => load('slendrina');
+// Grandpa (outfit): "Grandpa Shotgun (G3 And Recaptured)" by DVUnit (sketchfab.com/DVUnit), CC BY 4.0, with his own clips
+export const loadGrandpa = () => load('grandpa');
+// Spider Mom (helper): "Spider Mom - Granny" by DVUnit (sketchfab.com/DVUnit), CC BY 4.0, with her own clips
+export const loadSpiderMom = () => load('spidermom');
+export const spiderMomReady = () => !!M.spidermom;
+export const grandpaReady = () => !!M.grandpa;
 export const grannyReady = () => !!(M.granny && M.granny_anims);
 export const slendrinaReady = () => !!M.slendrina;
 export function onGrannyReady(cb) { if (grannyReady()) cb(); else loadGranny().then(() => grannyReady() && cb()); }
@@ -177,7 +183,30 @@ class GrannyRig extends AnimRig {
     S.t.position.copy(S.t.parent.worldToLocal(root.localToWorld(want)));
   }
 }
-export function makeGrannyGlb(sk = {}, lite = false) { return grannyReady() ? new GrannyRig(sk, lite) : null; }
+export function makeGrannyGlb(sk = {}, lite = false) {
+  if (sk.grandpa) {
+    if (!M.grandpa) return null;
+    const R = new AnimRig('grandpa', sk, lite);
+    Object.assign(R, { kind: 'killer', killer: 'granny', glb: true, granny: true, grandpa: true });
+    // Granny's states -> his clips
+    R.clipMap = { idle: 'idle', Walk: 'walk', Hit: 'attack', arrowHit: 'arrowHit', pepperHit: 'peppered', freezeTrap: 'frozen', Look: 'search', lookBed: 'underbed' };
+    R.root.traverse(o => { if (o.isMesh && /Glasses|Hat_Santa|RedEyes|Ragdoll/i.test(o.name)) o.visible = false; });
+    return R;
+  }
+  return grannyReady() ? new GrannyRig(sk, lite) : null;
+}
+// Spider Mom: crawls, sniffs about, screeches
+export function makeSpiderMom(lite = false) {
+  if (!M.spidermom) return null;
+  const R = new AnimRig('spidermom', {}, lite);
+  R.kind = 'npc';
+  R.play = (name, dt) => {
+    const k = 1 - Math.exp(-dt * 8);
+    for (const n in R.acts) { const t = n === name ? 1 : 0; R.w[n] += (t - R.w[n]) * k; R.acts[n].setEffectiveWeight(R.w[n]); R.acts[n].paused = false; }
+    R.mixer.update(dt);
+  };
+  return R;
+}
 // Slendrina, as a standalone apparition (not a player)
 export function makeSlendrina(lite = false) {
   if (!M.slendrina) return null;
@@ -193,7 +222,11 @@ export function animateGranny(R, s, dt) {
   R.t += dt;
   const A = R.acts, sp = s.speed || 0;
   let want = 'idle', rate = 1, scrub = null, fast = false;
-  if (s.exec && s.exec.role === 'killer') { want = 'Hit'; rate = 1.6; fast = true; }
+  if (s.exec && s.exec.role === 'killer') {
+    // Bedtime Trap: bend down and set the trap, then the shove, then stand over them
+    const f = s.exec.f;
+    if (f < 0.34) { want = 'lookBed'; rate = 1.2; } else if (f < 0.6) { want = 'Hit'; scrub = 0.25 + (f - 0.34) / 0.26 * 0.6; fast = true; } else want = 'Look';
+  }
   else if (s.blind) { want = 'pepperHit'; rate = 1; fast = true; }
   else if (s.frozen) { want = 'freezeTrap'; rate = 1; fast = true; }
   else if (s.stun) { want = 'arrowHit'; rate = 0.9; fast = true; }
@@ -202,7 +235,8 @@ export function animateGranny(R, s, dt) {
   else if (s.act === 'pickup' || s.act === 'cage' || s.act === 'bear' || s.act === 'break' || s.act === 'kick') { want = 'lookBed'; rate = s.act === 'break' || s.act === 'kick' ? 1.6 : 1.2; }
   else if (s.listen) { want = 'Look'; rate = 1.2; }
   else if (sp > 0.3) { want = 'Walk'; rate = Math.min(2.6, Math.max(0.7, sp / 1.7)); }
-  if (!A[want]) want = 'idle';
+  if (R.clipMap) want = R.clipMap[want] || 'idle';
+  if (!A[want]) want = A.idle ? 'idle' : Object.keys(A)[0];
   const k = 1 - Math.exp(-dt * (fast ? 20 : 9));
   for (const n in A) {
     const a = A[n], target = n === want ? 1 : 0;

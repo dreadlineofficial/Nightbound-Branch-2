@@ -116,10 +116,11 @@ export const KILLERS = {
   granny: {
     id: 'granny', name: 'Granny', speed: 4.7, terror: 32, weapon: 'Baseball Bat', crossover: 'Granny (fan-made)',
     lore: 'She has kept you in her house for five days. She hears every creak of the floorboards, and she does not like guests leaving early.',
-    exec: { name: 'Sweet Dreams', desc: 'Raises her bloody bat high and brings it down, again and again, until the house is quiet.' },
-    ability: { name: 'Bear Trap', cooldown: 6, set: 1.1, max: 4, snare: 3.2, desc: 'Hold to kneel and set a bear trap at your feet (up to 4 on the map; the oldest springs shut when you set a fifth). A survivor who steps in one is injured and caught in place for 3s, screaming loud enough for you to hear it across the map.' },
-    ability2: { name: 'I Hear You', key: 'R', cooldown: 30, reveal: 6, desc: 'Stop and listen. Every survivor who is running, repairing, healing or unhooking anywhere on the map is revealed to you for 6s.' },
-    feature: { name: 'Sharp Ears & Slendrina', desc: 'She hears everything: survivors who run within 22m of her are revealed, and a failed skill check is heard anywhere. Her granddaughter Slendrina haunts the trial, now and then early on and constantly once the exit gates are powered. A survivor who looks at Slendrina for half a second is injured.' },
+    exec: { name: 'Bedtime Trap', desc: 'Forces the survivor to their knees, sets a bear trap in front of them, and shoves their face into it.' },
+    ability: { name: 'Frenzy', cooldown: 22, duration: 5, sense: 16, speed: 1.35, desc: 'She snaps. For 5s she moves 35% faster, senses every survivor within 16m through the walls, and her first hit puts a survivor straight down.' },
+    ability2: { name: 'I Hear You', key: 'R', cooldown: 25, reveal: 6, desc: 'Stop and listen. Every survivor who is running, repairing, healing or unhooking anywhere on the map is revealed to you for 6s.' },
+    teleport: { name: 'Creep', key: 'G', cooldown: 30, time: 1.4, desc: 'Hold G: every window, pallet, generator and hook on the map is marked. Release to vanish and reappear at the one in your sights.' },
+    feature: { name: 'Sharp Ears, Slendrina & Spider Mom', desc: 'She hears everything: survivors who run within 22m of her are revealed, and a failed skill check is heard anywhere. Spider Mom crawls between the generators and shows Granny anyone she finds repairing one. Slendrina haunts the trial, now and then early on and constantly once the exit gates are powered: look at her for half a second and you are injured.' },
     color: 0xd8d0c0,
   },
   bateman: {
@@ -263,7 +264,7 @@ export const LORE = {
   ] },
   granny: { title: 'Five Days', story: [
     'A fan-made crossover. Nobody knows how long she has lived in the old house by the moat, only that the people who wake up in it have five days to find their way out, and that she hears every one of them try.',
-    'She walks the halls with a bloody bat, sets bear traps where the floor creaks, and stops dead when she hears a door or a dropped plate. Her husband keeps the cellar. Her granddaughter Slendrina keeps the shadows.',
+    'She walks the halls with a bloody bat, comes out of nowhere wherever the floor creaks, and stops dead when she hears a door or a dropped plate. Her husband keeps the cellar. Her granddaughter Slendrina keeps the shadows, and the thing in the attic she calls Spider Mom keeps watch over the generators.',
     'The Entity did not have to take her anywhere. It simply moved the house. Now the guests are survivors, the trial is her home, and the rules have not changed: be quiet, and do not look at the girl in the white dress.',
   ] },
   chucky: { title: 'Friends Till the End', story: [
@@ -352,6 +353,7 @@ export const SKINS = {
   granny: [
     { id: 'default', name: 'House Dress', price: 0, desc: 'Her grey nightgown, her bloody bat, and the stare. You know the one.' },
     { id: 'bloodbath', name: 'Spring Cleaning', price: 3000, tint: 0x8a1010, tintK: 0.35, desc: 'She has been busy. Most of the red is not hers.' },
+    { id: 'grandpa', name: 'Grandpa', price: 5000, grandpa: true, desc: 'Her husband takes the shift: deaf as a post, but he brought his shotgun, and he hits harder than he looks.' },
     { id: 'ghost', name: 'Pale Visitor', price: 4500, tint: 0xd8e4f0, tintK: 0.5, glow: 0x6a8aa8, glowK: 0.35, desc: 'Drained of colour, glowing faintly, like something that stayed in the house long after it should have left.' },
   ],
   bateman: [
@@ -373,7 +375,7 @@ export const SKINS = {
 export const CHAPTERS = [
   { id: 'granny', num: 'VIII', name: 'Granny', sub: '× Nightbound', price: 5000, killer: 'granny', map: 'granny', banner: 'granny', isNew: true,
     tagline: 'You have five days. She hears everything.',
-    contents: ['Granny: Bear Trap, I Hear You, Sharp Ears', 'Her helper: Slendrina. Don\'t look at her.', 'Execution: Sweet Dreams', "Map: Granny's House (free for everyone)", '2 Granny outfits in the Store'] },
+    contents: ['Granny: Frenzy, Creep (teleport), I Hear You, Sharp Ears', 'Her helpers: Slendrina and Spider Mom', 'Execution: Bedtime Trap', "Map: Granny's House (free for everyone)", '2 Granny outfits in the Store'] },
   { id: 'offal', num: 'V', name: 'OFFAL', sub: '× Nightbound', price: 5000, killer: 'foreman', map: 'meatworks', banner: 'offal',
     tagline: 'Night shift at the Hollow Pines Meatworks. Headcount must be maintained.',
     contents: ['The Foreman: Chain Hook, Lights Out and Hunts by Sound', 'Execution: Reassignment', 'Map: Hollow Pines Meatworks (free for everyone)', '3 Foreman outfits in the Store'] },
@@ -389,8 +391,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.21.1';
+export const VERSION = '2.22.0';
 export const INBOX = [
+  {
+    id: 'v2.22.0', version: '2.22.0', date: 'Nov 2026', title: 'Granny Rework, Spider Mom & Grandpa', tag: 'Update',
+    body: ['Granny has been reworked. Her bear traps are gone. New power, Frenzy (RMB): for 5s she moves 35% faster, senses every survivor within 16m through the walls, and her first hit downs.', 'New: Creep (hold G). Every generator, hook, window and pallet on the map is marked; release to vanish and reappear at the one in your sights.', 'New helper: Spider Mom crawls from generator to generator. Anyone she finds repairing one is revealed to Granny.', 'New execution: Bedtime Trap. Granny forces the survivor to their knees, sets a bear trap in front of them and shoves their face into it.', 'New outfit in the Store: Grandpa (5,000 embers), with his own animations.', "Granny's House: generators and hooks no longer block the way from one side of the map to the other."],
+  },
   {
     id: 'v2.21.1', version: '2.21.1', date: 'Nov 2026', title: 'Limited Edition: The Dark Knight', tag: 'Store',
     body: ['A limited edition outfit for the Foreman: The Dark Knight. The cowl, the cape and the armoured suit, moving with all of the Foreman\'s own animations.', 'His hook becomes a black grappling hook, and his Chain Hook fires a thin black grapnel line. (Fan-made; not affiliated with DC.)', 'Find it in the Store under the Foreman, while it lasts.'],

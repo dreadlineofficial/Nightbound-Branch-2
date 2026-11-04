@@ -1,6 +1,6 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
 import { RULES, KILLERS, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS } from './config.js';
-import { barBox, losBlocked, moveCircle, findPath, cellOf } from './map.js';
+import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute, angDiff,
 } from './rules.js';
@@ -23,7 +23,7 @@ export class Sim {
       bars: M.bars.map(() => 0),
       cages: M.cages.map(() => null), cageBroken: M.cages.map(() => false),
       gates: M.gates.map(() => ({ p: 0, open: false })),
-      spears: [], lanterns: [], lid: 0, dark: 0, chains: [], traps: [], tid: 0, slime: [], saws: [], bears: [], slend: null,
+      spears: [], lanterns: [], lid: 0, dark: 0, chains: [], traps: [], tid: 0, slime: [], saws: [], bears: [], slend: null, spider: null,
     };
     let si = 0, ki = 0;
     for (const r of roster) {
@@ -110,7 +110,6 @@ export class Sim {
         if (p.role === 'killer' && p.char === 'foreman') p.aim = !!m.aim && p.abCd <= 0 && !p.pull && p.carry == null && !p.act && p.stun <= 0;
         if (p.role === 'killer' && p.char === 'harrower') p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0;
         if (p.role === 'killer' && p.char === 'bateman') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
-        if (p.role === 'killer' && p.char === 'granny') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk && !p.ab; if (p.aim && !was) p.abT = 0; }
         if (p.role === 'killer' && p.char === 'chucky') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && !p.leap && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
         break;
       }
@@ -275,6 +274,14 @@ export class Sim {
         this.ev({ k: 'tele', id: p.id, x: p.x, z: p.z, to: best.id });
         break;
       }
+      case 'creep': {
+        if (p.role !== 'killer' || p.char !== 'granny' || p.teleCd > 0 || p.tele || p.stun > 0 || p.act || p.carry != null || p.atk || p.vault) return;
+        const L = { gen: M.gens, hook: M.cages, win: M.windows, bar: M.bars }[m.kind], o = L && L[m.id | 0];
+        if (!o || (m.kind === 'hook' && S.cageBroken[o.id]) || (m.kind === 'bar' && S.bars[o.id] === 2)) return;
+        p.tele = { t: 0, x: o.x, z: o.z, g: 1 }; p.ab = 0; p.aim = false;
+        this.ev({ k: 'creep', id: p.id, x: p.x, z: p.z, tx: o.x, tz: o.z });
+        break;
+      }
       case 'chain': {
         if (p.role !== 'killer' || p.char !== 'foreman' || p.abCd > 0 || p.stun > 0 || p.carry != null || p.act || p.pull || p.atk) return;
         const yaw = num(m.yaw, p.yaw), f = fwd(yaw);
@@ -286,7 +293,7 @@ export class Sim {
         break;
       }
       case 'ability2': {
-        if (p.role === 'killer' && p.char === 'granny' && p.ab2Cd <= 0 && !p.act && p.stun <= 0 && !p.atk && p.carry == null) {
+        if (p.role === 'killer' && p.char === 'granny' && p.ab2Cd <= 0 && !p.ab && !p.tele && !p.act && p.stun <= 0 && !p.atk && p.carry == null) {
           // I Hear You: she stops and listens; anyone making noise anywhere is revealed
           const D = KILLERS.granny.ability2, ids = [];
           for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && (s.mv === 2 || s.act || s.vault)) { s.reveal = Math.max(s.reveal, D.reveal); ids.push(s.id); }
@@ -370,7 +377,10 @@ export class Sim {
   ability(p) {
     if (p.role !== 'killer' || p.stun > 0 || p.act || p.carry != null || p.vault) return;
     if (p.tele) return;
-    if (p.char === 'butcher') {
+    if (p.char === 'granny') {
+      // Frenzy: faster, senses survivors through walls, the first hit downs
+      if (!p.ab && p.abCd <= 0 && !p.atk) { const D = KILLERS.granny.ability; p.ab = 2; p.abT = D.duration; this.ev({ k: 'frenzy', id: p.id, x: p.x, z: p.z }); }
+    } else if (p.char === 'butcher') {
       if (p.ab === 0 && p.abCd <= 0 && p.charges > 0 && !p.atk) { p.charges--; p.ab = 1; p.abT = 2.6; this.ev({ k: 'rampage', id: p.id }); }
     } else if (p.char === 'wisp') {
       if (p.ab === 0 && p.abCd <= 0 && !p.atk) { p.ab = 2; p.abT = 0.7; this.ev({ k: 'fade', id: p.id, on: true }); }
@@ -803,6 +813,7 @@ export class Sim {
     if (K && K.char === 'foreman' && K.ab === 1 && !this.chainDmg) instantDown = true;
     // (slimed survivors are slowed and revealed, not one-shot: that made him unbeatable) // one strike from the hook, in the dark
     s.act = null; s.prog = 0;
+    if (K && K.char === 'granny' && K.ab === 2) { instantDown = true; K.ab = 0; K.abT = 0; K.abCd = KILLERS.granny.ability.cooldown; }
     const wasHp = s.hp;
     s.hp = instantDown ? 0 : s.hp - 1;
     K.score.a += 300;
@@ -1200,38 +1211,68 @@ export class Sim {
     const S = this.S, M = this.M;
     const Gs = S.players.filter(p => p.role === 'killer' && p.char === 'granny');
     for (const p of S.players) if (p.snare > 0) { p.snare = Math.max(0, p.snare - dt); if (p.st !== 'ok') p.snare = 0; }
-    if (!Gs.length && !S.bears.length && !S.slend) return;
-    const D = KILLERS.granny.ability;
+    if (!Gs.length && !S.slend && !S.spider) return;
+    const D = KILLERS.granny.ability, T = KILLERS.granny.teleport;
     for (const K of Gs) {
       // listening (I Hear You): stands still for a moment
       if (K.ab === 1) { K.abT -= dt; if (K.abT <= 0) { K.ab = 0; K.abT = 0; } }
-      // kneeling to set a trap
-      if (K.aim) {
-        K.abT += dt;
-        if (K.abT >= D.set) {
-          const f = fwd(K.yaw), t = { id: ++S.tid, x: K.x + f.x * 0.75, z: K.z + f.z * 0.75, by: K.id };
-          S.bears.push(t);
-          const mine = S.bears.filter(b => b.by === K.id);
-          if (mine.length > D.max) { const old = mine[0]; S.bears = S.bears.filter(b => b !== old); this.ev({ k: 'bearclose', x: old.x, z: old.z }); }
-          K.aim = false; K.abT = 0; K.abCd = D.cooldown;
-          this.ev({ k: 'bearset', id: K.id, x: t.x, z: t.z });
+      // Frenzy: survivors near her can't hide behind walls
+      if (K.ab === 2) {
+        K.abT -= dt;
+        for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && dist(s, K) < D.sense) s.reveal = Math.max(s.reveal || 0, 0.4);
+        if (K.abT <= 0) { K.ab = 0; K.abT = 0; K.abCd = D.cooldown; }
+      }
+      // Creep: fade out, reappear by the chosen window, pallet, generator or hook
+      if (K.tele && K.tele.g) {
+        K.tele.t += dt;
+        if (K.tele.t >= T.time) {
+          const spot = this.safeSpot(K.tele.x + 1.1, K.tele.z, K.tele.x, K.tele.z);
+          K.x = spot.x; K.z = spot.z; K.tp++; K.tele = null; K.teleCd = T.cooldown;
+          this.ev({ k: 'tele-end', id: K.id, x: K.x, z: K.z });
         }
       }
       // sharp ears: running near her gives you away
       for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && s.mv === 2 && dist(s, K) < 22) s.reveal = Math.max(s.reveal || 0, 0.6);
     }
-    // bear traps: snap shut on a survivor who steps in one
-    for (const b of S.bears.slice()) {
-      const s = S.players.find(o => o.role === 'survivor' && o.st === 'ok' && !(o.snare > 0) && !o.vault && Math.hypot(o.x - b.x, o.z - b.z) < 0.6);
-      if (!s) continue;
-      S.bears = S.bears.filter(o => o !== b);
-      const K = this.P(b.by) || Gs[0];
-      if (K) { this.damage(s, K, false); K.score.d += 300; }
-      if (s.st === 'ok') { s.snare = D.snare; s.tp++; }
-      s.reveal = Math.max(s.reveal || 0, 5);
-      this.ev({ k: 'bearsnap', id: s.id, by: b.by, x: b.x, z: b.z });
-    }
+    this.updateSpiderMom(dt, Gs);
     this.updateSlendrina(dt, Gs);
+  }
+  // Spider Mom: crawls from generator to generator; anyone she finds repairing one is shown to Granny
+  updateSpiderMom(dt, Gs) {
+    const S = this.S, M = this.M;
+    if (!Gs.length || !M.gens.length) { S.spider = null; return; }
+    let sp = S.spider;
+    if (!sp) { const g = M.gens[Math.floor(Math.random() * M.gens.length)]; const p0 = this.safeSpot(g.x + 2, g.z, g.x, g.z); sp = S.spider = { x: p0.x, z: p0.z, yaw: 0, st: 0 }; this.spiderPath = null; }
+    const P = this.spiderState ||= { path: null, i: 0, goal: -1, wait: 0, seen: {} };
+    if (sp.st === 2) { P.wait -= dt; if (P.wait <= 0) sp.st = 0; return; } // screeching
+    if (P.wait > 0) { P.wait -= dt; sp.st = 1; return; }                    // sniffing around a generator
+    // pick the next generator: one being repaired if she can smell it, otherwise any unfinished one
+    if (!P.path || P.i >= P.path.length) {
+      const busy = M.gens.filter((g, i) => !S.gens[i].done && S.gens[i].n > 0 && i !== P.goal);
+      const open = M.gens.filter((g, i) => !S.gens[i].done && i !== P.goal);
+      const pool = busy.length && Math.random() < 0.6 ? busy : open.length ? open : M.gens;
+      const g = pool[Math.floor(Math.random() * pool.length)];
+      P.goal = g.id; P.path = findPath(M, sp.x, sp.z, g.x + 1.6, g.z, t => t === 1 ? Infinity : 1, 30000) || []; P.i = 0;
+      if (!P.path.length) { P.wait = 2; return; }
+    }
+    // crawl along the path
+    let step = 3.4 * dt;
+    while (step > 0 && P.i < P.path.length) {
+      const c = cellPos(M, P.path[P.i]), dx = c.x - sp.x, dz = c.z - sp.z, d = Math.hypot(dx, dz);
+      if (d <= step) { sp.x = c.x; sp.z = c.z; step -= d; P.i++; }
+      else { sp.x += dx / d * step; sp.z += dz / d * step; sp.yaw = Math.atan2(dx, dz); step = 0; }
+    }
+    sp.st = 0;
+    if (P.i >= P.path.length) P.wait = 2.5 + Math.random() * 2;
+    // anyone repairing a generator within sight is reported
+    for (const s of S.players) {
+      if (s.role !== 'survivor' || s.st !== 'ok' || !s.act || s.act.k !== 'repair') continue;
+      if (Math.hypot(s.x - sp.x, s.z - sp.z) > 14 || losBlocked(M, sp.x, sp.z, s.x, s.z) || S.t - (P.seen[s.id] ?? -99) < 12) continue;
+      P.seen[s.id] = S.t; s.reveal = Math.max(s.reveal || 0, 7);
+      sp.st = 2; P.wait = 1.6; sp.yaw = Math.atan2(s.x - sp.x, s.z - sp.z);
+      this.ev({ k: 'spidermom', id: s.id, x: sp.x, z: sp.z });
+      break;
+    }
   }
   // Slendrina: a brief apparition in front of a survivor, now and then early on and constantly once
   // the exit gates are powered. Looking at her for half a second injures you.
