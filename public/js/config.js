@@ -399,8 +399,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.24.0';
+export const VERSION = '2.24.1';
 export const INBOX = [
+  {
+    id: 'v2.24.1', version: '2.24.1', date: 'Nov 2026', title: 'Fix: taking over a bot', tag: 'Fix',
+    body: ['Taking over a bot after you die (T) works again: swapping items at a chest was being mistaken for it.'],
+  },
   {
     id: 'v2.24.0', version: '2.24.0', date: 'Nov 2026', title: "Granny's House: Every Floor", tag: 'Map',
     body: ["The whole of Granny's House is open. Take the stairs in the hall up to the first and second floors, then the spiral staircase up to the tower room.", 'Hits, pick-ups and line of sight respect floors: nobody can be hit through a ceiling, and you can hide upstairs, but the killer will follow you up (bots too) and carry you back down to a hook.', 'Bots no longer get stuck carrying a survivor between two hooks that are the same distance away.'],

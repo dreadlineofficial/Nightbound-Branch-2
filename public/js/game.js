@@ -1656,7 +1656,7 @@ export class Game {
           if (e.by === this.myId) this.feed('The chest holds a ' + (ITEMS[e.item] || ITEMS.flashlight).name + (e.item === 'taser' ? '! Rare find.' : '.') + ' Hold E to swap it for yours.', e.item === 'taser' ? 'big' : '');
           break;
         }
-        case 'swap': {
+        case 'chestswap': {
           const c = this.M.chests && this.M.chests[e.id]; if (c) sound.play('click', c.x, c.z);
           if (e.by === this.myId) { this.feed('You took the ' + (ITEMS[e.item] || ITEMS.flashlight).name + ' and left your ' + (ITEMS[e.left] || ITEMS.flashlight).name + '.'); this.flashHeld = false; }
           break;

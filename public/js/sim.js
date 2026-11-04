@@ -1080,7 +1080,7 @@ export class Sim {
         p.item = got.k; p.flash = got.k === 'flashlight' ? got.n : 0; p.traps = got.k === 'trap' ? got.n : 0; p.tasers = got.k === 'taser' ? got.n : 0;
         p.flashOn = false;
         cs.it = mine;
-        this.ev({ k: 'swap', id: a.id, by: p.id, item: got.k, left: mine.k });
+        this.ev({ k: 'chestswap', id: a.id, by: p.id, item: got.k, left: mine.k });
         break;
       }
       case 'snuff': {
