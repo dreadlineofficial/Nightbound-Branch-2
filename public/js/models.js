@@ -777,14 +777,15 @@ export function animate(R, s, dt) {
 }
 
 // ---------- first-person killer viewmodel ----------
-export function makeViewModel(id) {
+export function makeViewModel(id, vsk = {}) {
   const g = new THREE.Group();
   const arm = new THREE.Group(); g.add(arm);          // right arm + weapon, animated as a whole
   const add = (parent, geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.scale.set(sx, sy, sz); parent.add(me); return me; };
   const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8, granny: 0x9a8a80 }[id];
   const bk = id === 'butcher' ? 1.5 : id === 'harrower' ? 1.25 : id === 'wisp' ? 0.85 : 1;
-  const armM = id === 'bateman' ? mat(0x30353c, { map: 'pinstripe', rough: 0.7 }) : mat(skin, { map: id === 'lamplighter' || id === 'harrower' ? 'cloth' : 'skin', rough: 0.75 });
-  const handM = id === 'lamplighter' ? mat(0x111111, { map: 'leather' }) : mat(skin, { map: 'skin', rough: 0.7 });
+  // (Batman: black armoured sleeves and gauntlets)
+  const armM = vsk.batman ? mat(0x1a1c20, { map: 'leather', rough: 0.45 }) : id === 'bateman' ? mat(0x30353c, { map: 'pinstripe', rough: 0.7 }) : mat(skin, { map: id === 'lamplighter' || id === 'harrower' ? 'cloth' : 'skin', rough: 0.75 });
+  const handM = vsk.batman ? mat(0x121316, { map: 'leather', rough: 0.4 }) : id === 'lamplighter' ? mat(0x111111, { map: 'leather' }) : mat(skin, { map: 'skin', rough: 0.7 });
   add(arm, lathe(0.42, [[0, 0.03 * bk], [0.3, 0.04 * bk], [0.75, 0.05 * bk], [1, 0.055 * bk]]), armM, 0, -0.02, 0.03, -Math.PI / 2, 0, 0);
   add(arm, G.sph(0.045 * bk, 12, 10), handM, 0, -0.005, 0.0, 0, 0, 0, 1.0, 0.75, 1.15);
   for (let i = 0; i < 4; i++) add(arm, G.cap(0.011 * bk, 0.03), handM, -0.028 * bk + i * 0.019 * bk, 0.022, -0.012, 0, 0, Math.PI / 2, 1, 1, 1);
@@ -821,7 +822,7 @@ export function makeViewModel(id) {
     add(bat, G.sph(0.046, 10, 8), blood, 0, 0, -0.83, 0, 0, 0, 1, 1, 0.6);
     tip.position.set(0, Math.sin(0.28) * 0.83, -Math.cos(0.28) * 0.83); base.position.set(0, Math.sin(0.28) * 0.25, -Math.cos(0.28) * 0.25);
   } else if (id === 'foreman') {
-    const steel = mat(0x8a8a88, { map: 'metal', metal: 0.8, rough: 0.35 });
+    const steel = vsk.batman ? mat(0x1a1c20, { map: 'metal', metal: 0.85, rough: 0.3 }) : mat(0x8a8a88, { map: 'metal', metal: 0.8, rough: 0.35 });
     add(arm, G.cyl(0.014, 0.014, 0.25, 6), steel, 0, 0.03, -0.14, Math.PI / 2, 0, 0);
     add(arm, G.tor(0.13, 0.016, Math.PI * 1.35), steel, 0, 0.06, -0.38, Math.PI / 2, Math.PI, Math.PI * 0.35);
     tip.position.set(0, 0.12, -0.5); base.position.set(0, 0.02, -0.2);

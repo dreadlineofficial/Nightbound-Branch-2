@@ -651,3 +651,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .granny-logo, #trailer .tr-logo { background: url(../img/granny-logo.png) center / contain no-repeat; }
 #trailer .tr-logo { width: min(620px, 70vw); aspect-ratio: 447 / 195; filter: drop-shadow(0 0 24px rgba(0,0,0,.9)) drop-shadow(0 0 40px rgba(150,180,230,.25)); margin: 6px 0 2px; }
 #trailer .tr-x { font-size: clamp(30px, 4.5vw, 64px) !important; }
+/* limited edition outfits */
+.of.limited { --rc: #d8b040; } .cs-detail.limited { --rc: #f2d06a; }
+.of.limited::after { content: 'LIMITED'; position: absolute; top: 6px; left: 6px; font-family: var(--cond); font-size: 10px; letter-spacing: .14em; padding: 2px 6px; background: linear-gradient(90deg, #d8b040, #f2e08a); color: #1a1408; font-weight: 700; }
+.of { position: relative; }

@@ -358,7 +358,7 @@ export class Game {
   // first-person weapon and swing trail for a killer
   setupKillerView(me) {
     {
-      this.view = makeViewModel(me.char);
+      this.view = makeViewModel(me.char, skinOf(me.char, me.skin));
       this.view.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.userData.op = o.material.opacity; } });
       this.camera.add(this.view);
       // weapon swing trail (camera space)
@@ -952,7 +952,10 @@ export class Game {
       const a = new THREE.Vector3(kc.x + rx * 0.35, 1.55 + (kc.lift || 0), kc.z + rz * 0.35), b = new THREE.Vector3(c.x, c.y != null ? c.y : 1.25, c.z);
       const mid = a.clone().add(b).multiplyScalar(0.5), len = a.distanceTo(b);
       const u = g.userData;
-      u.link.position.copy(mid); u.link.scale.set(1, Math.max(0.01, len), 1);
+      // Batman's grappling line: thin and black instead of a steel chain
+      const bat = K.skin === 'batman';
+      if (u.bat !== bat) { u.bat = bat; u.link.material.color.setHex(bat ? 0x0c0c0e : 0x5a5a58); u.link.material.metalness = bat ? 0.2 : 0.8; u.link.scale.x = u.link.scale.z = bat ? 0.45 : 1; if (u.hook) u.hook.material.color.setHex(bat ? 0x1a1c20 : 0x8a8a88); }
+      u.link.position.copy(mid); u.link.scale.y = Math.max(0.01, len);
       u.link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
       u.hook.position.copy(b); u.hook.lookAt(a); u.hook.rotateX(Math.PI / 2);
     });

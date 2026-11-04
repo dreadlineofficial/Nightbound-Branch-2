@@ -8,7 +8,7 @@ import { QUALITY } from './world.js';
 import { setDetail } from './models.js';
 import { setStyle, realistic, nightEnv } from './gfx.js';
 import { MenuScene } from './menu.js';
-import { loadForeman, onForemanReady } from './foremanGlb.js';
+import { loadForeman, onForemanReady, loadBatman } from './foremanGlb.js';
 import { loadChucky, onChuckyReady, chuckyReady } from './chuckyGlb.js';
 import { loadTed } from './sidekicks.js';
 import { loadRealism } from './realism.js';
@@ -129,6 +129,7 @@ function startBG() {
   renderShowcase();
 }
 loadForeman();
+loadBatman().then(m => { if (m) { forgetArt('foreman'); if (menu && menu.killerChar === 'foreman') menu.setKiller('foreman', menu.killerSkin); } });
 loadChucky();
 loadTed();
 for (const n of ['bringit', 'email', 'weak', 'cock', 'shit', 'idle', 'arfh', 'teddy', 'problems', 'fuckme', 'listen', 'pussy', 'thunder']) loadClip('ted/' + n);
@@ -419,7 +420,8 @@ $('pause-vol').addEventListener('input', e => { settings.vol = +e.target.value; 
 
 // ---------- store ----------
 // ---------- store (full screen, DbD-style) ----------
-const RARITY = p => p === 0 ? '' : p < 2000 ? 'common' : p < 3500 ? 'rare' : p < 5000 ? 'epic' : 'legendary';
+const RARITY0 = p => p === 0 ? '' : p < 2000 ? 'common' : p < 3500 ? 'rare' : p < 5000 ? 'epic' : 'legendary';
+const RARITY = (p, sk) => sk && sk.limited ? 'limited' : RARITY0(p);
 let storeTab = 'chapters', storeRole = 'survivor', storeChar = null, storePreview = null;
 const ownsChapter = id => !!(profile.dlc && profile.dlc[id]);
 const ownsChar = c => !CHAPTER_OF[c] || ownsChapter(CHAPTER_OF[c]);
@@ -485,18 +487,18 @@ function charactersHTML() {
   const sel = list.find(x => x.id === (storePreview || skinId(storeChar))) || list[0];
   const grid = chars.map(c => `<button class="cs-por ${c === storeChar ? 'on' : ''}" data-c="${c}"><img alt="" src="${art('portrait', c, skinId(c), 224, 224)}">${ownsChar(c) ? '' : '<i class="lock">DLC</i>'}<span>${esc(charName(c).replace(/^The /, ''))}</span></button>`).join('');
   const outfits = list.map(sk => {
-    const own = ownsSkin(storeChar, sk), eq = skinId(storeChar) === sk.id, r = RARITY(sk.price) || 'base';
+    const own = ownsSkin(storeChar, sk), eq = skinId(storeChar) === sk.id, r = RARITY(sk.price, sk) || 'base';
     const tag = eq ? '<span class="of-p eq">Equipped</span>' : own ? '<span class="of-p own">Owned</span>' : `<span class="of-p">${price(sk.price)}</span>`;
     return `<div class="of ${r} ${sel && sel.id === sk.id ? 'on' : ''}" data-s="${sk.id}"><img alt="" src="${art('portrait', storeChar, sk.id, 180, 180)}"><span class="of-n">${esc(sk.name)}</span>${tag}</div>`;
   }).join('');
   let detail = '';
   if (sel) {
-    const own = ownsSkin(storeChar, sel), eq = skinId(storeChar) === sel.id, r = RARITY(sel.price) || 'base';
+    const own = ownsSkin(storeChar, sel), eq = skinId(storeChar) === sel.id, r = RARITY(sel.price, sel) || 'base';
     const locked = !ownsChar(storeChar);
     const act = locked ? `<button class="btn primary" data-tab="chapters">Get the ${esc(CHAPTERS.find(c => c.killer === storeChar).name)} chapter</button>`
       : eq ? '<span class="of-p eq" style="font-size:16px">Equipped</span>' : own ? `<button class="btn primary" data-eq="${sel.id}">Equip</button>`
       : `<span class="ch-price">${price(sel.price)}</span><button class="btn primary" data-buy="${sel.id}">Buy</button>`;
-    detail = `<div class="cs-detail ${r}"><div class="rk">${r === 'base' ? 'Default outfit' : r}</div><h3>${esc(sel.name)}</h3><p>${esc(charName(storeChar))}${sel.desc ? ` · ${esc(sel.desc)}` : ''}</p><div class="row">${act}</div></div>`;
+    detail = `<div class="cs-detail ${r}"><div class="rk">${r === 'base' ? 'Default outfit' : r === 'limited' ? 'Limited edition' : r}</div><h3>${esc(sel.name)}</h3><p>${esc(charName(storeChar))}${sel.desc ? ` · ${esc(sel.desc)}` : ''}</p><div class="row">${act}</div></div>`;
   }
   return `<div class="cs-wrap"><div class="cs-roles"><button data-role="survivor" class="${storeRole === 'survivor' ? 'on' : ''}">Survivors</button><button data-role="killer" class="${storeRole === 'killer' ? 'on' : ''}">Killers</button></div>
     <div class="cs-grid">${grid}</div>

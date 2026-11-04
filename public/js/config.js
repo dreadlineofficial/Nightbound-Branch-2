@@ -364,6 +364,7 @@ export const SKINS = {
     { id: 'default', name: 'Night Shift', price: 0 },
     { id: 'overtime', name: 'Overtime', price: 2000, flesh: 0x9a8a88, apron: 0x2a1a14, blood: 0x6a0a06, desc: 'Hard hat and a hi-vis vest over the apron. Safety first.', fx: [['hardhat', { color: 0xe0b020, lamp: true }], ['hivis', { color: 0xf09020 }]] },
     { id: 'quota', name: 'Quota Met', price: 3500, bone: 0xc8a050, eye: 0xff3a20, desc: 'Employee of the month: a gold mask, a gold hook and gold chains.', fx: [['metal', { names: ['Foreman_8', 'Foreman_14'], color: 0xd8b040 }], ['chains', { color: 0xd8b040, cross: true }], ['crown', { color: 0xd8b040 }]] },
+    { id: 'batman', name: 'The Dark Knight', price: 6500, limited: true, batman: true, desc: 'Limited edition. The cowl, the cape, the armoured suit, and the Foreman\'s hook turned into a grappling hook. Fan-made; not affiliated with DC.' },
     { id: 'reassigned', name: 'Reassigned', price: 6000, flesh: 0x7a8a8a, bone: 0x2a2a2a, eye: 0x7affd0, apron: 0x101418, desc: 'Moved to the cold store, and never came back out. A gas-masked teal ghost in chains.', fx: [['ghost', { color: 0x7affd0, op: 0.55 }], ['gasmask', { color: 0x1a1c1e, eye: 0x7affd0, filter: 0x2a2a2a }], ['chains', { color: 0x4a4a4a }]] },
   ],
 };
@@ -388,8 +389,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.21.0';
+export const VERSION = '2.21.1';
 export const INBOX = [
+  {
+    id: 'v2.21.1', version: '2.21.1', date: 'Nov 2026', title: 'Limited Edition: The Dark Knight', tag: 'Store',
+    body: ['A limited edition outfit for the Foreman: The Dark Knight. The cowl, the cape and the armoured suit, moving with all of the Foreman\'s own animations.', 'His hook becomes a black grappling hook, and his Chain Hook fires a thin black grapnel line. (Fan-made; not affiliated with DC.)', 'Find it in the Store under the Foreman, while it lasts.'],
+  },
   {
     id: 'v2.21.0', version: '2.21.0', date: 'Nov 2026', title: 'Chapter VIII: Granny', tag: 'New Chapter', banner: 'granny',
     body: [
