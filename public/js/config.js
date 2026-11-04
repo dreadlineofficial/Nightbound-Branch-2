@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.5';
+export const VERSION = '2.19.6';
 export const INBOX = [
+  {
+    id: 'v2.19.6', version: '2.19.6', date: 'Nov 2026', title: 'Ted: Arfh!', tag: 'Fix',
+    body: ['Ted\'s "Arfh!" now plays when he sees you get downed (it used to wait until you died).'],
+  },
   {
     id: 'v2.19.5', version: '2.19.5', date: 'Nov 2026', title: 'Ted: New Line', tag: 'Update',
     body: ['Ted has a new line for when the killer is chasing you: "I\'m a f***ing teddy bear!"'],

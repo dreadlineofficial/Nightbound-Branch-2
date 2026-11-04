@@ -294,8 +294,8 @@ export class Sidekick {
     this.t += dt;
     this.puffs.update(dt);
     if (this.queued) { env.say && R0(this) && env.say(this.queued, this.x, this.z); this.queued = null; }
-    // seeing the owner die
-    if (owner && this.prevSt && this.prevSt !== 'dead' && owner.st === 'dead') this.say('arfh', 5, true);
+    // seeing the owner go down
+    if (owner && this.prevSt && this.prevSt !== 'down' && owner.st === 'down') this.say('arfh', 5, true);
     if (owner) this.prevSt = owner.st;
     if (owner && this.kind === 'ted' && env.visible !== false && owner.st !== 'out' && owner.st !== 'ghost') {
       // running from the monster
