@@ -787,19 +787,20 @@ export function animate(R, s, dt) {
 }
 
 // ---------- first-person killer viewmodel ----------
-export function makeViewModel(id, vsk = {}) {
+export function makeViewModel(id, vsk = {}, real = {}) {
   const g = new THREE.Group();
   const arm = new THREE.Group(); g.add(arm);          // right arm + weapon, animated as a whole
   const add = (parent, geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.scale.set(sx, sy, sz); parent.add(me); return me; };
   const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8, granny: 0x9a8a80 }[id];
   const bk = id === 'butcher' ? 1.5 : id === 'harrower' ? 1.25 : id === 'wisp' ? 0.85 : 1;
   // (Batman: black armoured sleeves and gauntlets)
-  const armM = vsk.batman ? mat(0x1a1c20, { map: 'leather', rough: 0.45 }) : id === 'bateman' ? mat(0x30353c, { map: 'pinstripe', rough: 0.7 }) : mat(skin, { map: id === 'lamplighter' || id === 'harrower' ? 'cloth' : 'skin', rough: 0.75 });
-  const handM = vsk.batman ? mat(0x121316, { map: 'leather', rough: 0.4 }) : id === 'lamplighter' ? mat(0x111111, { map: 'leather' }) : mat(skin, { map: 'skin', rough: 0.7 });
-  add(arm, lathe(0.42, [[0, 0.03 * bk], [0.3, 0.04 * bk], [0.75, 0.05 * bk], [1, 0.055 * bk]]), armM, 0, -0.02, 0.03, -Math.PI / 2, 0, 0);
-  add(arm, G.sph(0.045 * bk, 12, 10), handM, 0, -0.005, 0.0, 0, 0, 0, 1.0, 0.75, 1.15);
-  for (let i = 0; i < 4; i++) add(arm, G.cap(0.011 * bk, 0.03), handM, -0.028 * bk + i * 0.019 * bk, 0.022, -0.012, 0, 0, Math.PI / 2, 1, 1, 1);
-  add(arm, G.cap(0.012 * bk, 0.03), handM, 0.035 * bk, 0.015, 0.02, 0.6, 0, 0.4);
+  const armParts = [], leftParts = [];
+  const armM = real.armM || (vsk.batman ? mat(0x1a1c20, { map: 'leather', rough: 0.45 }) : id === 'bateman' ? mat(0x30353c, { map: 'pinstripe', rough: 0.7 }) : mat(skin, { map: id === 'lamplighter' || id === 'harrower' ? 'cloth' : 'skin', rough: 0.75 }));
+  const handM = real.handM || vsk.batman ? mat(0x121316, { map: 'leather', rough: 0.4 }) : id === 'lamplighter' ? mat(0x111111, { map: 'leather' }) : mat(skin, { map: 'skin', rough: 0.7 });
+  armParts.push(add(arm, lathe(0.42, [[0, 0.03 * bk], [0.3, 0.04 * bk], [0.75, 0.05 * bk], [1, 0.055 * bk]]), armM, 0, -0.02, 0.03, -Math.PI / 2, 0, 0));
+  armParts.push(add(arm, G.sph(0.045 * bk, 12, 10), handM, 0, -0.005, 0.0, 0, 0, 0, 1.0, 0.75, 1.15));
+  for (let i = 0; i < 4; i++) armParts.push(add(arm, G.cap(0.011 * bk, 0.03), handM, -0.028 * bk + i * 0.019 * bk, 0.022, -0.012, 0, 0, Math.PI / 2, 1, 1, 1));
+  armParts.push(add(arm, G.cap(0.012 * bk, 0.03), handM, 0.035 * bk, 0.015, 0.02, 0.6, 0, 0.4));
   const tip = new THREE.Object3D(), base = new THREE.Object3D();
   if (id === 'butcher') {
     add(arm, G.cyl(0.025, 0.03, 0.2), mat(0x3a2414), 0, 0.02, -0.05, Math.PI / 2, 0, 0);
@@ -831,6 +832,9 @@ export function makeViewModel(id, vsk = {}) {
     add(bat, G.cyl(0.046, 0.044, 0.2, 12), blood, 0, 0, -0.73, Math.PI / 2, 0, 0);
     add(bat, G.sph(0.046, 10, 8), blood, 0, 0, -0.83, 0, 0, 0, 1, 1, 0.6);
     tip.position.set(0, Math.sin(0.28) * 0.83, -Math.cos(0.28) * 0.83); base.position.set(0, Math.sin(0.28) * 0.25, -Math.cos(0.28) * 0.25);
+  } else if (id === 'slimer') {
+    // no weapon: he grabs with his slimy hands
+    tip.position.set(0, 0.02, -0.12); base.position.set(0, 0, 0.05);
   } else if (id === 'foreman') {
     const steel = vsk.batman ? mat(0x1a1c20, { map: 'metal', metal: 0.85, rough: 0.3 }) : mat(0x8a8a88, { map: 'metal', metal: 0.8, rough: 0.35 });
     add(arm, G.cyl(0.014, 0.014, 0.25, 6), steel, 0, 0.03, -0.14, Math.PI / 2, 0, 0);
@@ -841,6 +845,12 @@ export function makeViewModel(id, vsk = {}) {
     add(arm, G.tor(0.1, 0.014, Math.PI * 1.2), mat(0x2a2a28, { metal: 0.7 }), 0, 0.06, -1.15, 0, Math.PI / 2, 0);
     tip.position.set(0, 0.1, -1.2); base.position.set(0, 0, -0.6);
   }
+  // the killer's own forearm and hand (and weapon, if the model holds one) from their model
+  if (real.R) {
+    for (const m of armParts) m.visible = false;
+    if (real.R.weapon) { for (const o of arm.children) if (!armParts.includes(o)) o.visible = false; tip.position.copy(real.R.tip); base.position.copy(real.R.base); }
+    arm.add(real.R.group);
+  }
   arm.add(tip); arm.add(base);
   // blood smear on the business end, revealed after a hit
   const bloodMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshStandardMaterial({ color: 0x5a0505, roughness: 0.15, transparent: true, opacity: 0 }));
@@ -848,9 +858,10 @@ export function makeViewModel(id, vsk = {}) {
   arm.add(bloodMesh); g.userData.bloodMesh = bloodMesh;
   // left hand (holds the lantern for the Lamplighter)
   const left = new THREE.Group(); g.add(left);
-  add(left, lathe(0.4, [[0, 0.03 * bk], [0.3, 0.04 * bk], [0.75, 0.05 * bk], [1, 0.055 * bk]]), armM, 0, 0, 0.03, -Math.PI / 2, 0, 0);
-  add(left, G.sph(0.045 * bk, 12, 10), handM, 0, 0, 0, 0, 0, 0, 1.0, 0.7, 1.2);
-  for (let i = 0; i < 4; i++) add(left, G.cap(0.01 * bk, 0.045), handM, -0.026 * bk + i * 0.018 * bk, -0.005, -0.06, -Math.PI / 2 + 0.3, 0, 0);
+  leftParts.push(add(left, lathe(0.4, [[0, 0.03 * bk], [0.3, 0.04 * bk], [0.75, 0.05 * bk], [1, 0.055 * bk]]), armM, 0, 0, 0.03, -Math.PI / 2, 0, 0));
+  leftParts.push(add(left, G.sph(0.045 * bk, 12, 10), handM, 0, 0, 0, 0, 0, 0, 1.0, 0.7, 1.2));
+  for (let i = 0; i < 4; i++) leftParts.push(add(left, G.cap(0.01 * bk, 0.045), handM, -0.026 * bk + i * 0.018 * bk, -0.005, -0.06, -Math.PI / 2 + 0.3, 0, 0));
+  if (real.L) { for (const m of leftParts) m.visible = false; left.add(real.L.group); }
   if (id === 'lamplighter') {
     const lant = new THREE.Group(); lant.position.set(0, -0.12, -0.05); left.add(lant);
     add(lant, G.box(0.12, 0.16, 0.12), mat(0x1a2a1a, { transparent: true, opacity: 0.5 }), 0, 0, 0);

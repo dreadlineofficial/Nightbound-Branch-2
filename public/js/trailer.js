@@ -1,9 +1,10 @@
 // The Granny chapter trailer: a short in-engine cinematic (the real house, Granny, Slendrina and a
-// bear trap), letterboxed, with captions, sound and a title card. Skippable at any time.
+// bear trap model), letterboxed, with captions, sound and a title card. Skippable at any time.
 import * as THREE from 'three';
 import { loadGranny, makeGrannyGlb, animateGranny, loadSlendrina, makeSlendrina } from './grannyGlb.js';
 import { loadScene, cloneScene } from './sceneGlb.js';
 import { sound } from './audio.js';
+import { cloneStatic, loadStatic } from './glbModels.js';
 
 const $ = id => document.getElementById(id);
 const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
@@ -48,7 +49,7 @@ function stop() {
 async function play(T, done) {
   const loadingEl = document.createElement('div'); loadingEl.className = 'tr-text show'; loadingEl.textContent = '…';
   T.appendChild(loadingEl);
-  const ok = await Promise.race([Promise.all([loadGranny(), loadSlendrina(), loadScene('granny_map')]).then(a => a.every(Boolean)), new Promise(r => setTimeout(() => r(false), 20000))]);
+  const ok = await Promise.race([Promise.all([loadGranny(), loadSlendrina(), loadScene('granny_map'), loadStatic('beartrap').then(() => true)]).then(a => a.every(Boolean)), new Promise(r => setTimeout(() => r(false), 20000))]);
   if (!ok) { done(); return; }
   T.innerHTML = '';
   const r = new THREE.WebGLRenderer({ antialias: true });
@@ -88,6 +89,14 @@ async function play(T, done) {
     const j = new THREE.Group(); j.position.y = 0.03; trap.add(j); jaws.push([j, sd]);
     const arc = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.013, 6, 18, Math.PI), steel); arc.rotation.y = sd > 0 ? 0 : Math.PI; j.add(arc);
     for (let i = 1; i < 8; i++) { const a = i / 8 * Math.PI, t = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.06, 4), steel); t.position.set(Math.cos(a) * 0.21, 0.03, Math.sin(a) * 0.21 * sd); j.add(t); }
+  }
+  // the Granny bear trap model, when it has loaded (its clip snaps the jaws shut)
+  let trapClose = null;
+  const tm = cloneStatic('beartrap'), tclip = tm && tm.userData.anims && tm.userData.anims[0];
+  if (tm && tclip) {
+    trap.children.slice().forEach(c => trap.remove(c)); jaws.length = 0; trap.add(tm);
+    const mx = new THREE.AnimationMixer(tm), act = mx.clipAction(tclip); act.play(); act.paused = true;
+    trapClose = k => { act.time = k * tclip.duration * 0.999; mx.update(0); }; trapClose(0);
   }
   const tl = new THREE.PointLight(0xffc890, 6, 3, 1.5); tl.position.set(0.4, 0.8, 22.6); sc.add(tl);
   const cam = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 300);
@@ -129,6 +138,7 @@ async function play(T, done) {
     const snapAt = 0.55;
     trap.visible = !!sh.trap;
     for (const [j, sd] of jaws) j.rotation.x = sh.trap && f > snapAt ? sd * 0.05 : sd * 1.25;
+    if (trapClose) trapClose(sh.trap && f > snapAt ? Math.min(1, (f - snapAt) / 0.04) : 0);
     if (sh.trap && f > snapAt) once('snap', () => { sound.play('thunk'); sound.play('scream', undefined, undefined, { pitch: 1.2, len: 1.0 }); flash.style.background = '#600'; flash.style.opacity = '0.6'; setTimeout(() => { flash.style.opacity = '0'; }, 120); });
     // shot 4: Slendrina, flickering in the dark, closer every flicker
     if (sh.slend) {

@@ -2,6 +2,8 @@
 //  - slimer: "Ghostbuster's Slimer" by Nom (sketchfab.com/nomthewise), CC BY 4.0
 //  - axe: "Fire Axe" by denis_cliofas (sketchfab.com/denis_cliofas), CC BY 4.0
 //  - ghosttrap: "HW Detail #4 GHOST TRAP" by Kirumba86 (sketchfab.com/MorisKirumba86), CC BY 4.0
+//  - beartrap: "Granny bear trap" by Eri Game Dev (sketchfab.com/blerko0178), CC BY 4.0; its clip snaps the jaws shut
+//  - taser: "Taser Gun" by Mati236 (sketchfab.com/chenjunliu6), CC BY 4.0
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -10,6 +12,8 @@ const SPEC = {
   slimer: { size: 1.55, axis: 'y', origin: 'center' },
   axe: { size: 0.82, axis: 'max', origin: 'center' },
   ghosttrap: { size: 0.5, axis: 'x', origin: 'bottom' },
+  beartrap: { size: 0.62, axis: 'max', origin: 'bottom' },
+  taser: { size: 0.2, axis: 'max', origin: 'center' },
 };
 const tpl = {}, loading = {}, waiters = {};
 
@@ -36,6 +40,7 @@ export function loadStatic(name) {
     inner.scale.multiplyScalar(k);
     inner.position.set(-c.x * k, S.origin === 'bottom' ? -box.min.y * k : -c.y * k, -c.z * k);
     root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    root.userData.anims = g.animations || [];
     tpl[name] = root;
     for (const cb of (waiters[name] || []).splice(0)) { try { cb(); } catch (e) { console.error(e); } }
     return root;
@@ -49,6 +54,7 @@ export function onStaticReady(name, cb) { if (tpl[name]) cb(); else (waiters[nam
 export function cloneStatic(name, tint) {
   if (!tpl[name]) return null;
   const o = tpl[name].clone(true);
+  o.userData = { ...tpl[name].userData };
   o.traverse(m => {
     if (!m.isMesh) return;
     m.material = Array.isArray(m.material) ? m.material.map(x => x.clone()) : m.material.clone();

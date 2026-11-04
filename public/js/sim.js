@@ -1,5 +1,5 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
-import { RULES, KILLERS, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS } from './config.js';
+import { RULES, KILLERS, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS } from './config.js';
 import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute, angDiff,
@@ -24,6 +24,7 @@ export class Sim {
       cages: M.cages.map(() => null), cageBroken: M.cages.map(() => false),
       gates: M.gates.map(() => ({ p: 0, open: false })),
       spears: [], lanterns: [], lid: 0, dark: 0, chains: [], traps: [], tid: 0, slime: [], saws: [], bears: [], slend: null, spider: null,
+      chests: (M.chests || []).map(() => ({ open: false, it: null })), zaps: [],
     };
     let si = 0, ki = 0;
     for (const r of roster) {
@@ -69,7 +70,7 @@ export class Sim {
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
         ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0,
+        item: r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: 0, zap: 0, spied: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: typeof r.pet === 'string' && ['ted', 'rosy'].includes(r.pet) ? r.pet : '',
@@ -171,6 +172,31 @@ export class Sim {
         p.emote = n;
         (this.emoteAt ||= new Map()).set(p.id, { x: p.x, z: p.z, t: S.t });
         if (n) this.ev({ k: 'emote', id: p.id, n });
+        break;
+      }
+      case 'taser': {
+        // Taser: a short-range shot along the aim; the first killer it reaches is electrocuted
+        if (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || p.item !== 'taser' || !(p.tasers > 0) || ((this.taserCd ||= new Map()).get(p.id) || 0) > S.t) return;
+        p.tasers--; this.taserCd.set(p.id, S.t + 0.8);
+        const yaw = num(m.yaw, p.yaw), f = fwd(yaw), T = ITEMS.taser;
+        let hit = null, hd = T.range;
+        for (const K of S.players) {
+          if (K.role !== 'killer' || K.st === 'dead' || K.disguise) continue;
+          const dx = K.x - p.x, dz = K.z - p.z, along = dx * f.x + dz * f.z, side = Math.abs(dx * f.z - dz * f.x);
+          if (along < 0.2 || along > hd || side > 0.75 || losBlocked(M, p.x, p.z, K.x, K.z, 1.2)) continue;
+          hit = K; hd = along;
+        }
+        // the darts stop at the first wall
+        let reach = hit ? hd : T.range;
+        if (!hit) for (let d = 0.5; d < T.range; d += 0.25) if (losBlocked(M, p.x, p.z, p.x + f.x * d, p.z + f.z * d, 1.2)) { reach = d; break; }
+        const ex = p.x + f.x * reach, ez = p.z + f.z * reach;
+        this.ev({ k: 'taser', id: p.id, x: p.x, z: p.z, tx: hit ? hit.x : ex, tz: hit ? hit.z : ez, hit: hit ? hit.id : null });
+        if (hit) {
+          this.stunKiller(hit, T.stun, false); hit.zap = T.stun;
+          p.score.d += 600;
+          this.ev({ k: 'tazed', id: hit.id, by: p.id });
+        }
+        if (p.tasers <= 0) this.ev({ k: 'taserdead', id: p.id });
         break;
       }
       case 'trap': {
@@ -490,6 +516,8 @@ export class Sim {
       p.boost = Math.max(0, p.boost - dt);
       p.reveal = Math.max(0, p.reveal - dt);
       if (p.stun > 0) p.stun = Math.max(0, p.stun - dt);
+      if (p.zap > 0) p.zap = Math.max(0, p.zap - dt);
+      if (p.spied > 0) p.spied = Math.max(0, p.spied - dt);
       if (p.abCd > 0) p.abCd = Math.max(0, p.abCd - dt);
       if (p.ab2Cd > 0) p.ab2Cd = Math.max(0, p.ab2Cd - dt);
       if (p.teleCd > 0) p.teleCd = Math.max(0, p.teleCd - dt);
@@ -1030,6 +1058,27 @@ export class Sim {
         this.ev({ k: 'kick', id: a.id });
         break;
       }
+      case 'chest': {
+        // what's inside is rolled now: a Taser one time in five, otherwise a fresh flashlight or ghost traps
+        const cs = S.chests[a.id]; if (!cs || cs.open) break;
+        const r = Math.random();
+        cs.open = true;
+        cs.it = r < ITEMS.taser.chance ? { k: 'taser', n: ITEMS.taser.shots } : r < 0.6 ? { k: 'flashlight', n: RULES.flashBattery } : { k: 'trap', n: 2 };
+        p.score.c += 150;
+        this.ev({ k: 'chest', id: a.id, by: p.id, item: cs.it.k });
+        break;
+      }
+      case 'swap': {
+        // trade what you're holding (used up or not) for what's in the chest
+        const cs = S.chests[a.id]; if (!cs || !cs.it) break;
+        const mine = { k: p.item, n: p.item === 'trap' ? p.traps : p.item === 'taser' ? p.tasers : p.flash };
+        const got = cs.it;
+        p.item = got.k; p.flash = got.k === 'flashlight' ? got.n : 0; p.traps = got.k === 'trap' ? got.n : 0; p.tasers = got.k === 'taser' ? got.n : 0;
+        p.flashOn = false;
+        cs.it = mine;
+        this.ev({ k: 'swap', id: a.id, by: p.id, item: got.k, left: mine.k });
+        break;
+      }
       case 'snuff': {
         const i = S.lanterns.findIndex(l => l.id === a.id);
         if (i >= 0) { const L = S.lanterns[i]; S.lanterns.splice(i, 1); p.score.d += 250; this.ev({ k: 'snuff', id: L.id, x: L.x, z: L.z, by: p.id }); }
@@ -1126,10 +1175,10 @@ export class Sim {
   possess(C, X) {
     const S = this.S;
     for (const o of S.players) if (o.act && (o.act.k === 'heal' || o.act.k === 'pickup') && o.act.id === X.id) this.cancelAct(o);
-    const orig = { char: X.char, skin: X.skin, perks: X.perks, item: X.item, flash: X.flash, traps: X.traps, bot: X.bot };
+    const orig = { char: X.char, skin: X.skin, perks: X.perks, item: X.item, flash: X.flash, traps: X.traps, tasers: X.tasers, bot: X.bot };
     const gid = X.id + '~ghost';
     const G = this.makePlayer({ id: gid, name: X.name, role: 'survivor', char: X.char, skin: X.skin, perks: X.perks, item: X.item, bot: X.bot }, { x: X.x, z: X.z });
-    Object.assign(G, { st: 'ghost', yaw: X.yaw, stage: X.stage, flash: 0, traps: 0, score: X.score });
+    Object.assign(G, { st: 'ghost', yaw: X.yaw, stage: X.stage, flash: 0, traps: 0, tasers: 0, score: X.score });
     X.score = { a: 0, b: 0, c: 0, d: 0 };
     S.players.push(G); this.inputs.set(gid, { e: false, latch: false });
     Object.assign(X, {
@@ -1268,7 +1317,7 @@ export class Sim {
     for (const s of S.players) {
       if (s.role !== 'survivor' || s.st !== 'ok' || !s.act || s.act.k !== 'repair') continue;
       if (Math.hypot(s.x - sp.x, s.z - sp.z) > 14 || losBlocked(M, sp.x, sp.z, s.x, s.z) || S.t - (P.seen[s.id] ?? -99) < 12) continue;
-      P.seen[s.id] = S.t; s.reveal = Math.max(s.reveal || 0, 7);
+      P.seen[s.id] = S.t; s.reveal = Math.max(s.reveal || 0, 7); s.spied = 7;
       sp.st = 2; P.wait = 1.6; sp.yaw = Math.atan2(s.x - sp.x, s.z - sp.z);
       this.ev({ k: 'spidermom', id: s.id, x: sp.x, z: sp.z });
       break;

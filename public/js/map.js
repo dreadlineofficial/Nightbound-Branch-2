@@ -94,8 +94,35 @@ export function makeCtx(M, R, cx, cz, rot) {
 
 
 export function buildMap(seed, map = 'woods') {
-  if (map === 'meatworks') return buildMeatworks(seed);
-  if (map === 'granny') return buildGrannyHouse(seed);
+  const M = map === 'meatworks' ? buildMeatworks(seed) : map === 'granny' ? buildGrannyHouse(seed) : buildArena(seed, map);
+  addChests(M, seed);
+  return M;
+}
+// Chests: a few on every map, away from generators, hooks, gates and spawns, each one on open ground
+// the bots can walk to. What's inside is rolled when it is first opened (sim).
+function addChests(M, seed) {
+  const R = rng(seed * 31 + 7), half = M.half || HALF, n = half > 60 ? 7 : 4;
+  M.chests = [];
+  if (!M.grid) buildGrid(M);
+  const away = (x, z) => [...M.gens, ...M.cages].every(o => Math.hypot(o.x - x, o.z - z) > 6) && M.gates.every(g => Math.hypot(g.x - x, g.z - z) > 8)
+    && M.chests.every(c => Math.hypot(c.x - x, c.z - z) > half * 0.55) && M.spawns.survivors.every(s => Math.hypot(s.x - x, s.z - z) > 5);
+  for (let tries = 0; tries < 400 && M.chests.length < n; tries++) {
+    const p = freePoint(M, (R() * 2 - 1) * half * 0.85, (R() * 2 - 1) * half * 0.85, 1.0);
+    if (Math.abs(p.x) > half - 2 || Math.abs(p.z) > half - 2 || !away(p.x, p.z) || overlaps(M, p.x, p.z, 1.0)) continue;
+    const k = cellOf(M, p.x, p.z); if (k < 0 || M.grid.type[k] === 1) continue;
+    M.chests.push({ id: M.chests.length, x: p.x, z: p.z, rot: R() * Math.PI * 2 });
+  }
+  // relax the spacing if the map was too tight
+  for (let tries = 0; tries < 300 && M.chests.length < Math.min(3, n); tries++) {
+    const p = freePoint(M, (R() * 2 - 1) * half * 0.8, (R() * 2 - 1) * half * 0.8, 1.0);
+    if (overlaps(M, p.x, p.z, 1.0) || M.chests.some(c => Math.hypot(c.x - p.x, c.z - p.z) < 10) || [...M.gens, ...M.cages].some(o => Math.hypot(o.x - p.x, o.z - p.z) < 4)) continue;
+    const k = cellOf(M, p.x, p.z); if (k < 0 || M.grid.type[k] === 1) continue;
+    M.chests.push({ id: M.chests.length, x: p.x, z: p.z, rot: R() * Math.PI * 2 });
+  }
+  for (const c of M.chests) M.circles.push({ x: c.x, z: c.z, r: 0.5, h: 0.75, kind: 'chest', nocast: true });
+  M.hash = null; buildGrid(M);
+}
+function buildArena(seed, map) {
   const R = rng(seed);
   const BIG = BIG_MAPS[map] || null; // Infection maps reuse a theme on a bigger grid
   const base = BIG ? BIG.base : map;

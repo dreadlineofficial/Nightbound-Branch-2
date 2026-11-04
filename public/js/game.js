@@ -6,12 +6,14 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { realistic, nightEnv } from './gfx.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { grannyReady, grandpaReady, slendrinaReady, makeSlendrina, spiderMomReady, makeSpiderMom } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
+import { bakeArm } from './fpArms.js';
+import { foremanReady, batmanReady } from './foremanGlb.js';
 let KB_SETTINGS = null;
 const kbd = id => `<kbd>${keyLabel(KB_SETTINGS, id).replace(/[<>&]/g, '')}</kbd>`;
 import { staticReady, cloneStatic } from './glbModels.js';
@@ -256,6 +258,33 @@ class BloodDecals {
 // how a player looks to everyone else: a body possessed by Chucky still looks like its survivor
 const lookRole = p => p.disguise ? 'survivor' : p.role;
 // killers played over the shoulder: Chucky, and Chucky inside a survivor's body
+// killers drawn from a GLB model: their first-person arms are cut from it
+const GLB_KILLERS = new Set(['granny', 'foreman', 'slimer']);
+const FP_OPT = { slimer: { region: { sign: -1, from: 0.55, wrist: 0.72 } }, foreman: { skip: /Foreman_14/ }, granny: { pitch: -0.35 } };
+function fpModelReady(id, sk) {
+  if (id === 'granny') return sk.grandpa ? grandpaReady() : grannyReady();
+  if (id === 'foreman') return sk.batman ? batmanReady() : foremanReady();
+  if (id === 'slimer') return staticReady('slimer');
+  return true;
+}
+function killerViewParts(id, sk) {
+  let R = null;
+  try { R = makeKiller(id, sk); } catch (e) { return {}; }
+  if (!R) return {};
+  const out = {};
+  if (R.glb || R.staticGlb) {
+    if (!GLB_KILLERS.has(id)) return {};
+    const o = FP_OPT[id] || {};
+    try { out.R = bakeArm(R.root, 'R', o); out.L = bakeArm(R.root, 'L', { ...o, noRigid: true, pitch: 0 }); } catch (e) { console.warn('first-person arms:', e); }
+    if (!out.R) delete out.R; if (!out.L) delete out.L;
+  } else if (R.j) {
+    // a procedural killer: use the materials of their own forearm and hand (outfit colours included)
+    const first = j => j && j.children.find(c => c.isMesh && c.material && !Array.isArray(c.material));
+    const fm = first(R.j.elR), hm = first(R.j.handR);
+    if (fm) out.armM = fm.material; if (hm) out.handM = hm.material;
+  }
+  return out;
+}
 const isTpv = p => !!p && (p.disguise || !!(KILLERS[p.char] && KILLERS[p.char].tpv));
 // Chucky's pounce arc
 function leapLift(p) {
@@ -358,9 +387,7 @@ export class Game {
   // first-person weapon and swing trail for a killer
   setupKillerView(me) {
     {
-      this.view = makeViewModel(me.char, skinOf(me.char, me.skin));
-      this.view.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.userData.op = o.material.opacity; } });
-      this.camera.add(this.view);
+      this.buildView(me);
       // weapon swing trail (camera space)
       const N = 14;
       const tg = new THREE.BufferGeometry();
@@ -373,6 +400,18 @@ export class Game {
       this.trailPts = [];
       this.camera.add(this.trail);
     }
+  }
+  // the first-person arms: cut from the killer's own model (and outfit) once it has loaded
+  buildView(me) {
+    if (this.view) this.camera.remove(this.view);
+    const sk = skinOf(me.char, me.skin), real = killerViewParts(me.char, sk);
+    this.view = makeViewModel(me.char, sk, real);
+    this.view.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.userData.op = o.material.opacity; } });
+    this.camera.add(this.view);
+    this.viewFaded = false;
+    // a model still loading: try again when it's in
+    this.viewPending = GLB_KILLERS.has(me.char) && !real.R ? me.char + ':' + me.skin : null;
+    this.viewReady = fpModelReady(me.char, sk);
   }
   // Infection: a survivor who turns becomes a killer mid-match
   switchRole(me, S) {
@@ -503,6 +542,10 @@ export class Game {
           this.send({ t: 'act', a: 'ability' });
         }
       }
+    } else if (e.button === 2 && me.item === 'taser') {
+      // survivor taser: click to fire where you're looking
+      if (down && me.st === 'ok' && !me.act && me.tasers > 0) { me.yaw = this.camYaw; this.send({ t: 'act', a: 'taser', yaw: this.camYaw }); }
+      else if (down && me.st === 'ok' && !(me.tasers > 0)) this.feed('Your Taser is out of shots.');
     } else if (e.button === 2) {
       // survivor flashlight: hold to shine
       const on = down && me.flash > 0 && me.st === 'ok';
@@ -577,6 +620,8 @@ export class Game {
     this.updateTorchLight();
     this.updateTraps(S);
     this.updateBears(S);
+    this.updateChests(S, dt);
+    this.updateZaps(S, dt);
     if (this.execTrap && !S.players.some(o => o.st === 'exec')) { this.execTrapT = (this.execTrapT || 0) + dt; if (this.execTrapT > 6) { this.scene.remove(this.execTrap); this.execTrap = null; this.execTrapT = 0; } } else this.execTrapT = 0;
     this.updateSlendrina(dt, S, me);
     this.updateSpiderMom(dt, S);
@@ -859,6 +904,11 @@ export class Game {
       }
     }
     // viewmodel
+    if (this.view && me && this.viewPending && (this.viewRetry = (this.viewRetry || 0) + dt) > 1) {
+      this.viewRetry = 0;
+      if (me.role !== 'killer' || isTpv(me)) this.viewPending = null;
+      else if (fpModelReady(me.char, skinOf(me.char, me.skin)) && !this.viewReady) this.buildView(me);
+    }
     if (this.view && me) {
       const c = this.chars.get(me.id), cs = (c && c.st) || {};
       animateView(this.view, { atk: me.atk, atkF: cs.atkF, atkHit: me.atkHit, recF: cs.recF, aim: me.aim, stun: me.stun > 0, rampage: me.char === 'butcher' && me.ab === 1, carry: me.carry != null, act: me.act && me.act.k !== 'execute', speed: c ? c.spd : 0, t: this.t, tele: !!me.tele, saw: me.char === 'bateman' && me.ammo > 0 }, dt);
@@ -1181,19 +1231,19 @@ export class Game {
       once('kneel', 0.04, () => { sound.play('thud', pos.x, pos.z); if (mine) this.feed('"Time for bed…"', 'big'); });
       once('set', 0.14, () => {
         if (this.execTrap) this.scene.remove(this.execTrap);
-        const g = makeBearTrap(); g.position.set(pos.x + F.x * 0.78, 0.02, pos.z + F.z * 0.78); g.rotation.y = K.yaw || 0;
+        const g = makeExecTrap(); g.position.set(pos.x + F.x * 0.78, 0.02, pos.z + F.z * 0.78); g.rotation.y = K.yaw || 0;
         this.scene.add(g); this.execTrap = g; this.execTrapKey = key; sound.play('click', pos.x, pos.z);
       });
       once('scream', 0.32, () => sound.play('scream', pos.x, pos.z, { pitch, len: 1.4 }));
       once('shove', 0.42, () => sound.play('swing', pos.x, pos.z));
       once('snap', 0.55, () => {
-        if (this.execTrap) for (const j of this.execTrap.userData.jaws) j.rotation.x = j.userData.sd * 0.12;
         const tx = pos.x + F.x * 0.78, tz = pos.z + F.z * 0.78;
         this.blood.spawn(tx, 0.25, tz, 120, 0x6a0303, 3.4, 1.6, -9.8, 1.4); this.blood.spawn(tx, 0.25, tz, 40, 0x3a0101, 1.2, 1.4, -9.8, 0.5);
         if (this.decals) { this.decals.add(tx, tz, 1.4, 0); this.decals.add(tx + (Math.random() - 0.5) * 0.5, tz + (Math.random() - 0.5) * 0.5, 0.9, 2); }
         sound.play('thunk', tx, tz); sound.play('break', tx, tz); sound.play('hit', pos.x, pos.z, { pitch, down: true });
         if (mine) { this.shake = 1.1; this.flash = 0.8; }
       });
+      if (this.execTrap && this.execTrap.userData.close) this.execTrap.userData.close(Math.max(0, Math.min(0.9, (f - 0.53) / 0.03 * 0.9)));
       if (f > 0.56 && f < 0.85 && Math.random() < 0.3) this.blood.spawn(pos.x + F.x * 0.78, 0.15, pos.z + F.z * 0.78, 3, 0x5a0404, 0.5, 1, -9, 0.3);
       once('done', 0.9, () => { if (mine) this.feed('"Sweet dreams."', 'big'); });
     } else if (ch === 'bateman') {
@@ -1323,6 +1373,58 @@ export class Game {
       const g = makeBearTrap(); g.position.set(t.x, 0.02, t.z); g.rotation.y = (t.id * 2.39) % 6.28;
       this.scene.add(g); this.bearMeshes.set(t.id, g);
     }
+  }
+  // ---------------- chests: a wooden chest with iron bands; the lid swings up, the item floats inside ----------------
+  updateChests(S, dt) {
+    const M = this.M;
+    if (!M.chests || !M.chests.length) return;
+    if (!this.chestMeshes) {
+      this.chestMeshes = [];
+      const wood = new THREE.MeshStandardMaterial({ color: 0x6a4626, roughness: 0.8, map: (tex('wood') || {}).map || null }), iron = new THREE.MeshStandardMaterial({ color: 0x3a3836, metalness: 0.7, roughness: 0.45 });
+      const gold = new THREE.MeshStandardMaterial({ color: 0xc8a050, metalness: 0.8, roughness: 0.3, emissive: 0x3a2a08, emissiveIntensity: 0.4 });
+      for (const c of M.chests) {
+        const g = new THREE.Group(); g.position.set(c.x, 0, c.z); g.rotation.y = c.rot; g.scale.setScalar(1.15);
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.42, 0.56), wood); box.position.y = 0.21; g.add(box);
+        for (const x of [-0.33, 0.33]) { const band = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.44, 0.58), iron); band.position.set(x, 0.21, 0); g.add(band); }
+        const lid = new THREE.Group(); lid.position.set(0, 0.42, -0.28); g.add(lid);
+        const top = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.9, 14, 1, false, 0, Math.PI), wood); top.rotation.set(0, 0, Math.PI / 2); top.position.set(0, 0, 0.28); top.scale.set(1, 1, 0.45); lid.add(top);
+        for (const x of [-0.33, 0.33]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.06, 14, 1, false, 0, Math.PI), iron); band.rotation.set(0, 0, Math.PI / 2); band.position.set(x, 0, 0.28); band.scale.set(1, 1, 0.47); lid.add(band); }
+        const lock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.04), gold); lock.position.set(0, 0.36, 0.29); g.add(lock);
+        g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        const glow = new THREE.Mesh(new THREE.CircleGeometry(0.32, 20), new THREE.MeshBasicMaterial({ color: 0xffd890, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+        glow.rotation.x = -Math.PI / 2; glow.position.y = 0.43; g.add(glow);
+        const hold = new THREE.Group(); hold.position.y = 0.62; g.add(hold);
+        this.scene.add(g); this.chestMeshes.push({ g, lid, glow, hold, k: null, open: 0 });
+      }
+    }
+    M.chests.forEach((c, i) => {
+      const cs = S.chests && S.chests[i], C = this.chestMeshes[i]; if (!cs || !C) return;
+      C.open += ((cs.open ? 1 : 0) - C.open) * Math.min(1, dt * 4);
+      C.lid.rotation.x = -C.open * 1.9;
+      C.glow.material.opacity = cs.open && cs.it ? 0.6 + Math.sin(this.t * 3 + i) * 0.15 : 0.12 + Math.sin(this.t * 1.5 + i) * 0.06;
+      const k = cs.open && cs.it ? cs.it.k + (cs.it.n > 0.05 ? '' : '-') : null;
+      if (k !== C.k) {
+        C.k = k; C.hold.clear();
+        if (k) { const m = itemModel(cs.it.k); if (cs.it.n <= 0.05) m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color && o.material.color.multiplyScalar(0.45); } }); C.hold.add(m); }
+      }
+      C.hold.rotation.y += dt * 1.2; C.hold.position.y = 0.62 + Math.sin(this.t * 2 + i) * 0.04;
+    });
+  }
+  // taser darts: a jagged electric line from the survivor to where it struck, crackling for a moment
+  updateZaps(S, dt) {
+    for (const z of (this.zaps ||= [])) {
+      z.t += dt;
+      const pos = z.line.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const f = i / (pos.count - 1), j = i === 0 || i === pos.count - 1 ? 0 : 0.12;
+        pos.setXYZ(i, z.x + (z.tx - z.x) * f + (Math.random() - 0.5) * j, 1.2 + (z.ty - 1.2) * f + (Math.random() - 0.5) * j, z.z + (z.tz - z.z) * f + (Math.random() - 0.5) * j);
+      }
+      pos.needsUpdate = true; z.line.material.opacity = Math.max(0, 1 - z.t / 0.45);
+    }
+    for (const z of this.zaps.filter(z => z.t > 0.45)) this.scene.remove(z.line);
+    this.zaps = this.zaps.filter(z => z.t <= 0.45);
+    // a tazed killer crackles with sparks
+    for (const p of S.players) if (p.zap > 0 && Math.random() < 0.6) this.sparks.spawn(p.x + (Math.random() - 0.5) * 0.6, 0.6 + Math.random() * 1.4, p.z + (Math.random() - 0.5) * 0.6, 2, 0x8ad8ff, 1.5, 0.3, 0, 0.6, 0.5);
   }
   // ---------------- Granny's Creep: markers on every window, pallet, generator and hook ----------------
   creepTargets(S) {
@@ -1478,7 +1580,8 @@ export class Game {
       let col = null;
       if (p.id === me.id && !(me.st === 'dead' || me.st === 'out')) col = null;
       else if (killerView && p.role === 'survivor') {
-        if (p.st === 'ok' && (p.reveal > 0 || (has(me, 'scent') && p.hp === 1 && dist(p, me) < 24) || (has(me, 'static') && p.act && p.act.k === 'repair'))) col = 0xff3030;
+        if (p.st === 'ok' && p.spied > 0) col = 0xc050ff; // Spider Mom found them: a purple outline
+        else if (p.st === 'ok' && (p.reveal > 0 || (has(me, 'scent') && p.hp === 1 && dist(p, me) < 24) || (has(me, 'static') && p.act && p.act.k === 'repair'))) col = 0xff3030;
         else if (p.st === 'caged') col = 0xff8a2a; // caged survivors stay in sight until they are freed
       } else if (!killerView) {
         if (p.disguise && has(me, 'exorcist') && dist(p, me) < 20) col = 0xb06aff; // Exorcist: Chucky inside a survivor
@@ -1542,6 +1645,32 @@ export class Game {
         case 'phase': { const p = S && playerById(S, e.id); this.sparks.spawn(e.x, 1.2, e.z, 50, 0x7aff4a, 2.2, 1.2, 0.4, 1); sound.play('fade', e.x, e.z, { on: true }); break; }
         case 'slimespit': this.sparks.spawn(e.x, 0.3, e.z, 40, 0x7aff4a, 2, 0.8, 0.3, 1); sound.play('drop', e.x, e.z); break;
         case 'slimed': if (e.id === this.myId) { this.feed('You ran through slime! Slowed and revealed.', 'big'); this.flash = 0.3; } break;
+        case 'chest': {
+          const c = this.M.chests && this.M.chests[e.id]; if (c) sound.play('chest', c.x, c.z);
+          if (e.by === this.myId) this.feed('The chest holds a ' + (ITEMS[e.item] || ITEMS.flashlight).name + (e.item === 'taser' ? '! Rare find.' : '.') + ' Hold E to swap it for yours.', e.item === 'taser' ? 'big' : '');
+          break;
+        }
+        case 'swap': {
+          const c = this.M.chests && this.M.chests[e.id]; if (c) sound.play('click', c.x, c.z);
+          if (e.by === this.myId) { this.feed('You took the ' + (ITEMS[e.item] || ITEMS.flashlight).name + ' and left your ' + (ITEMS[e.left] || ITEMS.flashlight).name + '.'); this.flashHeld = false; }
+          break;
+        }
+        case 'taser': {
+          const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12 * 3), 3));
+          const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x9ae0ff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+          line.frustumCulled = false; this.scene.add(line);
+          (this.zaps ||= []).push({ line, t: 0, x: e.x, z: e.z, tx: e.tx, tz: e.tz, ty: e.hit ? 1.2 : 1.0 });
+          sound.play('zap', e.x, e.z, { len: 0.25 });
+          this.sparks.spawn(e.tx, 1.1, e.tz, 25, 0x9ae0ff, 2.5, 0.4, -4, 0.5);
+          break;
+        }
+        case 'tazed': {
+          const K = S && playerById(S, e.id); if (K) sound.play('zap', K.x, K.z, { len: 1.2 });
+          if (e.id === this.myId) { this.feed('You were tazed!', 'big'); this.shake = 0.8; this.flash = 0.3; }
+          else if (e.by === this.myId) this.feed('Direct hit! ' + name(e.id) + ' is electrocuted.', 'big');
+          break;
+        }
+        case 'taserdead': if (e.id === this.myId) this.feed('Your Taser is out of shots. Swap it at a chest.'); break;
         case 'trapset': if (e.id === this.myId) this.feed('Ghost Trap set.'); sound.play('click', e.x, e.z); break;
         case 'trapped': {
           const by = S && playerById(S, e.by);
@@ -1783,8 +1912,7 @@ export class Game {
     $('power').classList.toggle('hidden', me.role !== 'killer');
     $('crosshair').classList.toggle('hidden', me.role !== 'killer');
     $('item').classList.toggle('hidden', me.role !== 'survivor' || me.st === 'ghost');
-    $('item').innerHTML = me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl">${kbd('item')} set a trap in front of you</div></div>`
-      : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>RMB</kbd> hold to blind the killer</div></div>`;
+    this.renderItemHUD(me);
     const teamOf = p => (p.role === 'survivor' && (p.st !== 'ghost' || p.id === this.myId)) || p.disguise || p.outcome === 'infected';
     $('team').classList.toggle('compact', S.players.filter(teamOf).length > 5);
     $('team').innerHTML = S.players.filter(teamOf).map(p =>
@@ -1871,16 +1999,27 @@ export class Game {
       html: `<div class="pwt"><div class="pwn">${esc(def.name)}</div><div class="pws">${sub}</div>${pips ? `<div class="pips">${pips}</div>` : ''}<div class="keyl">${extra}</div></div><div class="pwi">${icon(POWER_ICON[me.char])}<div class="cd"></div></div>` };
   }
 
+  // the survivor's item card (changes when you swap at a chest)
+  renderItemHUD(me) {
+    this.hudItem = me.item;
+    $('item').innerHTML = this.itemHTML(me);
+  }
+  itemHTML(me) {
+    if (me.item === 'taser') return `<div class="iti">${icon('taser')}</div><div class="itt"><div class="itn">Taser <span id="trapn"></span></div><div class="keyl"><kbd>RMB</kbd> fire at the killer (3s stun)</div></div>`;
+    return me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl">${kbd('item')} set a trap in front of you</div></div>`
+      : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>RMB</kbd> hold to blind the killer</div></div>`;
+  }
   updateHUD(dt, S, me) {
     if (!me) return;
+    if (me.role === 'survivor' && me.item !== this.hudItem) this.renderItemHUD(me);
     // flashlight battery, and the killer's view whiting out when a torch is in his eyes
     if (me.role === 'survivor') {
       const bar = $('item').querySelector('.itb div');
       if (bar) bar.style.width = (Math.max(0, me.flash) / RULES.flashBattery * 100).toFixed(1) + '%';
       $('item').classList.toggle('active', !!this.flashHeld && me.flash > 0);
-      $('item').classList.toggle('empty', me.item === 'trap' ? !(me.traps > 0) : me.flash <= 0);
-      const tn = document.getElementById('trapn'); if (tn) tn.textContent = '×' + (me.traps || 0);
-      $('crosshair').classList.toggle('hidden', !(this.flashHeld && me.flash > 0));
+      $('item').classList.toggle('empty', me.item === 'trap' ? !(me.traps > 0) : me.item === 'taser' ? !(me.tasers > 0) : me.flash <= 0);
+      const tn = document.getElementById('trapn'); if (tn) tn.textContent = '×' + ((me.item === 'taser' ? me.tasers : me.traps) || 0);
+      $('crosshair').classList.toggle('hidden', !((this.flashHeld && me.flash > 0) || (me.item === 'taser' && me.tasers > 0 && me.st === 'ok')));
     }
     const glare = me.role === 'killer' ? Math.max((me.glare || 0) * 0.75, me.blind > 0 ? Math.min(1, me.blind / 1.2) : 0) : 0;
     if (Math.abs(glare - (this.glareShown || 0)) > 0.01) { this.glareShown = glare; $('glare').style.opacity = glare.toFixed(2); }
@@ -2114,6 +2253,23 @@ export class Game {
 }
 
 
+// the execution's bear trap: the Granny bear trap model (its clip snaps the jaws shut), or the
+// procedural one while it loads. userData.close(k): 0 open .. 1 shut
+function makeExecTrap() {
+  const m = cloneStatic('beartrap');
+  const clip = m && m.userData.anims && m.userData.anims[0];
+  if (!m || !clip) {
+    const g = makeBearTrap();
+    g.userData.close = k => { for (const j of g.userData.jaws) j.rotation.x = j.userData.sd * 1.25 * (1 - k); };
+    return g;
+  }
+  const mixer = new THREE.AnimationMixer(m), a = mixer.clipAction(clip);
+  a.play(); a.paused = true; a.clampWhenFinished = true;
+  m.userData.close = k => { a.time = Math.max(0, Math.min(1, k)) * clip.duration * 0.999; mixer.update(0); };
+  m.userData.close(0);
+  m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return m;
+}
 // a bear trap: rusty base, pressure plate, two toothed jaws (g.userData.jaws, open at rotation.x = ±1.25, shut at 0)
 function makeBearTrap() {
   const g = new THREE.Group(), jaws = [];
@@ -2127,5 +2283,21 @@ function makeBearTrap() {
   }
   g.userData.jaws = jaws;
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
+// a survivor item as a small model (chests, hands): flashlight, ghost trap, taser
+function itemModel(k) {
+  if (k === 'taser') { const m = cloneStatic('taser'); if (m) { m.scale.setScalar(1.9); return m; } }
+  if (k === 'trap') { const m = cloneStatic('ghosttrap'); if (m) { m.scale.setScalar(0.75); m.position.y = -0.12; return m; } }
+  const g = new THREE.Group();
+  if (k === 'taser') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.2), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6 })); g.add(body);
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.04), new THREE.MeshStandardMaterial({ color: 0xd8e020, emissive: 0x6a7000 })); tip.position.z = 0.11; g.add(tip);
+    return g;
+  }
+  if (k === 'trap') { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.2), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.6 })); g.add(b); return g; }
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.22, 10), new THREE.MeshStandardMaterial({ color: 0x2a2a2e, metalness: 0.6, roughness: 0.4 })); body.rotation.x = Math.PI / 2; g.add(body);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.03, 0.05, 12), new THREE.MeshStandardMaterial({ color: 0xffffe0, emissive: 0xfff0a0, emissiveIntensity: 1.2 })); lens.rotation.x = Math.PI / 2; lens.position.z = 0.13; g.add(lens);
   return g;
 }

@@ -12,6 +12,13 @@ export const SPEED = {
   killer: 4.6, carry: 4.2, aimSlow: 0.55,
 };
 
+// Survivor items. Flashlight and Ghost Trap can be brought in; everything can turn up in a chest.
+// The Taser only comes out of chests (20% of them): 3 shots, each one locks the killer up for 3s.
+export const ITEMS = {
+  flashlight: { name: 'Flashlight', desc: 'Hold RMB to shine it in the killer\'s eyes.' },
+  trap: { name: 'Ghost Trap', desc: 'Set it down in front of you; the killer who steps on it is stunned.' },
+  taser: { name: 'Taser', shots: 3, stun: 3, range: 9, chance: 0.2, desc: 'Click RMB to fire: a killer you hit is electrocuted and frozen for 3s. 3 shots. Only found in chests.' },
+};
 export const RULES = {
   genCharges: 66,          // seconds of solo repair per generator
   gensTotal: 7,
@@ -39,6 +46,7 @@ export const RULES = {
   stunBarricade: 2.0,
   execTime: 4.2,
   flashBattery: 12, flashRange: 9, flashTime: 1.0, flashStun: 1.6, blindTime: 2.4, blindImmune: 12, // survivor flashlights
+  chestTime: 2.2, swapTime: 0.4,                                          // searching a chest, swapping items with it
   teleTime: 1.2, teleCd: 18, lanternRadius: 9, snuffTime: 2.5,           // length of a killer's execution finisher
 };
 
@@ -391,8 +399,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.22.0';
+export const VERSION = '2.23.0';
 export const INBOX = [
+  {
+    id: 'v2.23.0', version: '2.23.0', date: 'Nov 2026', title: 'Chests, the Taser & Your Own Hands', tag: 'Update',
+    body: ['Chests now sit on every map. Hold E to search one: inside is a fresh flashlight, ghost traps or, one time in five, the new Taser. Hold E at an open chest to swap your item for what it holds, even a used-up one.', 'New item, the Taser (chests only): click RMB to fire. A killer you hit is electrocuted and frozen for 3s, and drops whoever he is carrying. 3 shots.', 'Killers now see their own hands in first person: Granny\'s real arm and bloody bat, Grandpa\'s shotgun, the Dark Knight\'s gauntlets, the Slimer\'s slimy arms, and your outfit\'s colours on every other killer.', 'Spider Mom: survivors she finds are outlined in purple for Granny.', "Granny's Bedtime Trap uses a new bear trap model, in the execution and the trailer.", "Granny's House can now be picked from the map lists (bots and online lobbies)."],
+  },
   {
     id: 'v2.22.0', version: '2.22.0', date: 'Nov 2026', title: 'Granny Rework, Spider Mom & Grandpa', tag: 'Update',
     body: ['Granny has been reworked. Her bear traps are gone. New power, Frenzy (RMB): for 5s she moves 35% faster, senses every survivor within 16m through the walls, and her first hit downs.', 'New: Creep (hold G). Every generator, hook, window and pallet on the map is marked; release to vanish and reappear at the one in your sights.', 'New helper: Spider Mom crawls from generator to generator. Anyone she finds repairing one is revealed to Granny.', 'New execution: Bedtime Trap. Granny forces the survivor to their knees, sets a bear trap in front of them and shoves their face into it.', 'New outfit in the Store: Grandpa (5,000 embers), with his own animations.', "Granny's House: generators and hooks no longer block the way from one side of the map to the other."],

@@ -44,12 +44,14 @@ export class Sound {
     return gain;
   }
   noise(dest, t0, dur, type, f0, f1, q = 1, vol = 1, attack = 0.005) {
+    if (!dest) return;
     const c = this.ctx, src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
     const f = c.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(f0, t0); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t0 + dur); f.Q.value = q;
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     src.connect(f); f.connect(g); g.connect(dest); src.start(t0, Math.random()); src.stop(t0 + dur + 0.05);
   }
   tone(dest, t0, dur, type, f0, f1, vol = 1, attack = 0.005) {
+    if (!dest) return null;
     const c = this.ctx, o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t0); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + dur + 0.05);
@@ -62,7 +64,7 @@ export class Sound {
     const o = (ref = 4, max = 45) => this.out(x, z, ref, max);
     let d;
     switch (name) {
-      case 'click': d = o(); this.tone(d, t, 0.06, 'square', 900, 600, 0.05); break;
+      case 'click': if (!(d = o())) return; this.tone(d, t, 0.06, 'square', 900, 600, 0.05); break;
       case 'hover': d = o(); this.tone(d, t, 0.04, 'sine', 1400, null, 0.03); break;
       case 'swing': if (!(d = o(4, 30))) return; this.noise(d, t, 0.28, 'bandpass', 500, 2600, 2, 0.5, 0.05); break;
       case 'hit': {
@@ -100,6 +102,9 @@ export class Sound {
       case 'break': if (!(d = o(5, 60))) return; for (let i = 0; i < 7; i++) this.noise(d, t + i * 0.07, 0.12, 'bandpass', 600 + Math.random() * 1200, null, 3, 0.8); this.tone(d, t, 0.3, 'sine', 80, 40, 0.6); break;
       case 'vault': if (!(d = o(4, opt.fast ? 50 : 18))) return; this.noise(d, t, 0.3, 'bandpass', 300, 1200, 1.5, opt.fast ? 0.7 : 0.25, 0.04); this.tone(d, t + 0.25, 0.12, 'sine', 110, 60, opt.fast ? 0.5 : 0.2); break;
       case 'stun': if (!(d = o(5, 50))) return; this.tone(d, t, 0.25, 'sine', 70, 35, 1); this.tone(d, t + 0.05, 1.0, 'sawtooth', 140, 70, 0.25, 0.05); break;
+      // taser: a crackling electric buzz (o.len: how long it crackles)
+      case 'zap': { if (!(d = o(5, 45))) return; const L = opt.len || 0.5; this.noise(d, t, L, 'highpass', 3000, 5000, 3, 0.45, 0.01); for (const f of [118, 237, 355]) this.tone(d, t, L, 'square', f, f * 1.02, 0.07); this.tone(d, t, 0.08, 'square', 2200, 900, 0.12); break; }
+      case 'chest': { if (!(d = o(4, 30))) return; this.tone(d, t, 0.5, 'sawtooth', 95, 70, 0.12, 0.05); this.noise(d, t, 0.45, 'bandpass', 600, 300, 4, 0.25, 0.05); this.tone(d, t + 0.45, 0.12, 'square', 300, 200, 0.12); break; }
       case 'kick': if (!(d = o(5, 50))) return; for (const f of [180, 271, 413]) this.tone(d, t, 0.6, 'square', f, f * 0.97, 0.12); this.noise(d, t, 0.2, 'highpass', 1500, null, 1, 0.4); break;
       case 'caged': {
         if (!(d = o(8, 120))) return;

@@ -1,5 +1,5 @@
 // Rules shared by host simulation, client prediction and bots.
-import { SPEED, RULES, KILLERS, HALF } from './config.js';
+import { SPEED, RULES, KILLERS, HALF, ITEMS } from './config.js';
 import { barBox } from './map.js';
 
 export const has = (p, perk) => p.perks && p.perks.includes(perk);
@@ -68,6 +68,15 @@ export function speedOf(p, S, sprint, crouch) {
 }
 
 // What can this player interact with (hold E)?
+// what a survivor's item has left: battery seconds, traps, taser shots
+export function itemCharge(p) { return p.item === 'trap' ? (p.traps || 0) : p.item === 'taser' ? (p.tasers || 0) : (p.flash || 0); }
+export function itemLabel(k, n) {
+  const name = (ITEMS[k] || ITEMS.flashlight).name;
+  if (n != null && n <= 0.05) return name + ' (empty)';
+  if (k === 'trap') return name + ' ×' + n;
+  if (k === 'taser') return name + ' (' + n + ' shot' + (n === 1 ? '' : 's') + ')';
+  return name;
+}
 export function findInteraction(M, S, p) {
   if (p.role === 'survivor' && p.st === 'ghost') {
     // a ghost can only repair generators
@@ -101,6 +110,12 @@ export function findInteraction(M, S, p) {
       if (!gs.done && d < 1.75) consider('repair', g.id, 'Repair generator', 3, d);
     }
     for (const L of S.lanterns || []) { const d = Math.hypot(p.x - L.x, p.z - L.z); if (d < 1.5) consider('snuff', L.id, 'Snuff the lantern', 1, d); }
+    for (const c of M.chests || []) {
+      const cs = S.chests && S.chests[c.id], d = dist(p, c);
+      if (!cs || d > 1.5) continue;
+      if (!cs.open) consider('chest', c.id, 'Search the chest', 1, d);
+      else if (cs.it) consider('swap', c.id, 'Swap your ' + itemLabel(p.item, itemCharge(p)) + ' for the ' + itemLabel(cs.it.k, cs.it.n), 1, d);
+    }
     if (!best && p.hp === 1 && has(p, 'medic')) return { k: 'self', id: p.id, label: 'Heal yourself' };
     return best;
   }
@@ -144,6 +159,8 @@ export function actionTime(k, p, S) {
     case 'pickup': return RULES.pickupTime;
     case 'execute': return RULES.execTime;
     case 'snuff': return RULES.snuffTime;
+    case 'chest': return RULES.chestTime;
+    case 'swap': return RULES.swapTime;
     case 'cage': return RULES.cageTime;
     case 'kick': return RULES.kickTime * (has(p, 'brute') ? 0.65 : 1);
     case 'break': return RULES.breakTime * (has(p, 'brute') ? 0.65 : 1);

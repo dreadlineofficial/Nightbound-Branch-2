@@ -1,7 +1,7 @@
 // Bot brains (host only). Bots act through the same channels as human players.
 import { findPath, cellPos, cellOf, losBlocked, barBox, moveCircle } from './map.js';
 import { stepMover, startVault } from './movement.js';
-import { dist, fwd, angDiff, killerOf, killersOf, nearestKiller, modeOf, findSpace, findInteraction, vaultDuration, terrorRadius, playerById, canExecuteTarget, findExecute } from './rules.js';
+import { dist, fwd, angDiff, killerOf, killersOf, nearestKiller, modeOf, findSpace, findInteraction, vaultDuration, terrorRadius, playerById, canExecuteTarget, findExecute, itemCharge } from './rules.js';
 import { HALF, KILLERS } from './config.js';
 
 export class Bots {
@@ -65,6 +65,11 @@ export class Bots {
       this.survivor(p, dt); this.flashBot(p, dt);
       const K = nearestKiller(S, p);
       if (p.traps > 0 && p.st === 'ok' && K && dist(p, K) < 7 && K.mv && Math.random() < dt * 0.35) this.sim.onMsg(p.id, { t: 'act', a: 'trap' });
+      // taser: shoot the killer when he closes in (or has a teammate on his shoulder)
+      if (p.item === 'taser' && p.tasers > 0 && p.st === 'ok' && !p.act && K && K.stun <= 0 && dist(p, K) < 7 && (K.carry != null || dist(p, K) < 4.5) && !losBlocked(this.sim.M, p.x, p.z, K.x, K.z, 1.2) && Math.random() < dt * 1.2) {
+        const yaw = Math.atan2(K.x - p.x, K.z - p.z) + (Math.random() - 0.5) * (1 - this.sim.diff.aim) * 0.3;
+        this.sim.onMsg(p.id, { t: 'act', a: 'taser', yaw });
+      }
     }
   }
 
@@ -310,6 +315,16 @@ export class Bots {
     // heal injured teammates nearby (or get healed)
     if (!goal && (!K || kd > 20)) {
       for (const o of others) if (o.st === 'ok' && o.hp === 1 && dist(p, o) < 14 && !o.act) { goal = { mode: 'heal', modeId: o.id, x: o.x, z: o.z, kind: 'heal', id: o.id }; break; }
+    }
+    // a chest nearby: search it, and take what's in it if it beats what we're holding
+    if (!goal && !threat && M.chests && S.chests) {
+      const charge = itemCharge(p);
+      for (const c of M.chests) {
+        const cs = S.chests[c.id], d = Math.hypot(c.x - p.x, c.z - p.z);
+        if (!cs || d > 16 || (K && Math.hypot(K.x - c.x, K.z - c.z) < 12)) continue;
+        const better = cs.open && cs.it && cs.it.n > 0.05 && ((cs.it.k === 'taser' && p.item !== 'taser') || charge <= 0.05);
+        if (!cs.open || better) { goal = { mode: 'chest', modeId: c.id, x: c.x, z: c.z, kind: cs.open ? 'swap' : 'chest', id: c.id }; break; }
+      }
     }
     // repair the best generator
     if (!goal) {

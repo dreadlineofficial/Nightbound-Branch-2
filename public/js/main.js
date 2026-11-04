@@ -135,6 +135,7 @@ loadTed();
 for (const n of ['bringit', 'email', 'weak', 'cock', 'shit', 'idle', 'arfh', 'teddy', 'problems', 'fuckme', 'listen', 'pussy', 'thunder']) loadClip('ted/' + n);
 loadStatic('axe').then(m => { if (m) forgetArt('bateman'); });
 loadStatic('ghosttrap');
+loadStatic('beartrap'); loadStatic('taser');
 loadScene('granny_map');
 loadGranny().then(m => { if (m) { forgetArt('granny'); if (menu && menu.killerChar === 'granny') menu.setKiller('granny', menu.killerSkin); } });
 loadSlendrina();
