@@ -400,8 +400,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.27.0';
+export const VERSION = '2.27.1';
 export const INBOX = [
+  {
+    id: 'v2.27.1', version: '2.27.1', date: 'Nov 2026', title: 'Nightbound has moved', tag: 'Notice',
+    body: ['Updates now continue at https://froodyofficial-maker.github.io/Nightbound/ . This page will no longer be updated.'],
+  },
   {
     id: 'v2.27.0', version: '2.27.0', date: 'Nov 2026', title: 'Granny: Body Swap & a Wilder Bat Rush', tag: 'Update',
     body: ['New for Granny: Body Swap (V). Switch bodies with Spider Mom at any moment: Granny appears where Spider Mom was, and Spider Mom where Granny stood. Hold V to look through Spider Mom\'s eyes first, then let go to swap.', 'Bat Rush, upgraded: steer the charge with the mouse, crash straight through windows, and each dropped pallet you smash carries you 2m further. Wind it up all the way and it ends in a Ground Slam that strikes everyone around her and damages a nearby generator.', 'Slendrina is gone from the Granny chapter: no more apparitions, and the trailer and banner now feature Spider Mom.'],

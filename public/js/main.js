@@ -57,6 +57,21 @@ const profile = Object.assign({
   owned: {}, skins: {}, claimed: {}, readInbox: {},
 }, store.get('profile', {}));
 profile.owned ||= {}; profile.skins ||= {}; profile.claimed ||= {}; profile.readInbox ||= {}; profile.dlc ||= {}; profile.seen ||= {};
+// Nightbound has moved: every visit, a notice with the new address
+const MOVED_URL = 'https://froodyofficial-maker.github.io/Nightbound/';
+if (!window.__GXD) setTimeout(() => {
+  const d = document.createElement('div');
+  d.id = 'moved-note';
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.82);font-family:inherit';
+  d.innerHTML = `<div style="max-width:520px;margin:16px;padding:28px 26px;background:#120b0b;border:1px solid #7a1a1a;border-radius:10px;color:#e8dccb;text-align:center;box-shadow:0 0 40px #000">
+    <div style="letter-spacing:.2em;color:#d23a2a;font-size:13px;margin-bottom:10px">NOTICE</div>
+    <h2 style="margin:0 0 12px;font-size:26px">Nightbound has moved</h2>
+    <p style="margin:0 0 18px;line-height:1.5">Updates now continue at a new address. This page will no longer be updated.</p>
+    <a href="${MOVED_URL}" style="display:inline-block;padding:10px 18px;background:#a5221a;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;word-break:break-all">${MOVED_URL}</a>
+    <div style="margin-top:16px"><button id="moved-ok" style="padding:8px 16px;background:transparent;color:#bba;border:1px solid #554;border-radius:6px;cursor:pointer">Continue here anyway</button></div></div>`;
+  document.body.appendChild(d);
+  d.querySelector('#moved-ok').onclick = () => d.remove();
+}, 400);
 // the Scarred Chucky and Chucky DBD outfits were withdrawn (v2.25.1): anyone who bought one gets the embers back
 for (const [id, price] of [['scarred', 5500], ['dbd', 6000]]) if (profile.owned['chucky:' + id]) {
   delete profile.owned['chucky:' + id]; profile.stats = profile.stats || {}; profile.stats.embers = (profile.stats.embers || 0) + price;
