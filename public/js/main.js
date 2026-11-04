@@ -17,6 +17,7 @@ import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound, loadClip } from './audio.js';
+import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
@@ -338,6 +339,7 @@ function renderSettings() {
   $('set-subs').checked = settings.subs !== false;
   $('set-net').value = settings.net;
   renderCam();
+  rebinding = null; renderKeybinds();
 }
 $('set-name').addEventListener('input', e => { settings.name = e.target.value.trim().slice(0, 16) || 'Player'; saveSettings(); renderShowcase(); });
 const SHINT = {
@@ -355,6 +357,31 @@ $('set-vol').addEventListener('input', e => { settings.vol = +e.target.value; so
 $('set-music').addEventListener('input', e => { settings.music = +e.target.value; sound.setMusic(settings.music); saveSettings(); });
 $('set-invert').addEventListener('change', e => { settings.invert = e.target.checked; saveSettings(); });
 $('set-subs').addEventListener('change', e => { settings.subs = e.target.checked; saveSettings(); });
+// ---------- keybinds ----------
+let rebinding = null;
+function renderKeybinds() {
+  const el = $('keybinds'); if (!el) return;
+  el.innerHTML = ACTIONS.map(a => {
+    const k = bound(settings, a.id), changed = settings.keys && settings.keys[a.id] && settings.keys[a.id] !== a.def;
+    return `<div class="kb-row"><span>${a.label}</span><button class="kb-key${rebinding === a.id ? ' listening' : ''}${changed ? ' changed' : ''}" data-bind="${a.id}">${rebinding === a.id ? 'Press a key…' : keyName(k)}</button></div>`;
+  }).join('');
+}
+$('keybinds').addEventListener('click', e => { const b = e.target.closest('[data-bind]'); if (!b) return; rebinding = rebinding === b.dataset.bind ? null : b.dataset.bind; renderKeybinds(); });
+$('keys-reset').addEventListener('click', () => { settings.keys = {}; rebinding = null; saveSettings(); renderKeybinds(); toast('Keybinds reset to defaults.'); });
+// capture the next key press for the action being rebound; a key already in use swaps over
+addEventListener('keydown', e => {
+  if (!rebinding) return;
+  e.preventDefault(); e.stopPropagation();
+  if (e.code === 'Escape') { rebinding = null; renderKeybinds(); return; }
+  if (RESERVED.has(e.code)) { toast(keyName(e.code) + " can't be bound."); return; }
+  const keys = settings.keys = { ...(settings.keys || {}) }, old = bound(settings, rebinding);
+  const other = ACTIONS.find(a => a.id !== rebinding && bound(settings, a.id) === e.code);
+  if (other) { keys[other.id] = old; toast(`${other.label} moved to ${keyName(old)}.`); }
+  keys[rebinding] = e.code;
+  for (const a of ACTIONS) if (keys[a.id] === a.def) delete keys[a.id];
+  rebinding = null; saveSettings(); renderKeybinds();
+}, true);
+renderKeybinds();
 $('set-net').addEventListener('change', e => { settings.net = e.target.value; saveSettings(); });
 // ---------- camera placement (settings and pause menu share these controls) ----------
 const CAM_DEF = { side: 1, dist: 1, height: 0, angle: 0 };

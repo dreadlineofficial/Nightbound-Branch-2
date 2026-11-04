@@ -366,8 +366,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.20.0';
+export const VERSION = '2.20.1';
 export const INBOX = [
+  {
+    id: 'v2.20.1', version: '2.20.1', date: 'Nov 2026', title: 'Custom Keybinds', tag: 'Update',
+    body: ['Every key can now be rebound: Settings > Keybinds, click an action and press a key (Esc cancels). Pick a key another action already uses and the two swap. Reset keybinds puts everything back.', 'The on-screen hints and prompts show your keys.'],
+  },
   {
     id: 'v2.20.0', version: '2.20.0', date: 'Nov 2026', title: 'Hooks', tag: 'Major Update',
     body: [

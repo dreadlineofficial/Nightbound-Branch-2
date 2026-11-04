@@ -10,6 +10,9 @@ import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } fr
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { Sidekick, TED_LINES, resetVoices } from './sidekicks.js';
+import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
+let KB_SETTINGS = null;
+const kbd = id => `<kbd>${keyLabel(KB_SETTINGS, id).replace(/[<>&]/g, '')}</kbd>`;
 import { staticReady, cloneStatic } from './glbModels.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat, HOOK_Y } from './models.js';
 import { stepMover, startVault } from './movement.js';
@@ -292,7 +295,7 @@ export class Game {
   }
 
   start() {
-    resetVoices();
+    resetVoices(); KB_SETTINGS = this.settings;
     const q = QUALITY[this.settings.quality] || QUALITY.medium;
     this.W = buildWorld(this.M, this.settings.quality);
     this.scene = this.W.scene;
@@ -431,7 +434,14 @@ export class Game {
     else this.lock();
   }
 
-  onKey(e, down) {
+  // translate the key through the player's keybinds, then handle it as its default key
+  onKey(raw, down) {
+    const code = remapCode(this.settings, raw.code);
+    if (code == null) return;
+    if (code !== raw.code && !(raw.target && (raw.target.tagName === 'INPUT' || raw.target.tagName === 'SELECT'))) raw.preventDefault();
+    this.onKeyCode({ code, repeat: raw.repeat, target: raw.target, preventDefault: () => raw.preventDefault() }, down);
+  }
+  onKeyCode(e, down) {
     if (this.paused && e.code !== 'Escape') return;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
     if (['Space', 'Tab', 'KeyE', 'ShiftLeft', 'ControlLeft', 'KeyC', 'KeyQ'].includes(e.code)) e.preventDefault();
@@ -1602,7 +1612,7 @@ export class Game {
     $('power').classList.toggle('hidden', me.role !== 'killer');
     $('crosshair').classList.toggle('hidden', me.role !== 'killer');
     $('item').classList.toggle('hidden', me.role !== 'survivor' || me.st === 'ghost');
-    $('item').innerHTML = me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl"><kbd>G</kbd> set a trap in front of you</div></div>`
+    $('item').innerHTML = me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl">${kbd('item')} set a trap in front of you</div></div>`
       : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>RMB</kbd> hold to blind the killer</div></div>`;
     const teamOf = p => (p.role === 'survivor' && (p.st !== 'ghost' || p.id === this.myId)) || p.disguise || p.outcome === 'infected';
     $('team').classList.toggle('compact', S.players.filter(teamOf).length > 5);
@@ -1611,12 +1621,12 @@ export class Game {
     this.hudCache = {};
     const k = (x) => `<kbd>${x}</kbd>`;
     $('controls-hint').innerHTML = me.disguise
-      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('E')} pick up / hook · ${k('Space')} vault · ${k('G')} let go (after a down and a hook) · ${k('Tab')} status`
+      ? `${k(moveLabel(this.settings))} move · ${k('LMB')} strike · ${k(keyLabel(this.settings, 'interact'))} pick up / hook · ${k(keyLabel(this.settings, 'space'))} vault · ${k(keyLabel(this.settings, 'item'))} let go (after a down and a hook) · ${k(keyLabel(this.settings, 'status'))} status`
       : me.st === 'ghost'
-      ? `${k('WASD')} move · ${k('E')} repair generators · nobody can see you`
+      ? `${k(moveLabel(this.settings))} move · ${k(keyLabel(this.settings, 'interact'))} repair generators · nobody can see you`
       : me.role === 'killer'
-      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k('R')} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k('R')} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k('E')} interact · ${k('F')} execute · ${k('Space')} ${me.char === 'chucky' ? 'jump' : 'vault'}${me.char === 'chucky' ? ` · ${k('G')} possess · ${k('V')} soul split` : ''} · ${k('Q')} drop · ${k('Tab')} status`
-      : `${k('WASD')} move · ${k('Shift')} run · ${k('Ctrl')} crouch · ${k('E')} interact · ${k('RMB')} flashlight · ${k('G')} ghost trap · ${k('Space')} vault / barricade / skill check · ${k('B')} emotes · ${k('Tab')} status`;
+      ? `${k(moveLabel(this.settings))} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k(keyLabel(this.settings, 'ability2'))} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k(keyLabel(this.settings, 'ability2'))} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k(keyLabel(this.settings, 'interact'))} interact · ${k(keyLabel(this.settings, 'execute'))} execute · ${k(keyLabel(this.settings, 'space'))} ${me.char === 'chucky' ? 'jump' : 'vault'}${me.char === 'chucky' ? ` · ${k(keyLabel(this.settings, 'item'))} possess · ${k(keyLabel(this.settings, 'split'))} soul split` : ''} · ${k(keyLabel(this.settings, 'drop'))} drop · ${k(keyLabel(this.settings, 'status'))} status`
+      : `${k(moveLabel(this.settings))} move · ${k(keyLabel(this.settings, 'run'))} run · ${k(keyLabel(this.settings, 'crouch'))} crouch · ${k(keyLabel(this.settings, 'interact'))} interact · ${k('RMB')} flashlight · ${k(keyLabel(this.settings, 'item'))} ghost trap · ${k(keyLabel(this.settings, 'space'))} vault / barricade / skill check · ${k(keyLabel(this.settings, 'emotes'))} emotes · ${k(keyLabel(this.settings, 'status'))} status`;
     $('controls-hint').classList.remove('fade');
     clearTimeout(this.hintT); this.hintT = setTimeout(() => $('controls-hint').classList.add('fade'), 14000);
     $('fps').classList.toggle('hidden', !this.settings.showFps);
@@ -1626,7 +1636,7 @@ export class Game {
   powerHTML(me) {
     if (me.disguise) {
       const done = me.pdowns >= 1 && me.pcages >= 1;
-      return { ready: done, active: true, pct: 0, html: `<div class="pwt"><div class="pwn">Possession</div><div class="pws">Down ${Math.min(1, me.pdowns)}/1 · Hook ${Math.min(1, me.pcages)}/1</div><div class="keyl">${done ? '<kbd>G</kbd> let go of the body' : 'Nobody knows it\'s you'}</div></div><div class="pwi">${icon('knife')}<div class="cd"></div></div>` };
+      return { ready: done, active: true, pct: 0, html: `<div class="pwt"><div class="pwn">Possession</div><div class="pws">Down ${Math.min(1, me.pdowns)}/1 · Hook ${Math.min(1, me.pcages)}/1</div><div class="keyl">${done ? '' + kbd('item') + ' let go of the body' : 'Nobody knows it\'s you'}</div></div><div class="pwi">${icon('knife')}<div class="cd"></div></div>` };
     }
     const K = KILLERS[me.char], def = K.ability;
     let ready = false, pct = 0, sub = '', pips = '', extra = '';
@@ -1652,33 +1662,33 @@ export class Game {
       ready = me.abCd <= 0 && !me.pull;
       pct = me.abCd / def.cooldown;
       sub = me.pull ? 'Reeling…' : me.aim ? 'Aiming…' : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
-      extra = me.ab ? `Lights Out · ${Math.ceil(me.abT)}s · one hit downs` : me.ab2Cd > 0 ? `<kbd>R</kbd> Lights Out ${Math.ceil(me.ab2Cd)}s` : '<kbd>R</kbd> Lights Out ready';
+      extra = me.ab ? `Lights Out · ${Math.ceil(me.abT)}s · one hit downs` : me.ab2Cd > 0 ? `${kbd('ability2')} Lights Out ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Lights Out ready';
     } else if (me.char === 'chucky') {
       const coil = me.aim ? Math.min(1, Math.max(0, (me.abT || 0) - 0.1) / def.coil) : 0;
       ready = me.abCd <= 0 && !me.leap; pct = me.aim ? 1 - coil : me.abCd / def.cooldown;
       sub = me.leap ? 'Pouncing!' : me.aim ? `Coiling… ${Math.round(def.min + (def.max - def.min) * coil)}m` : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       const mm = t => Math.floor(t / 60) + ':' + String(Math.ceil(t % 60)).padStart(2, '0');
-      extra = (me.ab2Cd > 0 ? `<kbd>R</kbd> Laugh ${Math.ceil(me.ab2Cd)}s` : "<kbd>R</kbd> Laugh ready") + ' · ' + (me.harmless ? 'Possessing…' : me.possCd > 0 ? `<kbd>G</kbd> Possess ${mm(me.possCd)}` : '<kbd>G</kbd> Possess ready');
+      extra = (me.ab2Cd > 0 ? `${kbd('ability2')} Laugh ${Math.ceil(me.ab2Cd)}s` : "" + kbd('ability2') + " Laugh ready") + ' · ' + (me.harmless ? 'Possessing…' : me.possCd > 0 ? `${kbd('item')} Possess ${mm(me.possCd)}` : '' + kbd('item') + ' Possess ready');
       const S = this.S, oneLeft = S && !S.gatesPowered && S.gensNeeded - S.gensDone === 1 && (S.dolls || []).length;
-      if (!me.split) extra += oneLeft ? ' · <kbd>V</kbd> <b>Soul Split ready</b>' : ' · Soul Split: last generator';
+      if (!me.split) extra += oneLeft ? ' · ' + kbd('split') + ' <b>Soul Split ready</b>' : ' · Soul Split: last generator';
     } else if (me.char === 'bateman') {
       const d2 = K.ability2, held = me.ammo > 0;
       ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1;
       sub = !held ? 'Go get your chainsaw' : me.aim ? (me.abT >= def.aim ? 'Release to throw!' : 'Revving…') : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
-      extra = me.haste > 0 ? `Morning Routine · +12% speed` : me.ab2Cd > 0 ? `<kbd>R</kbd> Business Card ${Math.ceil(me.ab2Cd)}s` : '<kbd>R</kbd> Business Card ready';
+      extra = me.haste > 0 ? `Morning Routine · +12% speed` : me.ab2Cd > 0 ? `${kbd('ability2')} Business Card ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Business Card ready';
     } else if (me.char === 'slimer') {
       const n = (this.S.slime || []).length;
       ready = me.abCd <= 0; pct = me.abCd / def.cooldown;
       sub = me.abCd > 0 ? Math.ceil(me.abCd) + 's' : `${n}/${def.max} puddles`;
       pips = Array.from({ length: def.max }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
-      extra = me.phase > 0 ? `Ghost Phase · ${me.phase.toFixed(1)}s` : me.ab2Cd > 0 ? `<kbd>R</kbd> Ghost Phase ${Math.ceil(me.ab2Cd)}s` : '<kbd>R</kbd> Ghost Phase ready';
+      extra = me.phase > 0 ? `Ghost Phase · ${me.phase.toFixed(1)}s` : me.ab2Cd > 0 ? `${kbd('ability2')} Ghost Phase ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Ghost Phase ready';
     } else {
       const n = (this.S.lanterns || []).length;
       ready = me.abCd <= 0;
       pct = me.abCd / def.cooldown;
       sub = `${n}/${def.max} lanterns lit`;
       pips = Array.from({ length: def.max }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
-      extra = me.tele ? 'Stepping through shadow…' : me.teleCd > 0 ? `Shadow Step ${Math.ceil(me.teleCd)}s` : '<kbd>R</kbd> Shadow Step ready';
+      extra = me.tele ? 'Stepping through shadow…' : me.teleCd > 0 ? `Shadow Step ${Math.ceil(me.teleCd)}s` : '' + kbd('ability2') + ' Shadow Step ready';
     }
     return { ready, active: !!me.ab || !!me.tele || me.ambush > 0, pct: Math.max(0, Math.min(1, pct)),
       html: `<div class="pwt"><div class="pwn">${esc(def.name)}</div><div class="pws">${sub}</div>${pips ? `<div class="pips">${pips}</div>` : ''}<div class="keyl">${extra}</div></div><div class="pwi">${icon(POWER_ICON[me.char])}<div class="cd"></div></div>` };
@@ -1739,7 +1749,7 @@ export class Game {
     }
     // prompt / progress / status
     let prompt = [], prog = -1, label = '', status = '';
-    const kp = (key, txt) => prompt.push(`<span class="pr"><kbd>${key}</kbd>${esc(txt)}</span>`);
+    const kp = (key, txt) => prompt.push(`<span class="pr"><kbd>${esc(key)}</kbd>${esc(txt)}</span>`);
     if (S.phase === 'play') {
       if (me.role === 'survivor') {
         if (me.st === 'ok') {
@@ -1750,15 +1760,15 @@ export class Game {
           } else {
             const it = findInteraction(this.M, S, me);
             const sp = findSpace(this.M, S, me);
-            if (it) kp('E', it.label);
-            if (sp) kp('Space', sp.k === 'drop' ? 'Drop barricade' : 'Vault');
+            if (it) kp(keyLabel(this.settings, 'interact'), it.label);
+            if (sp) kp(keyLabel(this.settings, 'space'), sp.k === 'drop' ? 'Drop barricade' : 'Vault');
           }
           if (me.healP > 0 && me.hp === 1 && !me.act) { label = 'Being healed'; prog = me.healP; }
           if (me.mark > 0) status = `Marked <small>The Harrower can see you · ${Math.ceil(me.mark)}s</small>`;
           if (me.card > 0) status = `Intimidated <small>Slowed and revealed · ${Math.ceil(me.card)}s</small>`;
         } else if (me.st === 'ghost') {
           if (me.act) { prog = me.prog; label = 'Repairing (as a ghost)'; }
-          else { const it = findInteraction(this.M, S, me); if (it) kp('E', it.label); }
+          else { const it = findInteraction(this.M, S, me); if (it) kp(keyLabel(this.settings, 'interact'), it.label); }
           status = 'You are a ghost<small>Chucky took your body. Nobody can see you. Repair generators (10% slower) until he lets go.</small>';
         } else if (me.st === 'down') {
           status = me.healP > 0 ? 'Being helped up' : 'You are dying<small>Crawl to safety — a teammate can help you up</small>';
@@ -1768,14 +1778,14 @@ export class Game {
           const K = playerById(S, me.execBy) || killerOf(S);
           status = (K ? esc(KILLERS[K.char].exec.name) : 'Execution');
         } else if (me.st === 'carried') {
-          status = `Struggle!<small>Alternate <kbd>A</kbd> <kbd>D</kbd> to break free</small>`; prog = me.wig; label = 'Wiggle';
+          status = `Struggle!<small>Alternate ${kbd('left')} ${kbd('right')} to break free</small>`; prog = me.wig; label = 'Wiggle';
         } else if (me.st === 'caged') {
-          status = `Hooked<small>${Math.ceil(me.cageT)}s left${me.stage === 1 && me.esc < 3 ? ` · <kbd>Space</kbd> try to unhook yourself (${3 - me.esc} left)` : me.stage >= 2 ? ' · hit the skill checks to fight off the Entity' : ''}</small>`;
+          status = `Hooked<small>${Math.ceil(me.cageT)}s left${me.stage === 1 && me.esc < 3 ? ` · ${kbd('space')} try to unhook yourself (${3 - me.esc} left)` : me.stage >= 2 ? ' · hit the skill checks to fight off the Entity' : ''}</small>`;
           prog = me.cageT / me.cageMax; label = me.stage >= 2 ? 'Struggle phase' : 'Hooked';
         } else if (me.st === 'dead' || me.st === 'out') {
           const tb = this.takeoverTarget();
           status = (me.st === 'out' ? 'You escaped' : 'You were ' + esc(me.outcome || 'sacrificed')) + (this.spectate ? `<small>Spectating ${esc(this.spectate.name)} · click to switch</small>` : '')
-            + (tb ? `<small class="takeover"><kbd>T</kbd> Take over ${esc(tb.name.replace(/ \(bot\)$/, ''))} and keep playing</small>` : '');
+            + (tb ? `<small class="takeover">${kbd('takeover')} Take over ${esc(tb.name.replace(/ \(bot\)$/, ''))} and keep playing</small>` : '');
         }
       } else {
         if (me.act) { prog = me.prog; label = { pickup: 'Picking up', cage: 'Hooking', kick: 'Damaging generator', break: 'Breaking barricade', execute: KILLERS[me.char] ? KILLERS[me.char].exec.name : 'Execution' }[me.act.k] || ''; }
@@ -1784,11 +1794,11 @@ export class Game {
         else {
           const it = findInteraction(this.M, S, me);
           const sp = findSpace(this.M, S, me);
-          if (it) kp('E', it.label);
+          if (it) kp(keyLabel(this.settings, 'interact'), it.label);
           const ex = findExecute(this.M, S, me);
-          if (ex) kp('F', ex.label);
-          if (sp) kp('Space', 'Vault');
-          if (me.carry != null) { kp('Q', 'Drop survivor'); const s2 = playerById(S, me.carry); if (s2) { status = `Carrying ${esc(s2.name)}<small>Find a hook before they struggle free</small>`; prog = s2.wig; label = 'Their struggle'; } }
+          if (ex) kp(keyLabel(this.settings, 'execute'), ex.label);
+          if (sp) kp(keyLabel(this.settings, 'space'), 'Vault');
+          if (me.carry != null) { kp(keyLabel(this.settings, 'drop'), 'Drop survivor'); const s2 = playerById(S, me.carry); if (s2) { status = `Carrying ${esc(s2.name)}<small>Find a hook before they struggle free</small>`; prog = s2.wig; label = 'Their struggle'; } }
           if (me.atk === 2 && me.atkHit) status = '<small>Wiping your weapon…</small>';
         }
       }

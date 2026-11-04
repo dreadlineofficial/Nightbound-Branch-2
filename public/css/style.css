@@ -599,3 +599,10 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 #subs { position: absolute; left: 50%; bottom: 170px; transform: translateX(-50%); max-width: min(720px, 86vw); text-align: center; background: rgba(8,8,10,.72); color: #f2eee6; padding: 7px 14px; font-size: 18px; line-height: 1.35; border-radius: 3px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 25; }
 #subs.show { opacity: 1; }
 #subs b { color: #d9a441; margin-right: 4px; }
+.keybinds { display: grid; grid-template-columns: 1fr; gap: 4px; margin: 6px 0 8px; }
+.kb-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 14px; color: #cfc6b8; }
+.kb-key { min-width: 92px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.2); color: #fff; font-family: var(--display); font-size: 16px; letter-spacing: .05em; padding: 4px 10px; cursor: pointer; }
+.kb-key:hover { border-color: #b3201e; }
+.kb-key.changed { border-color: #d9a441; color: #f2d58a; }
+.kb-key.listening { background: #7a1412; border-color: #ff5a3a; animation: kbpulse .9s infinite alternate; }
+@keyframes kbpulse { from { opacity: 1; } to { opacity: .6; } }
