@@ -357,6 +357,8 @@ export const SKINS = {
     { id: 'default', name: 'Good Guy', price: 0, desc: 'Denim overalls, striped shirt, red hair and a kitchen knife. Hi, I\'m Chucky. Wanna play?' },
     { id: 'charred', name: 'Burnt Out', price: 2500, tint: 0x141210, tintK: 0.88, glow: 0x6a1400, glowK: 0.12, desc: 'Pulled from the toy factory fire. Charred black and still smouldering.' },
     { id: 'voodoo', name: 'Voodoo', price: 4500, tint: 0x7aff8a, tintK: 0.3, glow: 0x0a6a1a, glowK: 0.7, desc: 'Ade due Damballa. A sickly green glow from the inside.' },
+    { id: 'scarred', name: 'Scarred Chucky', price: 5500, outfit: 'chucky_scarred', desc: 'Stitched back together after Bride of Chucky: a face full of scars and staples, and a bloody butcher knife.' },
+    { id: 'dbd', name: 'Chucky DBD', price: 6000, outfit: 'chucky_dbd', desc: 'The Good Guy as he appears in Dead by Daylight, overalls, striped shirt and all. (Fan-made outfit; not affiliated with Behaviour Interactive.)' },
   ],
   granny: [
     { id: 'default', name: 'House Dress', price: 0, desc: 'Her grey nightgown, her bloody bat, and the stare. You know the one.' },
@@ -399,8 +401,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.24.1';
+export const VERSION = '2.25.0';
 export const INBOX = [
+  {
+    id: 'v2.25.0', version: '2.25.0', date: 'Nov 2026', title: 'Two New Chucky Outfits', tag: 'Store',
+    body: ['Scarred Chucky (5,500 embers): stitched back together after Bride of Chucky, scars, staples and a bloody butcher knife.', 'Chucky DBD (6,000 embers): the Good Guy as he looks in Dead by Daylight.', "Both are fitted to Chucky's own skeleton, so they play all of his animations, knife included."],
+  },
   {
     id: 'v2.24.1', version: '2.24.1', date: 'Nov 2026', title: 'Fix: taking over a bot', tag: 'Fix',
     body: ['Taking over a bot after you die (T) works again: swapping items at a chest was being mistaken for it.'],

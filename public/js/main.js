@@ -9,7 +9,7 @@ import { setDetail } from './models.js';
 import { setStyle, realistic, nightEnv } from './gfx.js';
 import { MenuScene } from './menu.js';
 import { loadForeman, onForemanReady, loadBatman } from './foremanGlb.js';
-import { loadChucky, onChuckyReady, chuckyReady } from './chuckyGlb.js';
+import { loadChucky, onChuckyReady, chuckyReady, loadChuckyOutfit } from './chuckyGlb.js';
 import { loadTed } from './sidekicks.js';
 import { loadRealism } from './realism.js';
 import { loadStatic } from './glbModels.js';
@@ -131,6 +131,7 @@ function startBG() {
 loadForeman();
 loadBatman().then(m => { if (m) { forgetArt('foreman'); if (menu && menu.killerChar === 'foreman') menu.setKiller('foreman', menu.killerSkin); } });
 loadChucky();
+loadChuckyOutfit('chucky_scarred'); loadChuckyOutfit('chucky_dbd');
 loadTed();
 for (const n of ['bringit', 'email', 'weak', 'cock', 'shit', 'idle', 'arfh', 'teddy', 'problems', 'fuckme', 'listen', 'pussy', 'thunder']) loadClip('ted/' + n);
 loadStatic('axe').then(m => { if (m) forgetArt('bateman'); });
