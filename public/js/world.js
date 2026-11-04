@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { HALF } from './config.js';
 import { realistic } from './gfx.js';
+import { cloneScene } from './sceneGlb.js';
 import { rng, barBox } from './map.js';
 import { tex } from './textures.js';
 import { buildMeatWorld, updateMeatLights } from './meatworld.js';
@@ -143,7 +144,7 @@ export function buildWorld(M, quality = 'medium') {
   };
   const tileOf = st => st === 'stone' ? 1.15 : st === 'brick' ? 1.6 : 2;
   for (const b of M.boxes) {
-    if (b.kind === 'gen' || b.kind === 'switch' || b.kind === 'logpile') continue;
+    if (b.kind === 'gen' || b.kind === 'switch' || b.kind === 'logpile' || b.kind === 'mesh') continue; // ('mesh': drawn by the map's own model)
     if (b.kind === 'log') {
       const along = b.hx > b.hz;
       const geo = new THREE.CylinderGeometry(0.45, 0.5, (along ? b.hx : b.hz) * 2, 10);
@@ -279,7 +280,7 @@ export function buildWorld(M, quality = 'medium') {
       const x = R.range(-HF - 8, HF + 8), z = R.range(-HF - 8, HF + 8);
       let bad = false;
       for (const b of M.boxes) if (Math.abs(x - b.x) < b.hx + 0.2 && Math.abs(z - b.z) < b.hz + 0.2) { bad = true; break; }
-      if (bad) continue;
+      if (bad || (M.isIndoors && M.isIndoors(x, z))) continue;
       let pd = 99; for (const [ax, az, bx, bz] of paths) pd = Math.min(pd, segDist(x, z, ax, az, bx, bz));
       if (pd < 1.3 && R() < 0.85) continue;
       list.push({ x, z, rot: R() * 6.28, s: R.range(0.7, 1.6) });
@@ -296,7 +297,7 @@ export function buildWorld(M, quality = 'medium') {
   for (const g of M.gens) for (let k = 0; k < 6 && lampSpots.length < M.gens.length * 2; k++) {
     const a = R() * 6.28, r = 3.2 + R() * 2;
     const x = g.x + Math.cos(a) * r, z = g.z + Math.sin(a) * r;
-    if (!blocked(x, z, 0.6) && !M.circles.some(c => Math.hypot(x - c.x, z - c.z) < c.r + 0.6)) { lampSpots.push({ x, z }); break; }
+    if (!blocked(x, z, 0.6) && !(M.isIndoors && M.isIndoors(x, z)) && !M.circles.some(c => Math.hypot(x - c.x, z - c.z) < c.r + 0.6)) { lampSpots.push({ x, z }); break; }
   }
   for (const gt2 of M.gates) lampSpots.push({ x: gt2.sx - 2.2, z: gt2.sz - gt2.dir * 1.5 });
   const postM = mat(0x2a2622, { map: 'metal', metal: 0.5, rough: 0.6 });
@@ -319,6 +320,8 @@ export function buildWorld(M, quality = 'medium') {
   }
 
   buildThemeExtras(W, M, quality, R);
+  // a map with its own scenery model (Granny's House)
+  if (M.glbScene) { const o = cloneScene(M.glbScene, lite); if (o) { scene.add(o); W.glb = o; } }
   addInteractables(W, M);
   // ---------- rolling ground fog: layered planes with scrolling noise ----------
   const nf = quality === 'potato' ? 0 : quality === 'low' ? 1 : 2;

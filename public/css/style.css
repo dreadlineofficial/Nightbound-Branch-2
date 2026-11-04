@@ -619,3 +619,35 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .killer-report td small { color: #a89888; }
 .killer-report tr.top td { color: #ffd780; font-weight: 600; }
 .killer-report tr.me td:first-child { text-decoration: underline; text-decoration-color: rgba(255,255,255,.3); }
+/* ================= Granny chapter ================= */
+.granny-art { background: #05070a url(../img/granny-banner.webp) center / cover no-repeat; }
+.news-card .granny-art { height: 118px; }
+.ch-hero .ch-art .granny-art { position: absolute; inset: 0; transition: transform 6s ease-out; }
+.ch-hero:hover .ch-art .granny-art { transform: scale(1.04); }
+.an-bg.granny { background: radial-gradient(ellipse at 60% 30%, rgba(90,110,140,.25), transparent 60%), #030406; }
+/* trailer */
+#trailer { position: fixed; inset: 0; z-index: 200; background: #000; display: flex; align-items: center; justify-content: center; }
+#trailer.hidden { display: none; }
+#trailer canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#trailer .tr-bars::before, #trailer .tr-bars::after { content: ''; position: absolute; left: 0; right: 0; height: 11vh; background: #000; z-index: 2; }
+#trailer .tr-bars::before { top: 0; } #trailer .tr-bars::after { bottom: 0; }
+#trailer .tr-text { position: absolute; left: 0; right: 0; bottom: 16vh; z-index: 3; text-align: center; font-family: 'IM Fell English SC', serif; font-size: clamp(26px, 4vw, 54px); color: #e8e2d6; letter-spacing: .04em; text-shadow: 0 2px 18px #000; opacity: 0; transition: opacity .6s; }
+#trailer .tr-text.show { opacity: 1; }
+#trailer .tr-title { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transition: opacity 1s; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,.2), rgba(0,0,0,.85)); }
+#trailer .tr-title.show { opacity: 1; }
+#trailer .tr-title h1 { margin: 0; font-family: 'IM Fell English SC', serif; font-weight: 400; font-size: clamp(54px, 10vw, 140px); color: #f2ece2; letter-spacing: .06em; text-shadow: 0 0 40px rgba(160,190,230,.35); }
+#trailer .tr-title h1 i { font-style: normal; color: var(--red2); font-size: .5em; vertical-align: middle; margin: 0 .2em; }
+#trailer .tr-title p { margin: 8px 0 0; font-family: var(--cond); letter-spacing: .3em; text-transform: uppercase; color: #c8c0b4; font-size: clamp(12px, 1.4vw, 18px); }
+#trailer .tr-title ul { list-style: none; padding: 0; margin: 18px 0 0; display: flex; gap: 26px; flex-wrap: wrap; justify-content: center; font-family: var(--cond); color: #e0d8cc; font-size: clamp(13px, 1.3vw, 17px); letter-spacing: .08em; }
+#trailer .tr-title ul li::before { content: '✦ '; color: var(--red2); }
+#trailer .tr-skip { position: absolute; right: 22px; bottom: calc(11vh + 14px); z-index: 6; }
+#trailer .tr-flash { position: absolute; inset: 0; z-index: 5; background: #fff; opacity: 0; pointer-events: none; }
+#trailer .tr-static { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0; mix-blend-mode: screen; background-size: 256px 256px; }
+#trailer .tr-start { position: relative; z-index: 7; display: flex; flex-direction: column; align-items: center; gap: 14px; cursor: pointer; background: none; border: 0; color: #eee; }
+#trailer .tr-start .granny-art { width: min(720px, 86vw); aspect-ratio: 1520 / 666; border: 1px solid rgba(200,210,230,.35); box-shadow: 0 0 60px rgba(120,150,200,.25); }
+#trailer .tr-start b { font-family: 'IM Fell English SC', serif; font-weight: 400; font-size: clamp(28px, 4vw, 48px); }
+#trailer .tr-start small { font-family: var(--cond); letter-spacing: .3em; text-transform: uppercase; color: var(--red2); }
+#trailer .tr-start .play { width: 74px; height: 74px; border-radius: 50%; border: 2px solid #eee; display: grid; place-items: center; font-size: 30px; margin-top: -170px; margin-bottom: 96px; background: rgba(0,0,0,.45); }
+.granny-logo, #trailer .tr-logo { background: url(../img/granny-logo.png) center / contain no-repeat; }
+#trailer .tr-logo { width: min(620px, 70vw); aspect-ratio: 447 / 195; filter: drop-shadow(0 0 24px rgba(0,0,0,.9)) drop-shadow(0 0 40px rgba(150,180,230,.25)); margin: 6px 0 2px; }
+#trailer .tr-x { font-size: clamp(30px, 4.5vw, 64px) !important; }

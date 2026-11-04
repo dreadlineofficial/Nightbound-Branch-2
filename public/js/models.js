@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
+import { makeGrannyGlb, animateGranny } from './grannyGlb.js';
 import { makeRealism } from './realism.js';
 import { makeStaticKiller, animateStaticKiller, cloneStatic } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
@@ -295,6 +296,7 @@ export function makeKiller(id, sk = {}) {
   }
   if (id === 'bateman') return makeBateman(sk);
   if (id === 'chucky') return makeChuckyGlb(sk, DETAIL.lite) || makeDoll(sk);
+  if (id === 'granny') { const g = makeGrannyGlb(sk, DETAIL.lite); if (g) return g; }
   if (id === 'foreman') { const g = makeForemanGlb(sk, DETAIL.lite); if (g) { applySkinFx(g, sk); return g; } }
   const R = new Rig();
   if (id === 'foreman') {
@@ -579,6 +581,7 @@ export function animate(R, s, dt) {
   if (R.retarget) { animate(R.proc, s, dt); R.copy(); return; }
   if (R.staticGlb) return animateStaticKiller(R, s, dt);
   if (R.chucky) return animateChucky(R, s, dt);
+  if (R.granny) return animateGranny(R, s, dt);
   if (R.glb) return animateGlb(R, s, dt);
   R.t += dt;
   const t = R.t;
@@ -778,7 +781,7 @@ export function makeViewModel(id) {
   const g = new THREE.Group();
   const arm = new THREE.Group(); g.add(arm);          // right arm + weapon, animated as a whole
   const add = (parent, geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.scale.set(sx, sy, sz); parent.add(me); return me; };
-  const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8 }[id];
+  const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8, granny: 0x9a8a80 }[id];
   const bk = id === 'butcher' ? 1.5 : id === 'harrower' ? 1.25 : id === 'wisp' ? 0.85 : 1;
   const armM = id === 'bateman' ? mat(0x30353c, { map: 'pinstripe', rough: 0.7 }) : mat(skin, { map: id === 'lamplighter' || id === 'harrower' ? 'cloth' : 'skin', rough: 0.75 });
   const handM = id === 'lamplighter' ? mat(0x111111, { map: 'leather' }) : mat(skin, { map: 'skin', rough: 0.7 });
@@ -808,6 +811,15 @@ export function makeViewModel(id) {
       add(arm, G.box(0.03, 0.2, 0.15), mat(0xb8bcc0, { map: 'metal', metal: 0.85, rough: 0.25 }), 0, 0.09, -0.56);
     }
     tip.position.set(0, 0.18, -0.6); base.position.set(0, 0.02, -0.3);
+  } else if (id === 'granny') {
+    // her bloody baseball bat: one piece, gripped at the handle, tip raised a little
+    const bat = new THREE.Group(); bat.position.set(0, 0.0, -0.02); bat.rotation.x = 0.28; arm.add(bat);
+    const wood = mat(0xb08858, { map: 'wood', rough: 0.55 }), blood = mat(0x6a0505, { rough: 0.15 });
+    add(bat, G.cyl(0.024, 0.02, 0.3, 10), mat(0x6a4426, { map: 'wood', rough: 0.6 }), 0, 0, -0.1, Math.PI / 2, 0, 0);
+    add(bat, G.cyl(0.044, 0.026, 0.4, 12), wood, 0, 0, -0.45, Math.PI / 2, 0, 0);
+    add(bat, G.cyl(0.046, 0.044, 0.2, 12), blood, 0, 0, -0.73, Math.PI / 2, 0, 0);
+    add(bat, G.sph(0.046, 10, 8), blood, 0, 0, -0.83, 0, 0, 0, 1, 1, 0.6);
+    tip.position.set(0, Math.sin(0.28) * 0.83, -Math.cos(0.28) * 0.83); base.position.set(0, Math.sin(0.28) * 0.25, -Math.cos(0.28) * 0.25);
   } else if (id === 'foreman') {
     const steel = mat(0x8a8a88, { map: 'metal', metal: 0.8, rough: 0.35 });
     add(arm, G.cyl(0.014, 0.014, 0.25, 6), steel, 0, 0.03, -0.14, Math.PI / 2, 0, 0);

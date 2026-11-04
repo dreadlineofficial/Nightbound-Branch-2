@@ -41,6 +41,7 @@ export function speedOf(p, S, sprint, crouch) {
       return SPEED.crawl * (has(p, 'resolve') ? 1.3 : 1);
     }
     if (p.st !== 'ok' && p.st !== 'ghost') return 0;
+    if (p.snare > 0) return 0; // caught in Granny's bear trap
     let s = crouch ? SPEED.crouch * (has(p, 'hushed') ? 1.25 : 1) : sprint ? SPEED.run : SPEED.walk;
     if (!crouch && sprint && p.hp === 1 && has(p, 'fleet')) s *= 1.07;
     if (p.boost > 0) s *= p.boostMul || SPEED.hitBoost;
@@ -59,6 +60,7 @@ export function speedOf(p, S, sprint, crouch) {
   if (p.char === 'butcher' && p.ab === 1) s = 8.6;
   if (p.char === 'wisp') { if (p.ab === 1) s *= 1.15; else if (p.ab === 2 || p.ab === 3) s *= 0.4; }
   // (Chucky keeps full speed while coiling a pounce)
+  if (p.char === 'granny' && (p.aim || p.ab === 1)) return 0; // kneeling over a trap / listening
   if ((p.char === 'harrower' || p.char === 'foreman' || p.char === 'bateman') && p.aim) s *= p.char === 'foreman' ? 0.75 : p.char === 'bateman' ? 0.6 : SPEED.aimSlow;
   if (p.diffMul) s *= p.diffMul;
   return s;

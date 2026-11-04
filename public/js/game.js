@@ -9,6 +9,7 @@ import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
+import { grannyReady, slendrinaReady, makeSlendrina } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
 let KB_SETTINGS = null;
@@ -490,6 +491,9 @@ export class Game {
         } else if (me.char === 'bateman') {
           if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'sawthrow', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
+        } else if (me.char === 'granny') {
+          if (down && me.abCd <= 0) { this.aimHeld = true; this.sendIn(); }
+          else if (!down && this.aimHeld) { this.aimHeld = false; this.sendIn(); }
         } else if (me.char === 'harrower') {
           if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'throw', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
@@ -571,6 +575,8 @@ export class Game {
     this.updateSidekicks(dt, S, me);
     this.updateTorchLight();
     this.updateTraps(S);
+    this.updateBears(S);
+    this.updateSlendrina(dt, S, me);
     this.updateSlime(S);
     this.updateSpears(dt, S);
     this.updateSaws(dt, S);
@@ -707,7 +713,7 @@ export class Game {
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
@@ -778,6 +784,7 @@ export class Game {
         if (vaulting) { const d = p.vault.d || 1.7; y = Math.sin(Math.min(1, c.vaultT / d) * Math.PI) * 0.5; }
         if (execing) st.exec = { f: p.act.t / RULES.execTime, char: p.char, role: 'killer' };
         st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0; st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
+        if (p.char === 'granny') { st.listen = p.ab === 1; st.blind = p.blind > 0; if (p.aim) st.act = 'bear'; st.aim = false; }
         if (p.atk === 1) { c.atkT = (c.atkPrev === 1 ? c.atkT + dt : 0); st.atkF = c.atkT / (RULES.lungeTime * (p.atkAmbush ? 1.4 : 1)); }
         c.atkPrev = p.atk;
         st.atkHit = p.atkHit; st.tele = !!p.tele; st.dark = p.char === 'foreman' && p.ab === 1;
@@ -1275,6 +1282,55 @@ export class Game {
   }
 
   // ghost traps on the ground ("HW Detail #4 GHOST TRAP" model; a striped box if it didn't load)
+  // ---------------- Granny's bear traps ----------------
+  updateBears(S) {
+    this.bearMeshes ||= new Map();
+    const live = new Set((S.bears || []).map(t => t.id));
+    for (const [id, m] of this.bearMeshes) if (!live.has(id)) { this.scene.remove(m); this.bearMeshes.delete(id); }
+    for (const t of S.bears || []) {
+      if (this.bearMeshes.has(t.id)) continue;
+      const g = new THREE.Group(); g.position.set(t.x, 0.02, t.z); g.rotation.y = (t.id * 2.39) % 6.28;
+      const steel = new THREE.MeshStandardMaterial({ color: 0x4a4440, metalness: 0.75, roughness: 0.45 }), rust = new THREE.MeshStandardMaterial({ color: 0x5a3020, metalness: 0.4, roughness: 0.8 });
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.03, 18), rust); base.position.y = 0.015; g.add(base);
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.02, 12), steel); plate.position.y = 0.04; g.add(plate);
+      for (const sd of [-1, 1]) {
+        const jaw = new THREE.Group(); jaw.position.set(0, 0.03, 0); jaw.rotation.x = sd * 1.25; g.add(jaw);
+        const arc = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.012, 6, 16, Math.PI), steel); arc.rotation.y = sd > 0 ? 0 : Math.PI; jaw.add(arc);
+        for (let i = 1; i < 8; i++) { const a = i / 8 * Math.PI, tooth = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.05, 4), steel); tooth.position.set(Math.cos(a) * 0.21, 0.025, Math.sin(a) * 0.21 * (sd > 0 ? 1 : -1)); g.add(tooth); jaw.add(tooth); }
+      }
+      g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      this.scene.add(g); this.bearMeshes.set(t.id, g);
+    }
+  }
+  // ---------------- Slendrina ----------------
+  updateSlendrina(dt, S, me) {
+    const sl = S.slend;
+    if (!sl) {
+      if (this.slend) { this.slend.R.root.visible = false; this.slend.id = null; }
+      this.slendLook = 0;
+      return;
+    }
+    if (!this.slend && slendrinaReady()) { const R = makeSlendrina(this.settings.quality === 'potato' || this.settings.quality === 'low'); if (R) { this.scene.add(R.root); this.slend = { R, id: null }; } }
+    if (!this.slend) return;
+    const R = this.slend.R;
+    if (this.slend.id !== sl.id) { this.slend.id = sl.id; this.slendLook = 0; this.slendSent = false; this.slend.born = this.t; }
+    R.root.visible = true; R.root.position.set(sl.x, 0, sl.z); R.root.rotation.y = sl.yaw;
+    R.update(dt);
+    // she flickers in and out of being there
+    const age = this.t - this.slend.born, life = sl.dur;
+    const o = Math.min(1, age * 3) * Math.min(1, Math.max(0, (life - age) * 2.5)) * (0.82 + Math.sin(this.t * 37) * 0.08 + (Math.random() < 0.06 ? -0.5 : 0));
+    R.setOpacity(Math.max(0.05, Math.min(1, o)));
+    // looking at her: on screen, near the middle, with a clear line of sight
+    if (me && me.role === 'survivor' && me.st === 'ok' && !this.slendSent) {
+      const v = new THREE.Vector3(sl.x, 1.5, sl.z).project(this.camera);
+      const d = Math.hypot(me.x - sl.x, me.z - sl.z);
+      const looking = v.z < 1 && Math.abs(v.x) < 0.38 && Math.abs(v.y) < 0.5 && d < 24 && !losBlocked(this.M, me.x, me.z, sl.x, sl.z);
+      this.slendLook = looking ? this.slendLook + dt : Math.max(0, this.slendLook - dt * 2);
+      this.teleFx = Math.max(this.teleFx || 0, Math.min(0.85, this.slendLook * 1.6)); // the screen darkens as you stare
+      if (this.slendLook >= 0.5) { this.slendSent = true; this.send({ t: 'act', a: 'slend' }); }
+    }
+  }
+
   updateTraps(S) {
     this.trapMeshes ||= new Map();
     const live = new Set((S.traps || []).map(t => t.id));
@@ -1514,6 +1570,30 @@ export class Game {
         case 'pounce-hit': sound.play('hit', e.x, e.z); this.blood.spawn(e.x, 1.0, e.z, 45, 0x6a0303, 3, 1.2, -9.8, 1.2); if (e.id === this.myId) { this.shake = 0.9; this.flash = 0.5; this.feed('Chucky pounced on you!', 'big'); } break;
         case 'pounce-wall': sound.play('thud', e.x, e.z); this.sparks.spawn(e.x, 0.6, e.z, 12, 0xffffff, 2, 0.4, -6); if (e.id === this.myId) { this.shake = 0.7; this.feed('You slammed into a wall.'); } break;
         case 'pounce-land': sound.play('thud', e.x, e.z); break;
+        case 'bearset': sound.play('click', e.x, e.z); if (e.id === this.myId) this.feed('Bear trap set.'); break;
+        case 'bearclose': sound.play('thunk', e.x, e.z); break;
+        case 'bearsnap': {
+          sound.play('thunk', e.x, e.z); sound.play('scream', e.x, e.z, { pitch: pitchOf(e.id), len: 1.2 });
+          this.blood.spawn(e.x, 0.3, e.z, 40, 0x6a0303, 2.2, 0.8, -9.8, 1); if (this.decals) this.decals.add(e.x, e.z, 0.7, 0);
+          const bm = this.bearMeshes && [...this.bearMeshes.values()].find(m => Math.hypot(m.position.x - e.x, m.position.z - e.z) < 0.2);
+          if (e.id === this.myId) { this.feed('You stepped in a bear trap!', 'big'); this.shake = 0.7; this.flash = 0.4; }
+          else if (e.by === this.myId) this.feed(name(e.id) + ' is caught in your trap.', 'big');
+          this.petReact(e.id, 'panic', 2.5);
+          void bm; break;
+        }
+        case 'hearyou': {
+          const p = S && playerById(S, e.id);
+          if (e.id === this.myId) this.feed(e.ids.length ? `You hear ${e.ids.length} of them.` : 'Silence. For now.');
+          else if (this.mine() && this.mine().role === 'survivor') { this.feed('Granny is listening… keep quiet.', 'big'); sound.play('fade', p ? p.x : e.x, p ? p.z : e.z, { on: true }); }
+          break;
+        }
+        case 'slendrina': sound.play('fade', e.x, e.z, { on: true }); break;
+        case 'slendhit': {
+          sound.play('scream', e.x, e.z, { pitch: 1.6, len: 0.9 });
+          if (e.id === this.myId) { this.feed('You looked at Slendrina.', 'big'); this.flash = 0.9; this.shake = 0.8; this.teleFx = 1; }
+          this.petReact(e.id, 'panic', 2);
+          break;
+        }
         case 'laugh': {
           sound.play('laugh', e.x, e.z);
           const c = this.chars.get(e.id); if (c) c.laughAt = this.t;
@@ -1680,6 +1760,12 @@ export class Game {
       ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1;
       sub = !held ? 'Go get your chainsaw' : me.aim ? (me.abT >= def.aim ? 'Release to throw!' : 'Revving…') : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       extra = me.haste > 0 ? `Morning Routine · +12% speed` : me.ab2Cd > 0 ? `${kbd('ability2')} Business Card ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Business Card ready';
+    } else if (me.char === 'granny') {
+      const n = (this.S.bears || []).filter(b => b.by === me.id).length;
+      ready = me.abCd <= 0; pct = me.aim ? 1 - Math.min(1, (me.abT || 0) / def.set) : me.abCd / def.cooldown;
+      sub = me.aim ? 'Setting the trap…' : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : `${n}/${def.max} traps set`;
+      pips = Array.from({ length: def.max }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
+      extra = me.ab === 1 ? 'Listening…' : me.ab2Cd > 0 ? `${kbd('ability2')} I Hear You ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' I Hear You ready';
     } else if (me.char === 'slimer') {
       const n = (this.S.slime || []).length;
       ready = me.abCd <= 0; pct = me.abCd / def.cooldown;

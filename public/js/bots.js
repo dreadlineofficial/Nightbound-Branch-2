@@ -564,6 +564,16 @@ export class Bots {
         if (!b.aim) { b.aim = true; b.aimT = 0.1 + Math.max(0, (lead - A.min) / (A.max - A.min)) * A.coil + D.react * 0.2; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }
       if (p.char === 'chucky' && !p.harmless && !target && p.ab2Cd <= 0 && Math.random() < dt * 0.15) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
+      if (p.char === 'granny') {
+        // no one in sight: listen for them, or kneel and set a trap on the way
+        if (!target && p.ab2Cd <= 0 && !p.ab && Math.random() < dt * 0.12) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
+        if (!target && !b.trapT && p.abCd <= 0 && !p.ab && p.carry == null && Math.random() < dt * 0.07) { b.trapT = 1.4; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
+        if (b.trapT) {
+          b.trapT -= dt;
+          if (b.trapT <= 0 || p.abCd > 0 || target) { b.trapT = 0; sim.onMsg(p.id, { t: 'in', e: false, aim: false }); }
+          else return;
+        }
+      }
       if (p.char === 'bateman' && target && los && p.abCd <= 0 && p.ammo > 0 && d > 5 && d < 17 && !p.atk && this.clearLine(p.x, p.z, tx, tz)) {
         if (!b.aim) { b.aim = true; b.aimT = 0.45 + D.react * 0.4; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }

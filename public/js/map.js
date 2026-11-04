@@ -2,6 +2,7 @@
 // The same seed produces the exact same map on host and every client.
 import { HALF } from './config.js';
 import { buildMeatworks } from './meatworks.js';
+import { buildGrannyHouse } from './grannyhouse.js';
 import { THEMES, BIG_MAPS } from './themes.js';
 
 export function rng(seed) {
@@ -94,6 +95,7 @@ export function makeCtx(M, R, cx, cz, rot) {
 
 export function buildMap(seed, map = 'woods') {
   if (map === 'meatworks') return buildMeatworks(seed);
+  if (map === 'granny') return buildGrannyHouse(seed);
   const R = rng(seed);
   const BIG = BIG_MAPS[map] || null; // Infection maps reuse a theme on a bigger grid
   const base = BIG ? BIG.base : map;
@@ -434,7 +436,7 @@ export function buildGrid(M) {
   const N = Math.ceil(ext * 2 / CELL);
   const type = new Uint8Array(N * N);   // 0 free, 1 solid, 2 window, 3 barricade, 4 gate
   const ref = new Int16Array(N * N).fill(-1);
-  const r = 0.42;
+  const r = M.navR ?? 0.42; // clearance kept from walls (smaller on maps with narrow doorways)
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = -ext + (i + 0.5) * CELL, z = -ext + (j + 0.5) * CELL, k = j * N + i;
     if (Math.abs(x) > HF + 0.2 || Math.abs(z) > HF + 0.2) {

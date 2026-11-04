@@ -113,6 +113,15 @@ export const KILLERS = {
     feature: { name: 'Tiny Terror & Possession', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump over windows, pallets and rocks. Possession (G, once every 10 minutes): take over a downed survivor in secret. They wander as an invisible ghost, your doll is left as a harmless decoy, and you can let go once you have downed and hooked someone. Soul Split (V, once, with one generator left): jump into a spare doll lying on the map; your old body keeps hunting as a bot that can down survivors but not hook them. Played in third person.' },
     color: 0xd83a22,
   },
+  granny: {
+    id: 'granny', name: 'Granny', speed: 4.7, terror: 32, weapon: 'Baseball Bat', crossover: 'Granny (fan-made)',
+    lore: 'She has kept you in her house for five days. She hears every creak of the floorboards, and she does not like guests leaving early.',
+    exec: { name: 'Sweet Dreams', desc: 'Raises her bloody bat high and brings it down, again and again, until the house is quiet.' },
+    ability: { name: 'Bear Trap', cooldown: 6, set: 1.1, max: 4, snare: 3.2, desc: 'Hold to kneel and set a bear trap at your feet (up to 4 on the map; the oldest springs shut when you set a fifth). A survivor who steps in one is injured and caught in place for 3s, screaming loud enough for you to hear it across the map.' },
+    ability2: { name: 'I Hear You', key: 'R', cooldown: 30, reveal: 6, desc: 'Stop and listen. Every survivor who is running, repairing, healing or unhooking anywhere on the map is revealed to you for 6s.' },
+    feature: { name: 'Sharp Ears & Slendrina', desc: 'She hears everything: survivors who run within 22m of her are revealed, and a failed skill check is heard anywhere. Her granddaughter Slendrina haunts the trial, now and then early on and constantly once the exit gates are powered. A survivor who looks at Slendrina for half a second is injured.' },
+    color: 0xd8d0c0,
+  },
   bateman: {
     id: 'bateman', name: 'Patrick Bateman', speed: 4.7, terror: 28, weapon: 'Axe', crossover: 'American Psycho (fan-made)',
     lore: 'Vice president at Pierce & Pierce. Impeccable taste, a flawless skincare routine, and an axe in his briefcase.',
@@ -252,6 +261,11 @@ export const LORE = {
     'The night the plant burned, every worker on the floor was counted, and the count came up short. The Foreman went back inside to find the missing ones. He never came out.',
     'He is still on the clock, hunting by sound and by light, dragging stragglers back to the line. The quota is never met. It never will be.',
   ] },
+  granny: { title: 'Five Days', story: [
+    'A fan-made crossover. Nobody knows how long she has lived in the old house by the moat, only that the people who wake up in it have five days to find their way out, and that she hears every one of them try.',
+    'She walks the halls with a bloody bat, sets bear traps where the floor creaks, and stops dead when she hears a door or a dropped plate. Her husband keeps the cellar. Her granddaughter Slendrina keeps the shadows.',
+    'The Entity did not have to take her anywhere. It simply moved the house. Now the guests are survivors, the trial is her home, and the rules have not changed: be quiet, and do not look at the girl in the white dress.',
+  ] },
   chucky: { title: 'Friends Till the End', story: [
     'A fan-made crossover. A Good Guy doll carrying the soul of a strangler who learned a little voodoo and would not stay dead. He has been burned, shot, melted and buried, and every time he has found another body to come back in.',
     'The Entity found him in a toy factory furnace, still laughing, and offered him a place where the playtime never ends. He said yes before it had finished asking.',
@@ -335,6 +349,11 @@ export const SKINS = {
     { id: 'charred', name: 'Burnt Out', price: 2500, tint: 0x141210, tintK: 0.88, glow: 0x6a1400, glowK: 0.12, desc: 'Pulled from the toy factory fire. Charred black and still smouldering.' },
     { id: 'voodoo', name: 'Voodoo', price: 4500, tint: 0x7aff8a, tintK: 0.3, glow: 0x0a6a1a, glowK: 0.7, desc: 'Ade due Damballa. A sickly green glow from the inside.' },
   ],
+  granny: [
+    { id: 'default', name: 'House Dress', price: 0, desc: 'Her grey nightgown, her bloody bat, and the stare. You know the one.' },
+    { id: 'bloodbath', name: 'Spring Cleaning', price: 3000, tint: 0x8a1010, tintK: 0.35, desc: 'She has been busy. Most of the red is not hers.' },
+    { id: 'ghost', name: 'Pale Visitor', price: 4500, tint: 0xd8e4f0, tintK: 0.5, glow: 0x6a8aa8, glowK: 0.35, desc: 'Drained of colour, glowing faintly, like something that stayed in the house long after it should have left.' },
+  ],
   bateman: [
     { id: 'default', name: 'Pierce & Pierce', price: 0, desc: 'Charcoal pinstripe double-breasted suit, crisp white shirt, red silk tie and a cigar. Valentino Couture.' },
     { id: 'raincoat', name: 'Hip to Be Square', price: 2500, rain: true, desc: 'A clear plastic raincoat over the suit, for the mess. Newspaper on the floor optional.' },
@@ -351,7 +370,10 @@ export const SKINS = {
 // ---------------- Store: chapters (DLC) ----------------
 // Bought with Embers. A chapter unlocks playing as its killer; its map is free for everyone.
 export const CHAPTERS = [
-  { id: 'offal', num: 'V', name: 'OFFAL', sub: '× Nightbound', price: 5000, killer: 'foreman', map: 'meatworks', banner: 'offal', isNew: true,
+  { id: 'granny', num: 'VIII', name: 'Granny', sub: '× Nightbound', price: 5000, killer: 'granny', map: 'granny', banner: 'granny', isNew: true,
+    tagline: 'You have five days. She hears everything.',
+    contents: ['Granny: Bear Trap, I Hear You, Sharp Ears', 'Her helper: Slendrina. Don\'t look at her.', 'Execution: Sweet Dreams', "Map: Granny's House (free for everyone)", '2 Granny outfits in the Store'] },
+  { id: 'offal', num: 'V', name: 'OFFAL', sub: '× Nightbound', price: 5000, killer: 'foreman', map: 'meatworks', banner: 'offal',
     tagline: 'Night shift at the Hollow Pines Meatworks. Headcount must be maintained.',
     contents: ['The Foreman: Chain Hook, Lights Out and Hunts by Sound', 'Execution: Reassignment', 'Map: Hollow Pines Meatworks (free for everyone)', '3 Foreman outfits in the Store'] },
   { id: 'psycho', num: 'VII', name: 'American Psycho', sub: '(fan-made)', killer: 'bateman', base: true, isNew: true, tagline: 'Do you like Huey Lewis and the News?' },
@@ -366,8 +388,19 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.20.3';
+export const VERSION = '2.21.0';
 export const INBOX = [
+  {
+    id: 'v2.21.0', version: '2.21.0', date: 'Nov 2026', title: 'Chapter VIII: Granny', tag: 'New Chapter', banner: 'granny',
+    body: [
+      'Granny comes to Nightbound. You wake up in her house, and you have five days. (Fan-made crossover.)',
+      'New killer, Granny: Bear Trap (hold RMB to kneel and set a trap: whoever steps in it is injured and held in place), I Hear You (R: everyone running, repairing, healing or unhooking is revealed), and Sharp Ears (runners near her, and every failed skill check, give you away). She moves with her own animations: the shuffle, the bat swing, the stagger, the pepper-spray flinch.',
+      'Her helper, Slendrina, haunts the trial: now and then early on, and constantly once the exit gates are powered. Look at her for half a second and you are injured. Don\'t look at her.',
+      'New map, free for everyone: Granny\'s House, the whole house and walled yard. Generators and hooks in the yard and inside the ground floor.',
+      'New execution: Sweet Dreams. Two outfits in the Store: Spring Cleaning and Pale Visitor.',
+      'Watch the trailer from the home screen.',
+    ],
+  },
   {
     id: 'v2.20.3', version: '2.20.3', date: 'Nov 2026', title: 'Killer Damage Report', tag: 'Update',
     body: ['The end screen now shows how much damage each killer did: health states taken, hits, downs, hooks and kills (executions noted), and crowns the killer who did the most.', 'Online: players who joined a room now see their connection and ping in the top-right corner. "Relay (slower)" means a direct link to the host couldn\'t be made. Direct connections also get more time to succeed before falling back to the relay, which should mean less lag for more players.'],

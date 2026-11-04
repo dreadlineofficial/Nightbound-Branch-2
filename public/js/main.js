@@ -13,10 +13,13 @@ import { loadChucky, onChuckyReady, chuckyReady } from './chuckyGlb.js';
 import { loadTed } from './sidekicks.js';
 import { loadRealism } from './realism.js';
 import { loadStatic } from './glbModels.js';
+import { loadScene, sceneReady } from './sceneGlb.js';
+import { loadGranny, loadSlendrina, grannyReady, slendrinaReady, onGrannyReady } from './grannyGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound, loadClip } from './audio.js';
+import { showTrailer, trailerPlaying } from './trailer.js';
 import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable } from './net.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF } from './config.js';
@@ -131,6 +134,9 @@ loadTed();
 for (const n of ['bringit', 'email', 'weak', 'cock', 'shit', 'idle', 'arfh', 'teddy', 'problems', 'fuckme', 'listen', 'pussy', 'thunder']) loadClip('ted/' + n);
 loadStatic('axe').then(m => { if (m) forgetArt('bateman'); });
 loadStatic('ghosttrap');
+loadScene('granny_map');
+loadGranny().then(m => { if (m) { forgetArt('granny'); if (menu && menu.killerChar === 'granny') menu.setKiller('granny', menu.killerSkin); } });
+loadSlendrina();
 loadStatic('slimer').then(m => { if (!m) return; forgetArt('slimer'); if (menu && menu.killerChar === 'slimer') menu.setKiller('slimer', menu.killerSkin); });
 loadRealism('ray').then(m => { if (!m) return; forgetArt('raghuvir'); if (menu) menu.setSurvivor(profile.survivor.char, skinId(profile.survivor.char)); if (!$('store').classList.contains('hidden')) { menu && (menu.showFor = null); renderStore(); } });
 // Chucky's model is 5MB: once it arrives, redraw every place that may have drawn the stand-in doll
@@ -143,6 +149,11 @@ onChuckyReady(() => {
 loadChucky().then(g => { if (!g) toast("Chucky's 3D model couldn't load, so a simple stand-in doll is used. Check your connection and refresh.", 8000); });
 // a match with Chucky in it waits (on the loading screen) for his real model, up to 20s
 async function waitForModels(need) {
+  // the Granny's House scenery (a big model) must be in before any match can use the map
+  if (!sceneReady('granny_map')) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([loadScene('granny_map'), new Promise(r => setTimeout(r, 25000))]); }
+  // Granny and her granddaughter, when she's in the match
+  if (need === 'granny' || (need && need.granny)) { if (!grannyReady() || !slendrinaReady()) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([loadGranny(), loadSlendrina()]), new Promise(r => setTimeout(r, 25000))]); } }
+  if (need && need.granny) need = need.chucky;
   if (!need || chuckyReady()) return;
   loading(true, "Waking Chucky up…");
   await Promise.race([loadChucky(), new Promise(r => setTimeout(r, 20000))]);
@@ -455,7 +466,7 @@ function chaptersHTML() {
   const dlc = CHAPTERS.filter(c => !c.base), base = CHAPTERS.filter(c => c.base);
   const hero = dlc.map(c => {
     const own = ownsChapter(c.id);
-    return `<div class="ch-hero"><div class="ch-art"><div class="offal-art"></div><div class="ch-x">× <span>Nightbound</span></div></div>
+    return `<div class="ch-hero"><div class="ch-art"><div class="${c.banner || 'offal'}-art"></div><div class="ch-x">× <span>Nightbound</span></div></div>
       <div class="ch-info"><span class="ch-tag ${own ? 'owned' : ''}">${own ? 'Owned' : 'New chapter'}</span>
         <div class="ch-name"><small>Chapter ${c.num}</small>${esc(c.name)} <span style="color:var(--red2)">×</span> Nightbound</div>
         <div class="ch-line">${esc(c.tagline)}</div>
@@ -565,7 +576,7 @@ function renderInbox() {
     const gift = m.gift ? (profile.claimed[m.id]
       ? `<div class="gift claimed">${icon('check')}${esc(m.gift.label)} · claimed</div>`
       : `<div class="gift">${icon('gift')}${esc(m.gift.label)}<button class="btn primary" data-claim="${m.id}">Claim</button></div>`) : '';
-    return `<div class="msg ${unread ? 'unread' : ''}">${m.banner ? `<div class="msg-banner offal-art" data-announce="offal"></div>` : m.gb ? `<div class="msg-banner gb-mini" data-announce="gb">Ghostbusters <i>×</i> Nightbound</div>` : ''}<div class="mtag">${esc(m.tag)} · v${esc(m.version)} · ${esc(m.date)}</div><h3>${esc(m.title)}</h3><ul>${m.body.map(b => `<li>${esc(b)}</li>`).join('')}</ul>${gift}</div>`;
+    return `<div class="msg ${unread ? 'unread' : ''}">${m.banner ? `<div class="msg-banner ${m.banner === true ? 'offal' : m.banner}-art" data-announce="${m.banner === true ? 'offal' : m.banner}"></div>` : m.gb ? `<div class="msg-banner gb-mini" data-announce="gb">Ghostbusters <i>×</i> Nightbound</div>` : ''}<div class="mtag">${esc(m.tag)} · v${esc(m.version)} · ${esc(m.date)}</div><h3>${esc(m.title)}</h3><ul>${m.body.map(b => `<li>${esc(b)}</li>`).join('')}</ul>${gift}</div>`;
   }).join('');
   $('inbox-list').querySelectorAll('[data-announce]').forEach(b => b.onclick = () => showAnnounce(b.dataset.announce));
   $('inbox-list').querySelectorAll('[data-claim]').forEach(b => b.onclick = () => {
@@ -822,7 +833,7 @@ async function startHostMatch(roster, opts) {
   loading(true, 'Entering the fog…');
   await nextFrame();
   // Chucky can appear in any match (picked, random bot killer, or an Infection turn)
-  await waitForModels(roster.some(r => r.char === 'chucky') || opts.mode === 'infection');
+  await waitForModels({ granny: roster.some(r => r.char === 'granny') || opts.mode === 'infection', chucky: roster.some(r => r.char === 'chucky') || opts.mode === 'infection' });
   loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
@@ -1023,7 +1034,7 @@ setInterval(() => {
 async function startClientMatch(m) {
   loading(true, 'Entering the fog…');
   await nextFrame();
-  await waitForModels((m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection');
+  await waitForModels({ granny: (m.roster || []).some(r => r.char === 'granny') || m.mode === 'infection', chucky: (m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection' });
   loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
@@ -1181,9 +1192,24 @@ const AN_GB = `<div class="an-bg gb"></div><div class="an-inner">
   <ul class="an-list"><li>New survivor: <b>Raghuvir</b></li><li>New survivor: <b>Abeer</b></li><li>New item: <b>Ghost Trap</b> (G)</li></ul>
   <div class="an-actions"><button class="btn primary big" id="an-play">Play as Raghuvir</button><button class="btn big" id="an-play2">Play as Abeer</button><button class="btn" id="an-store">Outfits</button><button class="btn" id="an-close">Close</button></div>
   <p class="gb-note">Fan-made. Not affiliated with or endorsed by the Ghostbusters rights holders.</p></div>`;
+const AN_GRANNY = `<div class="an-bg granny"></div><div class="an-inner">
+  <div class="an-kicker">Chapter VIII · New chapter · Available now</div>
+  <div class="an-banner"><div class="an-img granny-art"></div><div class="an-scan"></div></div>
+  <div class="an-x">× <span>Nightbound</span></div>
+  <p class="an-sub">You wake up in her house. She hears every creak of the floorboards, sets bear traps where you'll step, and her granddaughter <b>Slendrina</b> waits in the dark. Don't look at her. Escape <b>Granny's House</b>, a brand new map, before she finds you.</p>
+  <ul class="an-list"><li>New killer: <b>Granny</b> (Bear Trap, I Hear You)</li><li>Her helper: <b>Slendrina</b></li><li>New map: <b>Granny's House</b> (free for everyone)</li><li>New execution: <b>Sweet Dreams</b></li></ul>
+  <div class="an-actions"><button class="btn primary big" id="an-store">Get the Chapter</button><button class="btn big" id="an-play">Play Granny's House</button><button class="btn" id="an-trailer">Watch Trailer</button><button class="btn" id="an-close">Close</button></div>
+  <p class="gb-note">Fan-made crossover. Granny and Slendrina are characters by DVloper; not affiliated with or endorsed by them.</p></div>`;
 function showAnnounce(kind = 'offal') {
   closePanel();
-  const A = $('announce'); A.innerHTML = kind === 'gb' ? AN_GB : AN_OFFAL; A.classList.remove('hidden');
+  const A = $('announce'); A.innerHTML = kind === 'gb' ? AN_GB : kind === 'granny' ? AN_GRANNY : AN_OFFAL; A.classList.remove('hidden');
+  if (kind === 'granny') {
+    $('an-store').onclick = () => { sound.play('click'); hideAnnounce(); openStore('chapters'); };
+    $('an-play').onclick = () => { sound.play('click'); hideAnnounce(); botsCfg.map = 'granny'; navActions['play-survivor'](); $('bots-map').value = 'granny'; };
+    $('an-trailer').onclick = () => { sound.play('click'); hideAnnounce(); showTrailer(() => showAnnounce('granny'), true); };
+    $('an-close').onclick = () => { sound.play('click'); hideAnnounce(); };
+    profile.seen.granny = true; saveProfile(); return;
+  }
   const play = ch => { sound.play('click'); hideAnnounce(); profile.survivor.char = ch; saveProfile(); if (menu) menu.setSurvivor(ch, skinId(ch)); navActions['play-survivor'](); };
   if (kind === 'gb') {
     A.querySelector('.gb-l').src = art('full', 'raghuvir', 'default', 260, 390); A.querySelector('.gb-r').src = art('full', 'abeer', 'default', 260, 390);
@@ -1199,9 +1225,10 @@ function showAnnounce(kind = 'offal') {
   saveProfile(); sound.init(); sound.play('caged');
 }
 function hideAnnounce() { $('announce').classList.add('hidden'); }
-$('news-card').onclick = () => showAnnounce('gb');
+$('news-card').onclick = () => { sound.init(); showTrailer(() => showAnnounce('granny'), true); };
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('announce').classList.contains('hidden')) hideAnnounce(); });
-if (!profile.seen.gb) setTimeout(() => { if (!session) showAnnounce('gb'); }, 1200);
+// new chapter: everyone is greeted with its trailer once, then the announcement
+if (!profile.seen.grannyTrailer) setTimeout(() => { if (!session) { profile.seen.grannyTrailer = true; saveProfile(); showTrailer(() => showAnnounce('granny')); } }, 900);
 
 startBG();
 requestAnimationFrame(loop);
