@@ -332,10 +332,11 @@ export class Sim {
         break;
       }
       case 'esc': {
+        // trying to unhook yourself: a 4% chance, and every failed attempt costs hook time
         if (p.st !== 'caged' || p.stage !== 1 || p.esc >= 3) return;
         p.esc++;
-        if (Math.random() < 0.07) { this.freeFromCage(p, null); this.ev({ k: 'msg', text: p.name + ' broke free of the cage!' }); }
-        else this.ev({ k: 'escfail', id: p.id, left: 3 - p.esc });
+        if (Math.random() < RULES.selfUnhook) { this.freeFromCage(p, null); this.ev({ k: 'msg', text: p.name + ' unhooked themselves!' }); }
+        else { p.cageT = Math.max(0.01, p.cageT - RULES.selfUnhookCost); this.ev({ k: 'escfail', id: p.id, left: 3 - p.esc }); }
         break;
       }
       case 'sc': this.skillResult(p, m.r); break;
@@ -422,6 +423,8 @@ export class Sim {
 
   skillResult(p, r) {
     const S = this.S;
+    // struggling against the Entity on the hook: a miss lets its legs get closer
+    if (p.st === 'caged' && p.stage >= 2) { if (r === 'miss') { p.cageT -= RULES.struggleMiss; this.ev({ k: 'sc', id: p.id, r }); } return; }
     if (!p.act) return;
     if (p.act.k === 'repair') {
       const g = S.gens[p.act.id];
@@ -515,7 +518,15 @@ export class Sim {
         p.x = c.x; p.z = c.z;
         const rescuing = S.players.some(o => o.act && o.act.k === 'rescue' && o.act.id === p.cage);
         if (!rescuing) p.cageT -= dt * (anyKillerHas(S, 'rust') ? 1.2 : 1);
-        if (p.cageT <= 0) this.kill(p, 'sacrificed');
+        // bots fight the Entity too, and now and then slip up
+        if (p.bot && p.stage >= 2 && !rescuing && Math.random() < dt * 0.025) { p.cageT -= RULES.struggleMiss; this.ev({ k: 'sc', id: p.id, r: 'miss' }); }
+        if (p.cageT <= 0) {
+          if (p.stage === 1) { // the Entity arrives: struggle phase
+            p.stage = 2; p.cageMax = p.cageT = RULES.cageStage[1];
+            this.ev({ k: 'struggle', id: p.id, cage: p.cage });
+            this.ev({ k: 'msg', text: 'The Entity is trying to claim ' + p.name + '!' });
+          } else this.kill(p, 'sacrificed');
+        }
       } else if (p.st === 'down') {
         const beingHelped = S.players.some(o => o.act && o.act.k === 'heal' && o.act.id === p.id);
         if (!beingHelped) p.bleed -= dt * (has(p, 'resolve') ? 0.66 : 1);
@@ -973,7 +984,8 @@ export class Sim {
         else {
           s.cageMax = s.cageT = RULES.cageStage[s.stage - 1];
           this.ev({ k: 'caged', id: s.id, cage: a.id, stage: s.stage });
-          this.ev({ k: 'msg', text: s.name + ' has been caged' + (s.stage === 2 ? ' for the second time!' : '.') });
+          this.ev({ k: 'msg', text: s.name + ' has been hooked' + (s.stage === 2 ? ' again! The Entity is already here.' : '.') });
+          if (s.stage === 2) this.ev({ k: 'struggle', id: s.id, cage: a.id });
         }
         break;
       }

@@ -11,7 +11,7 @@ import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { Sidekick, TED_LINES, resetVoices } from './sidekicks.js';
 import { staticReady, cloneStatic } from './glbModels.js';
-import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat } from './models.js';
+import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat, HOOK_Y } from './models.js';
 import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
 import { losBlocked } from './map.js';
@@ -641,11 +641,12 @@ export class Game {
 
   // ---------------- skill checks ----------------
   updateSkill(dt, me) {
-    const working = me.act && (me.act.k === 'repair' || me.act.k === 'heal' || me.act.k === 'self') && me.role === 'survivor';
+    const struggling = me.role === 'survivor' && me.st === 'caged' && me.stage >= 2; // fighting the Entity on the hook
+    const working = struggling || (me.act && (me.act.k === 'repair' || me.act.k === 'heal' || me.act.k === 'self') && me.role === 'survivor');
     if (!working) { if (this.skill) { this.skill = null; this.skillCanvas.classList.add('hidden'); } this.skillCooldown = Math.max(this.skillCooldown, 1.2); return; }
     if (!this.skill) {
       this.skillCooldown -= dt;
-      if (this.skillCooldown <= 0 && Math.random() < dt * 0.22) {
+      if (this.skillCooldown <= 0 && Math.random() < dt * (struggling ? 0.7 : 0.22)) {
         const steady = has(me, 'steady');
         const start = 0.4 + Math.random() * 0.45;
         const w = 0.12 * (steady ? 1.4 : 1);
@@ -662,7 +663,7 @@ export class Game {
       if (s.needle > s.end + 0.03) this.resolveSkill();
       this.drawSkill();
     }
-    if (s.phase === 'done') { s.t2 = (s.t2 || 0) + dt; this.drawSkill(); if (s.t2 > 0.45) { this.skill = null; this.skillCanvas.classList.add('hidden'); this.skillCooldown = 2.5; } }
+    if (s.phase === 'done') { s.t2 = (s.t2 || 0) + dt; this.drawSkill(); if (s.t2 > 0.45) { this.skill = null; this.skillCanvas.classList.add('hidden'); this.skillCooldown = struggling ? 1.2 : 2.5; } }
   }
   resolveSkill() {
     const s = this.skill;
@@ -759,6 +760,7 @@ export class Game {
         else if (!local && (p.mv === 1 || p.mv === 2)) anim = p.mv === 2 ? 'run' : 'walk'; // what the player is doing, not network jitter
         else anim = c.spd > 3.0 ? 'run' : c.spd > (local ? 0.3 : 0.8) ? 'walk' : 'idle';
         st.struggle = p.st === 'carried';
+        st.hookPhase = p.st === 'caged' ? p.stage : 0;
         if (p.emote !== c.emotePrev) { c.emoteAt = this.t; c.emotePrev = p.emote; }
         if (p.emote && p.st === 'ok') { st.emote = p.emote; st.emoteT = this.t - c.emoteAt; }
       } else {
@@ -818,8 +820,10 @@ export class Game {
       }
       if (anim !== 'exec') c.execFrom = null;
       if (anim === 'caged') {
+        // hanging from the hook: shoulder on the point, feet off the ground, swaying a little
         const cg = this.M.cages[p.cage];
-        if (cg) { R.root.position.set(cg.x, 0.2, cg.z); }
+        // (the hook's point goes through the left shoulder, so the body hangs a little to the right of it)
+        if (cg) { const yw = R.root.rotation.y; R.root.position.set(cg.x - Math.cos(yw) * 0.17, HOOK_Y - 1.62 + Math.sin(this.t * 1.1) * 0.015, cg.z + Math.sin(yw) * 0.17); }
       }
       if (p.role === 'survivor') this.placeTorch(c, R, p, flashOn && R.root.visible);
       if (p.role === 'survivor' && local && (p.st === 'ghost') !== !!c.ghostFx) { c.ghostFx = p.st === 'ghost'; R.setOpacity(c.ghostFx ? 0.35 : 1); } // you, as a ghost
@@ -1417,10 +1421,10 @@ export class Game {
         case 'split':
           this.sparks.spawn(e.x, 0.5, e.z, 90, 0xff3a1a, 3, 1.5, 0.4, 1.4); this.smoke.spawn(e.x, 0.6, e.z, 14, 0x200808, 1.2, 2.2, 0.5, 0.8);
           sound.play('laugh', e.x, e.z);
-          if (e.to === this.myId) { this.feed('Your soul jumps into another doll! Your old body keeps hunting: it can put survivors down, but not cage them.', 'big'); this.flash = 0.6; }
+          if (e.to === this.myId) { this.feed('Your soul jumps into another doll! Your old body keeps hunting: it can put survivors down, but not hook them.', 'big'); this.flash = 0.6; }
           break;
         case 'possessed':
-          if (e.id === this.myId) { this.feed(`You are inside ${name(e.id)}. Nobody knows. Down a survivor and cage them, then press G to let go.`, 'big'); this.flash = 0.5; }
+          if (e.id === this.myId) { this.feed(`You are inside ${name(e.id)}. Nobody knows. Down a survivor and hook them, then press G to let go.`, 'big'); this.flash = 0.5; }
           if (e.ghost === this.myId) { this.feed('You have been possessed! You are a ghost now: nobody can see you. Keep repairing generators (10% slower).', 'big'); this.flash = 0.6; this.shake = 0.6; }
           break;
         case 'depossessed':
@@ -1523,6 +1527,11 @@ export class Game {
         case 'stun': { this.petReact(e.id, 'jump', 1); const p = S && playerById(S, e.id); if (p) { sound.play('stun', p.x, p.z); this.sparks.spawn(p.x, 2.2, p.z, 12, 0xffffff, 1.5, 0.6, 0); } if (e.id === this.myId) this.shake = 0.8; this.feed(name(e.id) + ' was stunned!'); break; }
         case 'kick': { const g = this.M.gens[e.id]; sound.play('kick', g.x, g.z); this.sparks.spawn(g.x, 1.0, g.z, 25, 0xffd080, 3, 0.6, -9); break; }
         case 'vault': if (e.id !== this.myId) sound.play('vault', e.x, e.z, { fast: e.fast }); break;
+        case 'struggle': {
+          const c = this.M.cages[e.cage]; if (c) { sound.play('fade', c.x, c.z, { on: true }); this.sparks.spawn(c.x, 0.4, c.z, 40, 0xff3010, 2, 1.6, 1.2); }
+          if (e.id === this.myId) { this.feed('The Entity has come for you! Hit the skill checks to hold it off.', 'big'); this.flash = 0.4; }
+          break;
+        }
         case 'caged': { const c = this.M.cages[e.cage]; sound.play('caged', c.x, c.z); this.sparks.spawn(c.x, 0.3, c.z, 50, 0xff5020, 3, 1.5, 1); break; }
         case 'died': {
           if (e.how === 'executed' || e.how === 'bled out') this.decals.add(e.x, e.z, 2.2, 1);
@@ -1540,7 +1549,7 @@ export class Game {
         case 'fade': { const p = S && playerById(S, e.id); if (p) sound.play('fade', p.x, p.z, { on: e.on }); break; }
         case 'rampage': { const p = S && playerById(S, e.id); if (p) sound.play('roar', p.x, p.z); break; }
         case 'exec': { const p = S && playerById(S, e.id); if (p) sound.play('caged', p.x, p.z); if (e.id === this.myId) this.feed('You are being executed…', 'big'); break; }
-        case 'escfail': if (e.id === this.myId) this.feed(`You failed to break free (${e.left} attempts left).`); break;
+        case 'escfail': if (e.id === this.myId) this.feed(`You failed to unhook yourself (${e.left} attempts left) and lost some time.`); break;
         case 'whiff': this.petSay(e.id, 'cock', 25); break;
         case 'sc': if (e.r === 'miss') this.petSay(e.id, Math.random() < 0.6 ? 'shit' : 'cock', 15); if (e.r === 'miss' && e.id !== this.myId) { const p = S && playerById(S, e.id); if (p) sound.play('genfail', p.x, p.z); } break;
       }
@@ -1602,7 +1611,7 @@ export class Game {
     this.hudCache = {};
     const k = (x) => `<kbd>${x}</kbd>`;
     $('controls-hint').innerHTML = me.disguise
-      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('E')} pick up / cage · ${k('Space')} vault · ${k('G')} let go (after a down and a cage) · ${k('Tab')} status`
+      ? `${k('WASD')} move · ${k('LMB')} strike · ${k('E')} pick up / hook · ${k('Space')} vault · ${k('G')} let go (after a down and a hook) · ${k('Tab')} status`
       : me.st === 'ghost'
       ? `${k('WASD')} move · ${k('E')} repair generators · nobody can see you`
       : me.role === 'killer'
@@ -1617,7 +1626,7 @@ export class Game {
   powerHTML(me) {
     if (me.disguise) {
       const done = me.pdowns >= 1 && me.pcages >= 1;
-      return { ready: done, active: true, pct: 0, html: `<div class="pwt"><div class="pwn">Possession</div><div class="pws">Down ${Math.min(1, me.pdowns)}/1 · Cage ${Math.min(1, me.pcages)}/1</div><div class="keyl">${done ? '<kbd>G</kbd> let go of the body' : 'Nobody knows it\'s you'}</div></div><div class="pwi">${icon('knife')}<div class="cd"></div></div>` };
+      return { ready: done, active: true, pct: 0, html: `<div class="pwt"><div class="pwn">Possession</div><div class="pws">Down ${Math.min(1, me.pdowns)}/1 · Hook ${Math.min(1, me.pcages)}/1</div><div class="keyl">${done ? '<kbd>G</kbd> let go of the body' : 'Nobody knows it\'s you'}</div></div><div class="pwi">${icon('knife')}<div class="cd"></div></div>` };
     }
     const K = KILLERS[me.char], def = K.ability;
     let ready = false, pct = 0, sub = '', pips = '', extra = '';
@@ -1736,7 +1745,7 @@ export class Game {
         if (me.st === 'ok') {
           if (me.act) {
             prog = me.prog;
-            label = { repair: 'Repairing', heal: 'Healing', self: 'Self-care', rescue: 'Freeing', gate: 'Opening gate', snuff: 'Snuffing lantern' }[me.act.k] || '';
+            label = { repair: 'Repairing', heal: 'Healing', self: 'Self-care', rescue: 'Unhooking', gate: 'Opening gate', snuff: 'Snuffing lantern' }[me.act.k] || '';
             if (me.act.k === 'rescue' || me.act.k === 'snuff') prog = (me.act.t || 0) / actionTime(me.act.k, me, S);
           } else {
             const it = findInteraction(this.M, S, me);
@@ -1761,15 +1770,15 @@ export class Game {
         } else if (me.st === 'carried') {
           status = `Struggle!<small>Alternate <kbd>A</kbd> <kbd>D</kbd> to break free</small>`; prog = me.wig; label = 'Wiggle';
         } else if (me.st === 'caged') {
-          status = `Caged<small>${Math.ceil(me.cageT)}s left${me.stage === 1 && me.esc < 3 ? ` · <kbd>Space</kbd> escape attempt (${3 - me.esc} left)` : me.stage >= 2 ? ' · the next caging is fatal' : ''}</small>`;
-          prog = me.cageT / me.cageMax; label = 'Struggle phase';
+          status = `Hooked<small>${Math.ceil(me.cageT)}s left${me.stage === 1 && me.esc < 3 ? ` · <kbd>Space</kbd> try to unhook yourself (${3 - me.esc} left)` : me.stage >= 2 ? ' · hit the skill checks to fight off the Entity' : ''}</small>`;
+          prog = me.cageT / me.cageMax; label = me.stage >= 2 ? 'Struggle phase' : 'Hooked';
         } else if (me.st === 'dead' || me.st === 'out') {
           const tb = this.takeoverTarget();
           status = (me.st === 'out' ? 'You escaped' : 'You were ' + esc(me.outcome || 'sacrificed')) + (this.spectate ? `<small>Spectating ${esc(this.spectate.name)} · click to switch</small>` : '')
             + (tb ? `<small class="takeover"><kbd>T</kbd> Take over ${esc(tb.name.replace(/ \(bot\)$/, ''))} and keep playing</small>` : '');
         }
       } else {
-        if (me.act) { prog = me.prog; label = { pickup: 'Picking up', cage: 'Caging', kick: 'Damaging generator', break: 'Breaking barricade', execute: KILLERS[me.char] ? KILLERS[me.char].exec.name : 'Execution' }[me.act.k] || ''; }
+        if (me.act) { prog = me.prog; label = { pickup: 'Picking up', cage: 'Hooking', kick: 'Damaging generator', break: 'Breaking barricade', execute: KILLERS[me.char] ? KILLERS[me.char].exec.name : 'Execution' }[me.act.k] || ''; }
         else if (me.stun > 0) status = 'Stunned';
         else if (me.tele) { status = 'Shadow Step'; prog = me.tele.t / RULES.teleTime; label = 'Stepping'; }
         else {
@@ -1779,7 +1788,7 @@ export class Game {
           const ex = findExecute(this.M, S, me);
           if (ex) kp('F', ex.label);
           if (sp) kp('Space', 'Vault');
-          if (me.carry != null) { kp('Q', 'Drop survivor'); const s2 = playerById(S, me.carry); if (s2) { status = `Carrying ${esc(s2.name)}<small>Find a cage before they struggle free</small>`; prog = s2.wig; label = 'Their struggle'; } }
+          if (me.carry != null) { kp('Q', 'Drop survivor'); const s2 = playerById(S, me.carry); if (s2) { status = `Carrying ${esc(s2.name)}<small>Find a hook before they struggle free</small>`; prog = s2.wig; label = 'Their struggle'; } }
           if (me.atk === 2 && me.atkHit) status = '<small>Wiping your weapon…</small>';
         }
       }
@@ -1844,7 +1853,7 @@ export class Game {
     const rows = S.players.filter(p => p.st !== 'ghost' || p.id === this.myId).map(p => {
       if (p.disguise) p = { ...p, role: 'survivor' };
       const state = p.role === 'killer' ? null : p.st === 'ok' ? (p.hp === 2 ? 'healthy' : 'injured') : p.st;
-      const st = p.role === 'killer' ? 'Killer' : { healthy: 'Healthy', injured: 'Injured', exec: 'Being executed', down: 'Dying', carried: 'Carried', caged: 'Caged', dead: 'Dead', out: 'Escaped', ghost: 'Ghost' }[state];
+      const st = p.role === 'killer' ? 'Killer' : { healthy: 'Healthy', injured: 'Injured', exec: 'Being executed', down: 'Dying', carried: 'Carried', caged: 'Hooked', dead: 'Dead', out: 'Escaped', ghost: 'Ghost' }[state];
       const sc = Math.round(p.score.a + p.score.b + p.score.c + p.score.d);
       const cname = p.role === 'killer' ? KILLERS[p.char].name : SURVIVORS[p.char].name;
       return `<tr class="${p.id === this.myId ? 'me' : ''}"><td>${icon(p.role === 'killer' ? POWER_ICON[p.char] : STATE_ICON[state])}</td><td>${esc(p.name)}${p.bot ? ' <small>BOT</small>' : ''}</td><td>${esc(cname)}</td><td>${st}</td><td>${sc}</td></tr>`;

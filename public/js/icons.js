@@ -56,7 +56,7 @@ const I = {
   injured: person() + `<path d="M44 20l-6 12 6 2-6 12" stroke="#ff4a3a"/>`,
   down: `<circle cx="14" cy="42" r="6"/><path d="M20 46h26l8 6M26 46l-4-8"/><path d="M8 54h48"/>`,
   carried: `<circle cx="22" cy="14" r="6"/><path d="M22 20v14M14 50l8-16 8 16M10 28l12-4 14 2"/><path d="M36 24h18M44 18v12" />`,
-  caged: `<path d="M14 10h36M14 54h36M18 10v44M26 10v44M38 10v44M46 10v44"/><circle cx="32" cy="24" r="4"/>`,
+  caged: `<path d="M32 6v10"/><path d="M32 16c-9 0-12 8-12 13s4 10 10 10c5 0 8-4 8-8"/><path d="M38 31l-4-4"/><path d="M20 46l6 12M44 46l-6 12M22 50h20"/>`, // a meat hook
   dead: `<path d="M16 30a16 16 0 1 1 32 0c0 6-3 10-6 12v8H22v-8c-3-2-6-6-6-12z"/><circle cx="25" cy="30" r="4" fill="currentColor"/><circle cx="39" cy="30" r="4" fill="currentColor"/>`,
   out: `<path d="M20 8h26v48H20"/><path d="M8 32h24M24 24l8 8-8 8"/>`,
   exec: `<path d="M10 54l30-30M34 12l18 18-8 8-18-18z"/>`,

@@ -17,13 +17,16 @@ export const RULES = {
   gensTotal: 7,
   healTime: 14,            // seconds to heal a teammate one health state
   pickupTime: 1.4,         // killer picks up a downed survivor
-  cageTime: 1.1,           // killer locks a survivor in a cage
+  cageTime: 1.1,           // killer hangs a survivor on a hook
   rescueTime: 1.2,
   gateTime: 18,
   kickTime: 1.8,
   breakTime: 2.4,
   bleedout: 200,
-  cageStage: [70, 50],     // seconds before the cage claims you (1st, 2nd caging); 3rd caging is instant
+  cageStage: [60, 60],     // hook phases: 60s hanging, then 60s struggling against the Entity; hooked in the struggle phase = sacrificed
+  selfUnhook: 0.04,        // chance per self-unhook attempt (3 attempts, first phase only)
+  selfUnhookCost: 8,       // hook seconds lost per failed attempt
+  struggleMiss: 9,         // hook seconds lost per missed struggle skill check
   wiggleNeed: 1,           // wiggle progress needed to escape the killer's grip
   wiggleRate: 0.012,       // progress per alternating keypress (~15s of struggling)
   collapse: 140,           // seconds after the gates are powered before the night claims everyone left
@@ -45,7 +48,7 @@ export const MODES = {
   duo: { name: 'Two Killers', short: '2 vs 8', killers: 2, survivors: 8, desc: 'Two killers hunt eight survivors. Six generators power the gates.' },
   dark: { name: 'Lights Out', short: 'Horror', desc: 'The lights never come on. Thick fog, no auras for survivors, half-charged flashlights.' },
   rush: { name: 'Survivor Rush', short: '5 min', time: 300, desc: 'Five-minute matches. Generators and gates go twice as fast, and the killer gets a burst of speed after every hit. When the clock runs out, the gates power up and the night collapses fast.' },
-  infection: { name: 'Infection', short: '2 vs 10', killers: 2, survivors: 10, bigMap: true, desc: 'No cages. Two killers, ten survivors, on big maps built for it. Downed survivors rise as killers a few seconds later, and every 60s the infected sense every survivor. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
+  infection: { name: 'Infection', short: '2 vs 10', killers: 2, survivors: 10, bigMap: true, desc: 'No hooks. Two killers, ten survivors, on big maps built for it. Downed survivors rise as killers a few seconds later, and every 60s the infected sense every survivor. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
 };
 // killers an infected survivor can turn into
 export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman', 'chucky'];
@@ -107,7 +110,7 @@ export const KILLERS = {
     exec: { name: 'Friends Till the End', desc: 'Leaps onto the survivor\'s chest and stabs, and stabs, and stabs.' },
     ability: { name: 'Pounce', cooldown: 5, min: 3, max: 10, coil: 0.8, desc: 'Hold to coil (at full speed), release to leap up to 10m: the longer you coil, the farther you fly. He sails over fences, pallets and other low obstacles. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
     ability2: { name: "Chucky's Laugh", key: 'R', cooldown: 35, radius: 28, reveal: 5, desc: 'Laugh. Every survivor within 28m hears it and is revealed to you for 5s.' },
-    feature: { name: 'Tiny Terror & Possession', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump over windows, pallets and rocks. Possession (G, once every 10 minutes): take over a downed survivor in secret. They wander as an invisible ghost, your doll is left as a harmless decoy, and you can let go once you have downed and caged someone. Soul Split (V, once, with one generator left): jump into a spare doll lying on the map; your old body keeps hunting as a bot that can down survivors but not cage them. Played in third person.' },
+    feature: { name: 'Tiny Terror & Possession', desc: 'Doll-sized and hard to spot: a 20m terror radius and silent footsteps. Space to jump over windows, pallets and rocks. Possession (G, once every 10 minutes): take over a downed survivor in secret. They wander as an invisible ghost, your doll is left as a harmless decoy, and you can let go once you have downed and hooked someone. Soul Split (V, once, with one generator left): jump into a spare doll lying on the map; your old body keeps hunting as a bot that can down survivors but not hook them. Played in third person.' },
     color: 0xd83a22,
   },
   bateman: {
@@ -137,8 +140,8 @@ export const SURV_PERKS = {
   hushed:   { name: 'Hushed',       icon: '☾', desc: 'Your footsteps and pained breathing are silent. Crouch speed +25%.' },
   sixth:    { name: 'Sixth Sense',  icon: '◉', desc: 'Every 25 seconds the killer\'s aura is revealed to you for 4 seconds.' },
   shared:   { name: 'Shared Labor', icon: '⚙', desc: '+15% repair speed for each other survivor working on the same generator.' },
-  lockpick: { name: 'Lockpick',     icon: '⚿', desc: 'Free caged survivors twice as fast. Open exit gates 30% faster.' },
-  lastwind: { name: 'Last Wind',    icon: '➶', desc: 'When freed from a cage or picked up from the ground, gain +40% speed for 5 seconds.' },
+  lockpick: { name: 'Quick Release', icon: '⚿', desc: 'Unhook survivors twice as fast. Open exit gates 30% faster.' },
+  lastwind: { name: 'Last Wind',    icon: '➶', desc: 'When unhooked or picked up from the ground, gain +40% speed for 5 seconds.' },
   acrobat:  { name: 'Acrobat',      icon: '⤴', desc: 'Vault windows and barricades 30% faster.' },
   resolve:  { name: 'Resolve',      icon: '♥', desc: 'Struggle free from the killer 40% faster. Bleed out 50% slower and crawl 30% faster.' },
   fleet:    { name: 'Fleet Foot',   icon: '»', desc: 'While injured, run 7% faster. Your post-hit speed burst lasts 50% longer.' },
@@ -158,7 +161,7 @@ export const KILLER_PERKS = {
   relentless: { name: 'Relentless',    icon: '⟳', desc: 'Recovery after a successful strike is 35% shorter.' },
   dread:      { name: 'Dread',         icon: '♒', desc: 'Terror radius +8m. Survivors inside your terror radius repair 10% slower.' },
   brute:      { name: 'Brute',         icon: '⚒', desc: 'Break barricades and kick generators 35% faster.' },
-  rust:       { name: 'Rusted Locks',  icon: '⛓', desc: 'Cage timers run 20% faster and rescuing a survivor takes twice as long.' },
+  rust:       { name: 'Rusted Hooks',  icon: '⛓', desc: 'Hook timers run 20% faster and unhooking a survivor takes twice as long.' },
   sentry:     { name: 'Sentry',        icon: '◎', desc: 'When a generator is completed, the survivors who finished it are revealed for 6 seconds.' },
   fury:       { name: 'Endgame Fury',  icon: '♨', desc: 'Once the exit gates are powered, gain +8% movement speed.' },
   irongrip:   { name: 'Iron Grip',     icon: '✠', desc: 'Survivors you carry struggle free 30% slower.' },
@@ -174,7 +177,7 @@ export const PERK_PRICES = {
 export const PERK_SLOTS = 4;
 // ---------------- Sidekicks (cosmetic companions, for survivors and killers) ----------------
 export const SIDEKICKS = {
-  ted: { name: 'Ted', price: 4000, desc: 'A foul-mouthed teddy bear who came to life and never grew up. He follows you everywhere, cheers you on, panics when you get hurt, and whenever you repair a generator, get caged or die, he pulls up a camping chair next to you with a beer and his bong.' },
+  ted: { name: 'Ted', price: 4000, desc: 'A foul-mouthed teddy bear who came to life and never grew up. He follows you everywhere, cheers you on, panics when you get hurt, and whenever you repair a generator, get hooked or die, he pulls up a camping chair next to you with a beer and his bong.' },
   rosy: { name: 'Rosy', price: 2500, desc: 'A loyal little rose-coloured dog. Trots at your heels, wags when things go well, runs in circles when they don\'t, and lies down beside you if you fall.' },
 };
 export const DEFAULT_SURV_PERKS = ['steady', 'shared', 'lastwind'];
@@ -363,8 +366,18 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.9';
+export const VERSION = '2.20.0';
 export const INBOX = [
+  {
+    id: 'v2.20.0', version: '2.20.0', date: 'Nov 2026', title: 'Hooks', tag: 'Major Update',
+    body: [
+      'Cages are gone. Killers now hang downed survivors on sacrificial meat hooks, by the shoulder, on every map.',
+      'First hook: hang for 60s. Press Space to try to unhook yourself: 3 tries, 4% chance each, and every failed try costs time.',
+      'Hang too long, or get hooked a second time, and the Entity arrives: its spider legs rise around the hook and you must hit struggle skill checks. Every miss brings it closer. A third hook is fatal.',
+      'When the Entity claims someone its legs plunge in and the hook is taken with them.',
+      'Executions now work on survivors who have reached the struggle phase. Perks renamed: Quick Release (unhook faster) and Rusted Hooks (hook timers run faster).',
+    ],
+  },
   {
     id: 'v2.19.9', version: '2.19.9', date: 'Nov 2026', title: 'Ted: More To Say', tag: 'Update',
     body: ['Two Teds in one match no longer talk over each other: they take turns, and a line one Ted has already said won\'t be said again by the other.', 'New lines: "Fuck me." right after the "Arfh!" when you go down; "Look, I know you\'re pissed..." and the Thunder Buddies song while you\'re being chased; and if you\'re the killer, your Ted heckles survivors you chase ("You\'re just making yourself look like a pussy"), which survivors can hear too.', 'The teddy bear line, like most of Ted\'s lines, only comes up once a match.'],
@@ -375,7 +388,7 @@ export const INBOX = [
   },
   {
     id: 'v2.19.7', version: '2.19.7', date: 'Nov 2026', title: 'Ted: Fewer Reruns', tag: 'Update',
-    body: ['Ted no longer repeats himself: most of his lines are said once a match. Only "Bring it in, you bastard!", "Shit.", the "acting like a..." line and "Arfh!" can come up again.', 'New line when you\'re put in a cage: "You got a lot of problems."'],
+    body: ['Ted no longer repeats himself: most of his lines are said once a match. Only "Bring it in, you bastard!", "Shit.", the "acting like a..." line and "Arfh!" can come up again.', 'New line when you\'re put on a hook: "You got a lot of problems."'],
   },
   {
     id: 'v2.19.6', version: '2.19.6', date: 'Nov 2026', title: 'Ted: Arfh!', tag: 'Fix',
@@ -442,7 +455,7 @@ export const INBOX = [
   },
   {
     id: 'v2.17.3', version: '2.17.3', date: 'Nov 2026', title: 'Ted Takes a Break', tag: 'Update',
-    body: ['Ted now pulls out his camping chair, beer and bong while you repair a generator or sit in a cage, not just when you die. He packs up when you get moving again. Rosy lies down beside you.'],
+    body: ['Ted now pulls out his camping chair, beer and bong while you repair a generator or hang on a hook, not just when you die. He packs up when you get moving again. Rosy lies down beside you.'],
   },
   {
     id: 'v2.17.2', version: '2.17.2', date: 'Nov 2026', title: 'Last Updated', tag: 'Update',
@@ -452,14 +465,14 @@ export const INBOX = [
     id: 'v2.17.1', version: '2.17.1', date: 'Nov 2026', title: 'Raghuvir: Realism', tag: 'Crossover', gb: true,
     body: [
       'New outfit for Raghuvir: Realism (6,000 Embers), a fully realistic Ghostbuster in a worn khaki flight suit with straps, patch and a heavy proton pack.',
-      'It moves with every survivor animation in the game: walking, running, crouching, repairing, healing, going down, being carried, caged and vaulting.',
+      'It moves with every survivor animation in the game: walking, running, crouching, repairing, healing, going down, being carried, hooked and vaulting.',
     ],
   },
   {
     id: 'v2.17', version: '2.17.0', date: 'Nov 2026', title: 'Sidekicks', tag: 'Update',
     body: [
       'New in the Store: Sidekicks, companions that follow you through the match, for survivors and killers. Equip one for each in the Store or on the Loadout screen.',
-      'Ted (4,000 Embers): cheers when things go well, panics when you get hurt, and whenever you repair a generator, get caged or die, he pulls up a camping chair next to you with a beer and his bong.',
+      'Ted (4,000 Embers): cheers when things go well, panics when you get hurt, and whenever you repair a generator, get hooked or die, he pulls up a camping chair next to you with a beer and his bong.',
       'Rosy (2,500 Embers): a loyal little dog who trots at your heels, wags, runs circles when you are in trouble and lies down beside you if you fall.',
       'Sidekicks can\'t be hurt and can\'t hurt anyone. Everyone in the match sees them.',
     ],
@@ -504,17 +517,17 @@ export const INBOX = [
     id: 'v2.15', version: '2.15.0', date: 'Nov 2026', title: 'Chucky: Soul Split', tag: 'Balance',
     body: [
       'New for Chucky, Soul Split (V, once per match): spare Good Guy dolls now lie around the map. When only one generator is left, his soul jumps into one of them at random.',
-      'His old body keeps hunting on its own as a bot. It can put survivors down, but it can never pick them up or cage them.',
+      'His old body keeps hunting on its own as a bot. It can put survivors down, but it can never pick them up or hook them.',
     ],
   },
   {
     id: 'v2.14', version: '2.14.0', date: 'Nov 2026', title: 'Chucky: Possession', tag: 'Balance',
     body: [
       'New for Chucky, Possession (G, once every 10 minutes): stand over a downed survivor and take over their body. Nobody is told.',
-      'The body gets back up looking exactly like that survivor, but you are in control: strike, pick up and cage like a killer.',
+      'The body gets back up looking exactly like that survivor, but you are in control: strike, pick up and hook like a killer.',
       'Your doll is left behind as a bot decoy that chases survivors but cannot hurt them.',
       'The possessed player becomes a ghost nobody else can see. Ghosts can only repair generators, 10% slower.',
-      'Once you have downed and caged a survivor in that body, press G to let go: you return to your doll and the survivor gets their body back, injured.',
+      'Once you have downed and hooked a survivor in that body, press G to let go: you return to your doll and the survivor gets their body back, injured.',
     ],
   },
   {
@@ -561,7 +574,7 @@ export const INBOX = [
     id: 'v2.11.1', version: '2.11.1', date: 'Nov 2026', title: 'The Killer Knows', tag: 'Update',
     body: [
       'Killers now always see which generators are being repaired (they glow yellow), and a marker shows where each generator was finished.',
-      'A caged survivor stays visible to the killer, through walls, until someone frees them.',
+      'A hooked survivor stays visible to the killer, through walls, until someone unhooks them.',
       'The Foreman\'s Chain Hook now flies where you aim, up and down. Aim at a treetop or a high wall and he is flung up to the hook, then drops down at its foot.',
       'Static Sense (killer perk) now reveals the survivors who are repairing a generator.',
     ],
@@ -584,7 +597,7 @@ export const INBOX = [
       'Two Killers (2 vs 8): two killers hunt eight survivors. Six generators power the gates.',
       'Lights Out: the lights never come on. Thick fog, no auras for survivors and half-charged flashlights.',
       'Survivor Rush: five-minute matches. Generators and gates go twice as fast and the killer gets a burst of speed after every hit. When the clock runs out, the gates power up and the night collapses in 40 seconds.',
-      'Infection: no cages. A downed survivor rises as a random killer 3 seconds later. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.',
+      'Infection: no hooks. A downed survivor rises as a random killer 3 seconds later. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.',
       'Online lobbies grow to 10 players for Two Killers.',
     ],
   },
@@ -711,10 +724,10 @@ export const INBOX = [
     body: [
       'Character models rebuilt: sculpted bodies, hands with fingers, faces with eyes, lips and expression.',
       'Survivor bots loop walls and trees, vault, drop barricades on you and rescue each other.',
-      'Killer bots predict where you run, listen for footsteps, search where they lost you and stop camping cages.',
+      'Killer bots predict where you run, listen for footsteps, search where they lost you and stop camping hooks.',
       'Online play: direct WebRTC connection with an automatic relay fallback. Works without a server.',
       'Fixed: killer mouse look was inverted.',
-      'Executions now need two prior cagings (or the last survivor alive).',
+      'Executions now need a survivor in the struggle phase (or the last survivor alive).',
     ],
   },
   {

@@ -618,8 +618,18 @@ export function animate(R, s, dt) {
     P.tiltX = 1.57; P.shL = -1.5 + Math.sin(t * 7) * 0.2; P.shR = -1.6 + Math.sin(t * 7 + 1) * 0.2; P.lgL = -1.3; P.lgR = -1.4; P.knL = 0.6; P.knR = 0.4; P.headX = 0.4;
     if (s.struggle) { P.lgL += Math.sin(t * 14) * 0.4; P.lgR -= Math.sin(t * 14) * 0.4; }
   } else if (a === 'caged') {
-    P.shL = -2.7 + Math.sin(t * 1.3) * 0.05; P.shR = -2.75; P.elL = -0.3; P.elR = -0.35; P.headX = 0.3; P.spineX += 0.05;
-    P.hipsY = Math.sin(t * 1.3) * 0.01;
+    // hanging from the hook by the left shoulder: that hand clutches at the hook overhead, the
+    // other arm and the legs dangle; in the struggle phase they thrash against the Entity's legs
+    const sw = Math.sin(t * 1.1);
+    if (s.hookPhase >= 2) {
+      const f = Math.sin(t * 7), g = Math.sin(t * 9 + 1);
+      P.shL = -2.85 + f * 0.15; P.elL = -0.5; P.shLz = 0.15; P.shR = -1.6 + g * 0.9; P.shRz = -0.5; P.elR = -0.9 + f * 0.4;
+      P.lgL = -0.3 + f * 0.45; P.lgR = -0.3 - f * 0.45; P.knL = 0.6 + g * 0.3; P.knR = 0.6 - g * 0.3; P.headX = -0.35 + g * 0.1; P.spineX -= 0.1; P.spineY = f * 0.15;
+    } else {
+      P.shL = -2.8 + sw * 0.04; P.elL = -0.45; P.shLz = 0.2; P.shR = 0.12 + sw * 0.08; P.shRz = -0.12; P.elR = -0.25;
+      P.lgL = 0.08 + sw * 0.06; P.lgR = -0.06 - sw * 0.06; P.knL = 0.25; P.knR = 0.35; P.headX = 0.45; P.spineX += 0.08; P.spineY = sw * 0.05;
+    }
+    P.tiltY = sw * 0.08;
   } else if (a === 'sit') {
     P.hipsY = -0.46; P.lgL = -1.5; P.lgR = -1.42; P.knL = 1.55; P.knR = 1.4; P.spineX += 0.28 + Math.sin(t * 1.4) * 0.015;
     P.shL = -0.75; P.shR = -0.62; P.elL = -0.95; P.elR = -1.05; P.headX = 0.12 + Math.sin(t * 0.4) * 0.06; P.lgLz = 0.1;
@@ -928,23 +938,63 @@ export function makeGenerator() {
   return g;
 }
 
-export function makeCage() {
+// A sacrificial meat hook: a rough post with an arm, a chain and a curved hook whose point sits
+// right over the hook's centre (where the survivor hangs), on a blood-stained base. The Entity's
+// spider legs (hidden until the struggle phase) wait coiled around it.
+export const HOOK_Y = 2.02; // height of the hook's point
+export function makeHook() {
   const g = new THREE.Group();
-  const iron = mat(0x3a3430, { metal: 0.7, rough: 0.55, map: 'metal' });
-  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.castShadow = true; g.add(me); return me; };
-  add(G.cyl(0.95, 1.05, 0.2, 16), mat(0x4a4642, { map: 'stone' }), 0, 0.1, 0);
-  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; add(G.cyl(0.025, 0.025, 2.5, 6), iron, Math.cos(a) * 0.72, 1.45, Math.sin(a) * 0.72); }
-  for (const y of [0.25, 1.4, 2.65]) add(new THREE.TorusGeometry(0.72, 0.035, 6, 24), iron, 0, y, 0, Math.PI / 2);
-  add(G.cone(0.8, 0.7, 14), iron, 0, 3.0, 0);
-  add(G.cone(0.04, 0.5, 6), iron, 0, 3.55, 0);
-  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; add(G.cone(0.03, 0.35, 5), iron, Math.cos(a) * 0.75, 2.85, Math.sin(a) * 0.75, Math.cos(a) * 0.6, 0, -Math.sin(a) * 0.6); }
-  // glowing sigil ring on the base (lit while someone is caged)
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0x220a04, emissive: 0xff4a1a, emissiveIntensity: 0, roughness: 0.6 });
-  const ring = add(new THREE.TorusGeometry(0.85, 0.03, 6, 32), ringMat, 0, 0.21, 0, Math.PI / 2);
-  const auraM = new THREE.Mesh(G.cyl(0.8, 0.8, 3.0, 12), auraMat(0xffffff)); auraM.position.y = 1.5; auraM.visible = false; auraM.renderOrder = 10; g.add(auraM);
-  g.userData = { ring, aura: auraM };
+  const iron = mat(0x2e2a27, { metal: 0.75, rough: 0.5, map: 'metal' }), rust = mat(0x5a3020, { metal: 0.4, rough: 0.75, map: 'metal' });
+  const wood = mat(0x3a2a1e, { map: 'wood', rough: 0.85 });
+  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.scale.set(sx, sy, sz); me.castShadow = true; g.add(me); return me; };
+  // base: broken stones and a dark stain
+  add(G.cyl(0.85, 0.95, 0.12, 12), mat(0x3a3632, { map: 'stone' }), -0.25, 0.06, 0);
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + 0.3; add(new THREE.DodecahedronGeometry(0.12 + (i % 3) * 0.04), mat(0x4a4642, { map: 'rock' }), -0.25 + Math.cos(a) * 0.82, 0.1, Math.sin(a) * 0.82, i, i * 2, 0); }
+  const stain = add(new THREE.CircleGeometry(0.75, 20), mat(0x2a0404, { rough: 0.25 }), 0.05, 0.125, 0.02, -Math.PI / 2); stain.castShadow = false;
+  // the post, leaning slightly, bound with iron bands
+  const post = new THREE.Group(); post.position.set(-0.55, 0, 0); post.rotation.z = -0.04; g.add(post);
+  const pm = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.castShadow = true; post.add(me); return me; };
+  pm(new THREE.BoxGeometry(0.16, 2.9, 0.16), wood, 0, 1.45, 0);
+  for (const y of [0.4, 1.3, 2.2]) pm(new THREE.BoxGeometry(0.19, 0.05, 0.19), iron, 0, y, 0);
+  pm(new THREE.BoxGeometry(0.75, 0.12, 0.12), wood, 0.32, 2.78, 0);              // arm
+  pm(new THREE.BoxGeometry(0.06, 0.5, 0.06), wood, 0.24, 2.5, 0, 0, 0, -0.75);    // brace
+  // chain from the arm's end down to the hook
+  for (let i = 0; i < 5; i++) add(G.tor(0.035, 0.01), rust, 0, 2.7 - i * 0.075, 0, 0, i % 2 ? Math.PI / 2 : 0, 0);
+  // the hook: an open curve ending in a point, with the point at HOOK_Y right over the centre
+  add(G.cyl(0.018, 0.018, 0.22, 6), iron, 0, 2.29, 0);
+  add(G.tor(0.12, 0.02, Math.PI * 1.35), iron, 0, 2.14, 0, 0, Math.PI / 2, Math.PI * 0.82);
+  add(G.cone(0.022, 0.12, 6), iron, 0, HOOK_Y + 0.05, 0.11, 0.35, 0, 0);
+  // glow under the hook while someone hangs from it
+  const ringMat = new THREE.MeshStandardMaterial({ color: 0x220a04, emissive: 0xff3a10, emissiveIntensity: 0, roughness: 0.6, transparent: true, opacity: 0.85, depthWrite: false });
+  const ring = add(new THREE.RingGeometry(0.5, 0.78, 32), ringMat, 0, 0.13, 0, -Math.PI / 2); ring.castShadow = false;
+  // the Entity's legs: four jointed, spiked claws that rise out of the ground around the hook
+  const legM = mat(0x0c0806, { rough: 0.35, metal: 0.2 }), spikeM = mat(0x2a120a, { rough: 0.4 });
+  const legs = [];
+  for (let i = 0; i < 4; i++) {
+    const a = i / 4 * Math.PI * 2 + Math.PI / 4;
+    const base = new THREE.Group(); base.position.set(Math.cos(a) * 1.05, 0, Math.sin(a) * 1.05); base.rotation.y = -a + Math.PI / 2; g.add(base);
+    const seg = (parent, len, r0, r1) => { const j = new THREE.Group(); parent.add(j); const m = new THREE.Mesh(G.cyl(r1, r0, len, 6), legM); m.position.y = len / 2; m.castShadow = true; j.add(m); for (let k = 0; k < 2; k++) { const sp = new THREE.Mesh(G.cone(0.025, 0.14, 4), spikeM); sp.position.set(0, len * (0.35 + k * 0.3), r0 * 0.8); sp.rotation.x = 1.0; j.add(sp); } return { j, len }; };
+    const s1 = seg(base, 1.1, 0.07, 0.05), s2 = seg(s1.j, 0.9, 0.05, 0.035), s3 = seg(s2.j, 0.6, 0.035, 0.004);
+    s2.j.position.y = s1.len; s3.j.position.y = s2.len;
+    base.scale.setScalar(0.001); base.visible = false;
+    legs.push({ base, s1: s1.j, s2: s2.j, s3: s3.j, ph: i * 1.7 });
+  }
+  const auraM = new THREE.Mesh(G.cyl(0.5, 0.5, 2.9, 12), auraMat(0xffffff)); auraM.position.set(-0.3, 1.45, 0); auraM.visible = false; auraM.renderOrder = 10; g.add(auraM);
+  g.userData = { ring, aura: auraM, legs, legF: 0 };
   return g;
 }
+// legs: f = 0 (gone) .. 1 (risen, curling over the survivor), stab = 0..1 (plunging in)
+export function poseHookLegs(h, f, t, stab = 0) {
+  for (const L of h.userData.legs) {
+    L.base.visible = f > 0.01; L.base.scale.setScalar(Math.max(0.001, f));
+    const w = Math.sin(t * 1.6 + L.ph) * 0.12;
+    // rise almost straight up, then arch over and point down at the survivor's chest
+    L.s1.rotation.x = -0.15 + w * 0.4 - stab * 0.1;
+    L.s2.rotation.x = -0.7 + w * 0.6 - stab * 0.3;
+    L.s3.rotation.x = -1.0 + Math.sin(t * 2.3 + L.ph) * 0.2 - stab * 0.7;
+  }
+}
+export const makeCage = makeHook;
 
 export function makeBarricade(half) {
   const pivot = new THREE.Group();

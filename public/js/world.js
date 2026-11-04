@@ -6,7 +6,7 @@ import { rng, barBox } from './map.js';
 import { tex } from './textures.js';
 import { buildMeatWorld, updateMeatLights } from './meatworld.js';
 import { LOOK, cypressGeos, snowify, buildThemeExtras, updateThemeFx } from './themeworld.js';
-import { setDetail, mat, boxGeo, mergeGeos, treeGeos, pineGeo, bushGeo, rockGeo, makeGenerator, makeCage, makeBarricade, makeGate, makeSwitch } from './models.js';
+import { setDetail, mat, boxGeo, mergeGeos, treeGeos, pineGeo, bushGeo, rockGeo, makeGenerator, makeCage, poseHookLegs, makeBarricade, makeGate, makeSwitch } from './models.js';
 
 export const QUALITY = {
   // potato: for very weak laptops / integrated graphics. No shadows, no post-processing, cheap materials.
@@ -399,7 +399,15 @@ export function updateWorld(W, M, S, t, dt, follow) {
   for (let i = 0; i < M.cages.length; i++) {
     const u = W.cages[i].userData, who = S.cages[i];
     u.ring.material.emissiveIntensity = who != null ? 2 + Math.sin(t * 4) * 1 : 0;
-    if (S.cageBroken[i] && !u.broken) { u.broken = true; W.cages[i].rotation.z = 0.12; W.cages[i].rotation.x = -0.08; W.cages[i].position.y = -0.25; }
+    // the Entity's legs rise in the struggle phase and plunge when it claims someone
+    const hp = who != null ? S.players.find(p => p.id === who) : null;
+    const want = hp && hp.stage >= 2 ? 1 : 0;
+    if (u.claimT != null) { u.claimT += dt; if (u.claimT > 2.2) u.claimT = null; }
+    const target = u.claimT != null ? 1 : want;
+    u.legF += (target - u.legF) * Math.min(1, dt * (target ? 1.5 : 3));
+    if (u.legF > 0.005 || u.legs[0].base.visible) poseHookLegs(W.cages[i], u.legF, t, u.claimT != null ? Math.min(1, u.claimT * 3) : 0);
+    if (S.cageBroken[i] && !u.broken) { u.broken = true; u.claimT = 0; } // the Entity takes them, and the hook with them
+    if (u.broken && u.claimT == null && !u.bent) { u.bent = true; W.cages[i].rotation.z = 0.12; W.cages[i].rotation.x = -0.08; W.cages[i].position.y = -0.25; }
   }
   for (let i = 0; i < M.bars.length; i++) {
     const o = W.bars[i], st = S.bars[i];

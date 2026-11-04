@@ -79,7 +79,7 @@ export function findInteraction(M, S, p) {
     const consider = (k, id, label, prio, d) => { if (prio > bp || (prio === bp && d < bd)) { best = { k, id, label }; bp = prio; bd = d; } };
     for (const c of M.cages) {
       const who = S.cages[c.id];
-      if (who != null) { const d = dist(p, c); if (d < 1.9) consider('rescue', c.id, 'Free ' + playerById(S, who).name, 5, d); }
+      if (who != null) { const d = dist(p, c); if (d < 1.9) consider('rescue', c.id, 'Unhook ' + playerById(S, who).name, 5, d); }
     }
     for (const o of S.players) {
       if (o === p || o.role !== 'survivor') continue;
@@ -106,7 +106,7 @@ export function findInteraction(M, S, p) {
   if (p.stun > 0 || p.atk || p.vault || p.tele || (p.char === 'butcher' && p.ab === 1)) return null;
   if (p.carry != null) {
     let best = null, bd = 2.4;
-    for (const c of M.cages) if (S.cages[c.id] == null && !S.cageBroken[c.id]) { const d = dist(p, c); if (d < bd) { bd = d; best = { k: 'cage', id: c.id, label: 'Lock in cage' }; } }
+    for (const c of M.cages) if (S.cages[c.id] == null && !S.cageBroken[c.id]) { const d = dist(p, c); if (d < bd) { bd = d; best = { k: 'cage', id: c.id, label: 'Hang on hook' }; } }
     return best;
   }
   let best = null, bd = 1e9;
@@ -119,7 +119,7 @@ export function findInteraction(M, S, p) {
   return best;
 }
 
-// Executions: a killer can finish a downed survivor who has already been caged twice,
+// Executions: a killer can finish a downed survivor who has reached the struggle phase on a hook,
 // or the last survivor standing.
 export function canExecuteTarget(S, k, s) {
   if (s.role !== 'survivor' || s.st !== 'down') return false;
