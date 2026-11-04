@@ -9,7 +9,7 @@ import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
-import { Sidekick, TED_LINES } from './sidekicks.js';
+import { Sidekick, TED_LINES, resetVoices } from './sidekicks.js';
 import { staticReady, cloneStatic } from './glbModels.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat } from './models.js';
 import { stepMover, startVault } from './movement.js';
@@ -292,6 +292,7 @@ export class Game {
   }
 
   start() {
+    resetVoices();
     const q = QUALITY[this.settings.quality] || QUALITY.medium;
     this.W = buildWorld(this.M, this.settings.quality);
     this.scene = this.W.scene;
@@ -984,25 +985,28 @@ export class Game {
       // a disguised body's sidekick would give Chucky away: it stays with the doll; ghosts' pets wait
       const c = this.chars.get(p.id);
       const owner = c ? { ...p, x: c.x, z: c.z, yaw: c.yaw } : p;
-      let killerD = null;
+      let killerD = null, survD = null;
       if (p.role === 'survivor') for (const q of S.players) if (q.role === 'killer' && !q.disguise) { const d = Math.hypot(q.x - owner.x, q.z - owner.z); if (killerD == null || d < killerD) killerD = d; }
-      k.update(dt, owner, { visible: !(p.st === 'ghost' && p.id !== this.myId), killerD, say: (line, x, z) => this.petVoice(line, x, z) });
+      if (p.role === 'killer') for (const q of S.players) if (q.role === 'survivor' && q.st === 'ok') { const d = Math.hypot(q.x - owner.x, q.z - owner.z); if (survD == null || d < survD) survD = d; }
+      k.update(dt, owner, { visible: !(p.st === 'ghost' && p.id !== this.myId), killerD, survD, say: (line, x, z) => this.petVoice(line, x, z) });
     }
     for (const [id, k] of this.pets) if (!S.players.some(p => p.id === id)) { k.dispose(); this.pets.delete(id); }
   }
   petReact(id, mood, time) { const k = this.pets && this.pets.get(id); if (k) k.react(mood, time); }
   petSay(id, line, gap) { const k = this.pets && this.pets.get(id); if (k) k.say(line, gap); }
   // a sidekick's voice line: played from where they stand, with a subtitle if you can hear it
+  // returns the line's length in seconds, or -1 if it's out of earshot
   petVoice(line, x, z) {
-    const len = sound.clip('ted/' + line, x, z);
-    if (!len && sound.ok) return;
     const heard = Math.hypot(x - sound.lx, z - sound.lz) < 40;
-    if (this.settings.subs === false || !heard) return;
+    if (!heard) return -1;
+    const len = sound.clip('ted/' + line, x, z) || 2.5; // (2.5s of subtitle if audio is unavailable)
+    if (this.settings.subs === false) return len;
     let el = document.getElementById('subs');
     if (!el) { el = document.createElement('div'); el.id = 'subs'; this.hud.appendChild(el); }
     el.innerHTML = `<b>Ted:</b> ${TED_LINES[line].replace(/[<>&]/g, '')}`;
     el.classList.add('show');
-    clearTimeout(this.subsT); this.subsT = setTimeout(() => el.classList.remove('show'), ((len || 2.5) + 0.8) * 1000);
+    clearTimeout(this.subsT); this.subsT = setTimeout(() => el.classList.remove('show'), (len + 0.8) * 1000);
+    return len;
   }
 
   // Chucky's spare dolls (Soul Split), lying where they were dropped

@@ -259,10 +259,19 @@ export const TED_LINES = {
   arfh: 'Arfh!',
   teddy: "I'm a fucking teddy bear!",
   problems: 'You got a lot of problems.',
+  fuckme: 'Fuck me.',
+  listen: "Look, I know you're pissed, alright, but just listen to me for five seconds.",
+  pussy: "You're just making yourself look like a pussy.",
+  thunder: '♪ Ted sings the Thunder Buddies song ♪',
 };
 
 // lines Ted can say again; every other line is said at most once a match
-const TED_REPEAT = new Set(['bringit', 'shit', 'cock', 'arfh']);
+const TED_REPEAT = new Set(['bringit', 'shit', 'cock', 'arfh', 'fuckme']);
+// one voice channel for every Ted in the match (on this screen): they never talk over each
+// other, and a once-a-match line said by one Ted is never said again by another
+const VOICE = { busyUntil: 0, said: new Set() };
+export function resetVoices() { VOICE.busyUntil = 0; VOICE.said.clear(); }
+const usable = line => TED_LINES[line] && (TED_REPEAT.has(line) || !VOICE.said.has(line));
 
 // ---------------- the sidekick ----------------
 export class Sidekick {
@@ -274,16 +283,28 @@ export class Sidekick {
     this.mood = null; this.moodT = 0; this.stuck = 0; this.side = Math.random() < 0.5 ? -1 : 1;
     this.c = null; // Ted's camp: { ph, t, D (chair spot), S (where he stands to set it up), ... }
     this.puffs = new Puffs(scene);
-    this.voiceAt = -99; this.said = {}; this.queued = null; this.idleNext = 40 + Math.random() * 50;
+    this.voiceAt = -99; this.said = {}; this.queue = []; this.idleNext = 40 + Math.random() * 50;
     scene.add(this.rig.root);
   }
-  // queue a line (Ted only); `gap` = seconds before this same line may repeat
+  // queue a line (Ted only). gap: seconds before this Ted may say the same line again;
+  // force: an important line (downed, caged) that waits its turn instead of being dropped
   say(line, gap = 30, force = false) {
-    if (this.kind !== 'ted' || !TED_LINES[line]) return false;
-    if (!TED_REPEAT.has(line) && this.said[line] != null) return false; // already said this match
-    if ((!force && this.t - this.voiceAt < 7) || this.t - (this.said[line] ?? -999) < gap) return false;
-    this.voiceAt = this.t; this.said[line] = this.t; this.queued = line;
+    if (this.kind !== 'ted' || !usable(line)) return false;
+    if (this.queue.some(q => q.line === line)) return false;
+    if (!force && (this.t - this.voiceAt < 7 || this.queue.length)) return false;
+    if (this.t - (this.said[line] ?? -999) < gap) return false;
+    this.queue.push({ line, force, until: this.t + (force ? 6 : 0.5) });
     return true;
+  }
+  // speak the next queued line once nobody else is talking
+  flushVoice(env) {
+    while (this.queue.length && (this.t > this.queue[0].until || !usable(this.queue[0].line))) this.queue.shift();
+    if (!this.queue.length || performance.now() < VOICE.busyUntil || !env.say || !R0(this)) return;
+    const { line } = this.queue.shift();
+    const len = env.say(line, this.x, this.z);
+    if (len < 0) return; // out of earshot: it doesn't count
+    VOICE.busyUntil = performance.now() + (len + 0.35) * 1000;
+    VOICE.said.add(line); this.said[line] = this.t; this.voiceAt = this.t;
   }
   dispose() { this.scene.remove(this.rig.root); if (this.camp) this.scene.remove(this.camp); this.camp = null; this.c = null; this.puffs.clear(); }
   react(mood, time = 1.6) { this.mood = mood; this.moodT = time; }
@@ -298,14 +319,16 @@ export class Sidekick {
   update(dt, owner, env) {
     this.t += dt;
     this.puffs.update(dt);
-    if (this.queued) { env.say && R0(this) && env.say(this.queued, this.x, this.z); this.queued = null; }
+    this.flushVoice(env);
     // seeing the owner go down
-    if (owner && this.prevSt && this.prevSt !== 'down' && owner.st === 'down') this.say('arfh', 5, true);
+    if (owner && this.prevSt && this.prevSt !== 'down' && owner.st === 'down') { this.say('arfh', 0, true); this.say('fuckme', 0, true); }
     if (owner && this.prevSt && this.prevSt !== 'caged' && owner.st === 'caged') this.say('problems', 0, true);
     if (owner) this.prevSt = owner.st;
     if (owner && this.kind === 'ted' && env.visible !== false && owner.st !== 'out' && owner.st !== 'ghost') {
       // running from the monster
-      if (owner.role === 'survivor' && owner.st === 'ok' && owner.mv === 2 && env.killerD != null && env.killerD < 14 && Math.random() < dt * 0.25) { const pool = ['bringit', 'email', 'teddy'].filter(l => TED_REPEAT.has(l) || this.said[l] == null); this.say(pool[Math.floor(Math.random() * pool.length)], 45); }
+      if (owner.role === 'survivor' && owner.st === 'ok' && owner.mv === 2 && env.killerD != null && env.killerD < 14 && Math.random() < dt * 0.25) { const fresh = ['email', 'teddy', 'listen', 'thunder'].filter(usable), pool = fresh.length && Math.random() < 0.7 ? fresh : ['bringit']; this.say(pool[Math.floor(Math.random() * pool.length)], 45); }
+      // the killer's Ted, chasing someone down
+      if (owner.role === 'killer' && !owner.disguise && owner.mv >= 1 && env.survD != null && env.survD < 10 && Math.random() < dt * 0.2) this.say('pussy', 60);
       // every so often, for no reason at all
       if (this.t > this.idleNext) { this.idleNext = this.t + 70 + Math.random() * 60; if (!(this.c && this.c.ph === 'seated')) this.say('idle', 60); }
     }

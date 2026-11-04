@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.8';
+export const VERSION = '2.19.9';
 export const INBOX = [
+  {
+    id: 'v2.19.9', version: '2.19.9', date: 'Nov 2026', title: 'Ted: More To Say', tag: 'Update',
+    body: ['Two Teds in one match no longer talk over each other: they take turns, and a line one Ted has already said won\'t be said again by the other.', 'New lines: "Fuck me." right after the "Arfh!" when you go down; "Look, I know you\'re pissed..." and the Thunder Buddies song while you\'re being chased; and if you\'re the killer, your Ted heckles survivors you chase ("You\'re just making yourself look like a pussy"), which survivors can hear too.', 'The teddy bear line, like most of Ted\'s lines, only comes up once a match.'],
+  },
   {
     id: 'v2.19.8', version: '2.19.8', date: 'Nov 2026', title: 'Realism Arms Fix', tag: 'Fix',
     body: ['Raghuvir\'s Realism outfit no longer sinks his hands into his body while standing or idle: his arms now hang naturally at his sides.'],
