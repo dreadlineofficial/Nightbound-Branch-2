@@ -64,6 +64,9 @@ export const realismReady = name => !!models[name];
 // procedural joint -> Mixamo bone
 const MAP = { hips: 'Hips', spine: 'Spine1', head: 'Head', shL: 'LeftArm', elL: 'LeftForeArm', handL: 'LeftHand', shR: 'RightArm', elR: 'RightForeArm', handR: 'RightHand', lgL: 'LeftUpLeg', knL: 'LeftLeg', lgR: 'RightUpLeg', knR: 'RightLeg' };
 
+const SPLAY_L = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.08, 0, 0.24));
+const SPLAY_R = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.08, 0, -0.24));
+
 class RealismRig {
   constructor(name, proc) {
     const M = models[name];
@@ -115,6 +118,9 @@ class RealismRig {
       const pj = P[j]; if (!pj) continue;
       R.copy(pj.quaternion);
       if (this.armFix[j]) R.multiply(this.armFix[j]);
+      // the jumpsuit and pack are much bulkier than the procedural body: hold the upper arms a
+      // little out from the sides (and a touch forward) so the hands clear the hips and thighs
+      if (j === 'shL') R.premultiply(SPLAY_L); else if (j === 'shR') R.premultiply(SPLAY_R);
       q.copy(d.wri).multiply(R).multiply(d.wr);
       d.bone.quaternion.copy(d.rest).multiply(q);
     }

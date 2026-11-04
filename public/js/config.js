@@ -363,8 +363,12 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.19.7';
+export const VERSION = '2.19.8';
 export const INBOX = [
+  {
+    id: 'v2.19.8', version: '2.19.8', date: 'Nov 2026', title: 'Realism Arms Fix', tag: 'Fix',
+    body: ['Raghuvir\'s Realism outfit no longer sinks his hands into his body while standing or idle: his arms now hang naturally at his sides.'],
+  },
   {
     id: 'v2.19.7', version: '2.19.7', date: 'Nov 2026', title: 'Ted: Fewer Reruns', tag: 'Update',
     body: ['Ted no longer repeats himself: most of his lines are said once a match. Only "Bring it in, you bastard!", "Shit.", the "acting like a..." line and "Arfh!" can come up again.', 'New line when you\'re put in a cage: "You got a lot of problems."'],
