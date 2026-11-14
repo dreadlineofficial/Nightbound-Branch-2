@@ -64,7 +64,7 @@ export const MODES = {
   infection: { name: 'Infection', short: '2 vs 10', killers: 2, survivors: 10, bigMap: true, desc: 'No hooks. Two killers, ten survivors, on big maps built for it. Downed survivors rise as killers a few seconds later, and every 60s the infected sense every survivor. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
 };
 // killers an infected survivor can turn into
-export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman', 'chucky'];
+export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman', 'chucky', 'springtrap'];
 
 export const POSSESS_MAX = 66; // Chucky can stay in a survivor's body for 1.1 minutes
 // Power levels: a killer's dash / pounce / hook reach starts low and is bought up with Embers.
@@ -147,6 +147,16 @@ export const KILLERS = {
     swap: { name: 'Body Swap', key: 'V', cooldown: 6, desc: 'Switch bodies with Spider Mom, any time: Granny appears where Spider Mom was, and Spider Mom where Granny stood. Hold V to look through Spider Mom\'s eyes first, release to swap.' },
     feature: { name: 'Sharp Ears & Spider Mom', desc: 'She hears everything: survivors who run within 22m of her are revealed, and a failed skill check is heard anywhere. Spider Mom crawls between the generators; anyone she finds repairing is shown to Granny and webbed (slowed for 3s).' },
     color: 0xd8d0c0,
+  },
+  springtrap: {
+    id: 'springtrap', name: 'Springtrap', speed: 4.6, terror: 32, weapon: 'Fire Axe', crossover: "Five Nights at Freddy's (fan-made)",
+    lore: 'A rotting yellow rabbit suit with a man still inside it. The springlocks failed thirty years ago. He did not.',
+    exec: { name: 'Springlock Failure', desc: 'Grabs the survivor by the throat, then brings the fire axe down. Twice.' },
+    ability: { name: 'Axe Throw', cooldown: 1.2, aim: 0.3, reload: 10, speed: 30, reveal: 4, desc: 'Hold to aim (slowed), release to hurl your fire axe. A hit injures the survivor and reveals them for 4s; a Scared survivor goes straight down. A new axe is in your hand 10s later.' },
+    ability2: { name: 'Phantom Scare', key: 'R', cooldown: 30, range: 18, reveal: 5, heard: 12, desc: 'Lurch forward with a jumpscare. Survivors within 18m who can see you are revealed for 5s, slowed for 2s and Scared for 12s: your next hit on a Scared survivor puts them straight down.' },
+    teleport: { name: 'Security Doors', key: 'G', cooldown: 22, time: 1.4, haste: 2, fright: 14, frightReveal: 4, desc: 'Hold G: every generator, hook, window and pallet on the map is marked. Release to step into the dark and out by the one in your sights; survivors within 14m of where you come out are revealed for 4s.' },
+    feature: { name: "Fazbear's Fright", desc: 'His eyes glow in the dark. Survivors who are Scared go down in one hit, from the axe in his hand or the one he throws. Stepping out of a Security Door reveals everyone nearby.' },
+    color: 0x9a9a4a,
   },
   bateman: {
     id: 'bateman', name: 'Patrick Bateman', speed: 4.7, terror: 28, weapon: 'Axe', crossover: 'American Psycho (fan-made)',
@@ -312,6 +322,11 @@ export const LORE = {
     'She walks the halls with a bloody bat, comes out of nowhere wherever the floor creaks, and stops dead when she hears a door or a dropped plate. Her husband keeps the cellar. And the thing in the attic she calls Spider Mom keeps watch over the generators, and lends Granny her body whenever she asks.',
     'The Entity did not have to take her anywhere. It simply moved the house. Now the guests are survivors, the trial is her home, and the rules have not changed: be quiet, and do not look at the girl in the white dress.',
   ] },
+  springtrap: { title: "Fazbear's Fright", story: [
+    "A fan-made crossover. Before the pizzeria closed, the owner kept a spare suit in the back room: a yellow rabbit that a man could wear, held open by spring locks. One night, hiding from the ghosts of the children he had taken, he climbed inside. Rain had soaked through the roof. The locks gave way.",
+    "Thirty years later a horror attraction dragged the suit out of a sealed room. Something in it was still moving. The attraction burned to the ground on its first week, and the rabbit walked out of the fire.",
+    "The Entity found him limping through the ashes with a fire axe and offered him what he always wanted: more guests, and doors that never stay locked. He uses the security doors to step out of the dark anywhere, and he always comes back.",
+  ] },
   chucky: { title: 'Friends Till the End', story: [
     'A fan-made crossover. A Good Guy doll carrying the soul of a strangler who learned a little voodoo and would not stay dead. He has been burned, shot, melted and buried, and every time he has found another body to come back in.',
     'The Entity found him in a toy factory furnace, still laughing, and offered him a place where the playtime never ends. He said yes before it had finished asking.',
@@ -410,6 +425,12 @@ export const SKINS = {
     { id: 'grandpa', name: 'Grandpa', price: 25000, god: true, grandpa: true, desc: 'GOD TIER: changes how you play. Her husband takes the shift with his shotgun: hold RMB to raise it, release to fire (replaces Bat Rush). Survivors get a second health bar against him: three long-range shots put anyone down, but up close the spread barely scratches them. The farther the shot, the harder it hits.' },
     { id: 'ghost', name: 'Pale Visitor', price: 4500, tint: 0xd8e4f0, tintK: 0.5, glow: 0x6a8aa8, glowK: 0.35, desc: 'Drained of colour, glowing faintly, like something that stayed in the house long after it should have left.' },
   ],
+  springtrap: [
+    { id: 'default', name: 'Springtrap', price: 0, desc: 'The rotting rabbit suit from the back room, wires and all, with what is left of the man inside. (Model: a Dead by Daylight Springtrap shared on Sketchfab.)' },
+    { id: 'yellowrabbit', name: 'Yellow Rabbit', price: 6000, rabbit: true, desc: 'Before the springlocks failed: the man himself in the golden rabbit suit, the head off, a bloody knife in his hand. His own body and moves. (Model: "Dead by daylight yellow rabbit", shared on Sketchfab.)' },
+    { id: 'phantom', name: 'Phantom', price: 3500, tint: 0x6a8a5a, tintK: 0.45, glow: 0x1a4a1a, glowK: 0.5, desc: 'A burnt-out hallucination from the camera feed. Sickly green, flickering, and it was not there a second ago.' },
+    { id: 'burnt', name: 'After the Fire', price: 2500, tint: 0x1a1612, tintK: 0.75, glow: 0x5a1800, glowK: 0.15, desc: 'Walked out of the Fazbear\'s Fright fire. Charred black and still smouldering.' },
+  ],
   bateman: [
     { id: 'default', name: 'Pierce & Pierce', price: 0, desc: 'Charcoal pinstripe double-breasted suit, crisp white shirt, red silk tie and a cigar. Valentino Couture.' },
     { id: 'raincoat', name: 'Hip to Be Square', price: 2500, rain: true, desc: 'A clear plastic raincoat over the suit, for the mess. Newspaper on the floor optional.' },
@@ -427,7 +448,10 @@ export const SKINS = {
 // ---------------- Store: chapters (DLC) ----------------
 // Bought with Embers. A chapter unlocks playing as its killer; its map is free for everyone.
 export const CHAPTERS = [
-  { id: 'granny', num: 'VIII', name: 'Granny', sub: '× Nightbound', price: 5000, killer: 'granny', map: 'granny', banner: 'granny', isNew: true,
+  { id: 'springtrap', num: 'IX', name: "Fazbear's Fright", sub: '× Nightbound', price: 5000, killer: 'springtrap', banner: 'springtrap', isNew: true,
+    tagline: 'He always comes back.',
+    contents: ['Springtrap: Axe Throw, Phantom Scare and Security Doors (teleport)', 'Execution: Springlock Failure', 'The Yellow Rabbit outfit and 2 more in the Store'] },
+  { id: 'granny', num: 'VIII', name: 'Granny', sub: '× Nightbound', price: 5000, killer: 'granny', map: 'granny', banner: 'granny',
     tagline: 'You have five days. She hears everything.',
     contents: ['Granny: Bat Rush, I Hear You, Creep (teleport), Body Swap', 'Her helper: Spider Mom', 'Execution: Bedtime Trap', "Map: Granny's House (free for everyone)", '2 Granny outfits in the Store'] },
   { id: 'offal', num: 'V', name: 'OFFAL', sub: '× Nightbound', price: 5000, killer: 'foreman', map: 'meatworks', banner: 'offal',
@@ -451,10 +475,20 @@ export const NEWSLETTER = 'nightbound';
 export const POWERUPS = {
   phantomtraps: { name: 'Phantom Traps', price: 20000, role: 'survivor', desc: 'Your Ghost Traps are invisible to the killer. Your team still sees them; the killer only finds out when they step in one.' },
 };
-export const VERSION = '2.56.2';
+export const VERSION = '2.57.0';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'v2.57.0', version: '2.57.0', date: 'Nov 2026', title: "Chapter IX: Springtrap, and Minigames", tag: 'New Chapter', banner: 'springtrap',
+    body: [
+      "New killer: Springtrap (fan-made, Chapter IX: Fazbear's Fright, 5,000 Embers in the Store). Axe Throw (hold RMB, release to hurl his fire axe), Phantom Scare (R: a jumpscare that reveals, slows and Scares everyone who can see him; Scared survivors go down in one hit) and Security Doors (hold G: step into the dark and out by any generator, hook, window or pallet). His own execution: Springlock Failure.",
+      'New outfit: Yellow Rabbit (6,000 Embers), with its own body. Also Phantom and After the Fire.',
+      'New Minigames menu: Fortnight is back for good (no end date; the prize round is over), and a brand new mode, Nightcraft Bedwars.',
+      "Nightcraft Bedwars: four teams on floating islands, played as your own Nightbound survivor or killer. Collect iron and gold at your forge, buy wool, planks, end stone, swords, armour, pickaxes and golden apples, bridge across the void and break the other teams' beds. Lose your bed and you don't respawn. Solo, duos or squads, against bots that bridge, raid and defend.",
+      'Everything from the Nightbound updates up to 2.56.2 is included in this build.',
+    ],
+  },
   {
     id: 'v2.56.2', version: '2.56.2', date: 'Nov 2026', title: 'Fortnight: party codes, invites that arrive', tag: 'Update',
     body: [

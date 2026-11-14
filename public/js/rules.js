@@ -83,6 +83,9 @@ export function speedOf(p, S, sprint, crouch) {
   if (p.char === 'granny' && p.dash) return 0; // (the rush moves her itself)
   if (p.char === 'granny' && p.aim) s *= 0.55;  // winding up the bat
   if ((p.char === 'harrower' || p.char === 'foreman' || p.char === 'bateman') && p.aim) s *= p.char === 'foreman' ? 0.75 : p.char === 'bateman' ? 0.6 : SPEED.aimSlow;
+  if (p.char === 'springtrap' && p.aim) s *= 0.6;  // the axe cocked back
+  if (p.char === 'springtrap' && p.scare > 0) s *= 0.4; // mid-lunge
+  if (p.char === 'springtrap' && p.tele) return 0; // stepping through a door
   if (p.diffMul) s *= p.diffMul;
   return S && modeOf(S) === 'adrenaline' ? s * 1.3 : s;
 }

@@ -12,6 +12,7 @@ import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skin
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { slappyReady } from './slappyGlb.js';
+import { springtrapReady } from './springtrapGlb.js';
 import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices, tedPref, tedText } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
@@ -21,7 +22,7 @@ let KB_SETTINGS = null;
 const kbd = id => `<kbd>${keyLabel(KB_SETTINGS, id).replace(/[<>&]/g, '')}</kbd>`;
 import { staticReady, cloneStatic } from './glbModels.js';
 import { BRView } from './brview.js';
-import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat, HOOK_Y } from './models.js';
+import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeThrownAxe, makeLantern, makeChainsaw, auraMat, HOOK_Y } from './models.js';
 import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
 import { losBlocked, heightAt, levelOf } from './map.js';
@@ -310,12 +311,13 @@ class BloodDecals {
 const lookRole = p => p.look || (p.disguise ? 'survivor' : p.role); // (look: Fortnight's chosen body)
 // killers played over the shoulder: Chucky, and Chucky inside a survivor's body
 // killers drawn from a GLB model: their first-person arms are cut from it
-const GLB_KILLERS = new Set(['granny', 'foreman', 'slimer']);
+const GLB_KILLERS = new Set(['granny', 'foreman', 'slimer', 'springtrap']);
 const FP_OPT = { slimer: { region: { sign: -1, from: 0.55, wrist: 0.72 } }, foreman: { skip: /Foreman_14/ }, granny: { pitch: -0.35 } };
 function fpModelReady(id, sk) {
   if (id === 'granny') return sk.grandpa ? grandpaReady() : grannyReady();
   if (id === 'foreman') return sk.batman ? batmanReady() : foremanReady();
   if (id === 'slimer') return staticReady('slimer');
+  if (id === 'springtrap') return springtrapReady(sk);
   return true;
 }
 function killerViewParts(id, sk) {
@@ -572,7 +574,7 @@ export class Game {
       if (this.br) { this.br.onKey(e.code, true); return; }
       if (e.code === 'Space') this.onSpace();
       if (e.code === 'KeyQ') this.send({ t: 'act', a: 'drop-carry' });
-      if (e.code === 'KeyG' && this.mine() && this.mine().role === 'killer' && this.mine().char === 'granny') { const m = this.mine(); if (m.teleCd <= 0 && !m.tele && m.carry == null) this.creepHeld = true; else this.feed(m.tele ? 'Already creeping…' : m.carry != null ? 'Not while carrying someone.' : `Creep recharging (${Math.ceil(m.teleCd)}s)`); }
+      if (e.code === 'KeyG' && this.mine() && this.mine().role === 'killer' && (this.mine().char === 'granny' || this.mine().char === 'springtrap')) { const m = this.mine(), nm = KILLERS[m.char].teleport.name; if (m.teleCd <= 0 && !m.tele && m.carry == null) this.creepHeld = true; else this.feed(m.tele ? 'Already on the way…' : m.carry != null ? 'Not while carrying someone.' : `${nm} recharging (${Math.ceil(m.teleCd)}s)`); }
       if (e.code === 'KeyG') this.send({ t: 'act', a: 'trap' });
       if (e.code === 'KeyR' && this.mine() && this.mine().role === 'survivor' && this.mine().char === 'spiderman') {
         const m = this.mine();
@@ -633,6 +635,10 @@ export class Game {
         } else if (me.char === 'bateman') {
           if (down && me.abCd <= 0 && me.ammo > 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'sawthrow', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
+        } else if (me.char === 'springtrap') {
+          if (down && me.abCd <= 0 && me.ammo > 0 && !me.tele && me.carry == null) { this.aimHeld = true; this.sendIn(); }
+          else if (down && !(me.ammo > 0)) this.feed('Your next axe is on its way.');
+          else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'axethrow', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
         } else if (me.char === 'granny') {
           if (down && me.abCd <= 0 && !me.dash && !me.tele && me.carry == null) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'rush', yaw: me.yaw }); this.sendIn(); }
@@ -876,7 +882,7 @@ export class Game {
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && (p.skin === 'grandpa' ? grandpaReady() : grannyReady())) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && (p.skin === 'grandpa' ? grandpaReady() : grannyReady())) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')) || (p.char === 'springtrap' && lookRole(p) === 'killer' && (!c.rig.springtrap || c.rig.rabbit !== (p.skin === 'yellowrabbit')) && springtrapReady(skinOf('springtrap', p.skin))))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
@@ -955,6 +961,7 @@ export class Game {
         if (vaulting) { const d = p.vault.d || 1.7; y = Math.sin(Math.min(1, c.vaultT / d) * Math.PI) * 0.5; }
         if (execing) st.exec = { f: p.act.t / RULES.execTime, char: p.char, role: 'killer' };
         st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0; st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
+        if (p.char === 'springtrap') { st.aim = !!p.aim; st.scare = p.scare > 0 ? 1 - p.scare / 0.9 : null; }
         if (p.char === 'granny') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; st.shot = c.shotAt != null && this.t - c.shotAt < 0.7 ? (this.t - c.shotAt) / 0.7 : null; }
         if (p.atk === 1) { c.atkT = (c.atkPrev === 1 ? c.atkT + dt : 0); st.atkF = c.atkT / (RULES.lungeTime * (p.atkAmbush ? 1.4 : 1)); }
         c.atkPrev = p.atk;
@@ -1019,7 +1026,7 @@ export class Game {
       if (p.role === 'survivor' && local && (p.st === 'ghost') !== !!c.ghostFx) { c.ghostFx = p.st === 'ghost'; R.setOpacity(c.ghostFx ? 0.35 : 1); } // you, as a ghost
       if (p.role === 'killer' && p.char === 'slimer') R.setOpacity(p.phase > 0 ? (viewerKiller ? 0.4 : 0.25 + Math.sin(this.t * 12) * 0.08) : 1);
       // Granny fading out on a Creep
-      if (p.role === 'killer' && p.char === 'granny' && (p.tele || c.creepFade)) { c.creepFade = !!p.tele; R.setOpacity(p.tele ? Math.max(0.04, 1 - p.tele.t / KILLERS.granny.teleport.time) : 1); }
+      if (p.role === 'killer' && (p.char === 'granny' || p.char === 'springtrap') && (p.tele || c.creepFade)) { c.creepFade = !!p.tele; R.setOpacity(p.tele ? Math.max(0.04, 1 - p.tele.t / KILLERS[p.char].teleport.time) : 1); }
       // wisp fade
       if (p.role === 'killer' && p.char === 'wisp') {
         const o = p.ab === 1 ? (viewerKiller ? 0.35 : 0.04 + Math.max(0, Math.sin(this.t * 3)) * 0.04) : p.ab ? 0.4 : 1;
@@ -1172,9 +1179,11 @@ export class Game {
     while (this.spears.length < S.spears.length) { const m = makeSpear(); this.scene.add(m); this.spears.push(m); }
     while (this.spears.length > S.spears.length) this.scene.remove(this.spears.pop());
     S.spears.forEach((s, i) => {
-      const m = this.spears[i];
+      let m = this.spears[i];
+      if (!!s.ax !== !!m.userData.ax) { this.scene.remove(m); m = s.ax ? makeThrownAxe() : makeSpear(); m.userData.ax = !!s.ax; this.scene.add(m); this.spears[i] = m; }
       m.position.set(s.x, s.y, s.z);
       m.lookAt(s.x + s.vx, s.y + s.vy, s.z + s.vz);
+      if (s.ax) m.children[0].rotation.x = (s.spin || s.t * 14);
     });
   }
 
@@ -1384,6 +1393,13 @@ export class Game {
       if (this.execTrap && this.execTrap.userData.close) this.execTrap.userData.close(Math.max(0, Math.min(0.9, (f - 0.53) / 0.03 * 0.9)));
       if (f > 0.56 && f < 0.85 && Math.random() < 0.3) this.blood.spawn(pos.x + F.x * 0.78, 0.15, pos.z + F.z * 0.78, 3, 0x5a0404, 0.5, 1, -9, 0.3);
       once('done', 0.9, () => { if (mine) this.feed('"Sweet dreams."', 'big'); });
+    } else if (ch === 'springtrap') {
+      // Springlock Failure: by the throat, then the fire axe, twice
+      once('grab', 0.04, () => { sound.play('thud', pos.x, pos.z); if (mine) this.feed('"I always come back."', 'big'); });
+      once('scream', 0.2, () => sound.play('scream', pos.x, pos.z, { pitch, len: 1.3 }));
+      once('click', 0.3, () => { sound.play('click', pos.x, pos.z); sound.play('swing', pos.x, pos.z); });
+      once('chop1', 0.48, () => { bloodAt(90); sound.play('thunk', pos.x, pos.z); sound.play('hit', pos.x, pos.z, { pitch, down: true }); if (mine) this.shake = 0.8; });
+      once('chop2', 0.86, () => { bloodAt(140); sound.play('thunk', pos.x, pos.z); sound.play('break', pos.x, pos.z); if (mine) { this.shake = 1.1; this.flash = 0.8; } });
     } else if (ch === 'bateman') {
       once('lecture', 0.04, () => { if (mine) this.feed('"Do you like Huey Lewis and the News?"', 'big'); });
       once('scream', 0.22, () => sound.play('scream', pos.x, pos.z, { pitch, len: 1.2 }));
@@ -1420,7 +1436,7 @@ export class Game {
   // the gore every execution shares: the wound opens, keeps pumping, a pool spreads under the body
   // and the killing blow comes with a burst, flying chunks and a beat of slow motion
   execGore(victim, K, f, ch, pos, once) {
-    const T = { butcher: [0.5, 0.72], bateman: [0.5, 0.72], chucky: [0.3, 0.75], foreman: [0.3, 0.55], harrower: [0.32, 0.5], lamplighter: [0.32, 0.5], wisp: [0.45, 0.8], slimer: [0.35, 0.75] }[ch] || [0.35, 0.7];
+    const T = { butcher: [0.5, 0.72], bateman: [0.5, 0.72], springtrap: [0.48, 0.86], chucky: [0.3, 0.75], foreman: [0.3, 0.55], harrower: [0.32, 0.5], lamplighter: [0.32, 0.5], wisp: [0.45, 0.8], slimer: [0.35, 0.75] }[ch] || [0.35, 0.7];
     const [wound, kill] = T, mine = victim.id === this.myId || K.id === this.myId;
     const y = ch === 'harrower' || ch === 'lamplighter' ? 1.2 : ch === 'chucky' ? 0.3 : 1.0;
     if (ch === 'wisp' || ch === 'slimer') { /* no blade: their deaths are frost and slime */ }
@@ -1584,7 +1600,7 @@ export class Game {
     return out;
   }
   updateCreep(S, me) {
-    if (!this.creepHeld || !me || me.char !== 'granny' || me.role !== 'killer' || me.teleCd > 0 || me.tele) { if (this.creepEls) this.clearCreep(); this.creepHeld = this.creepHeld && me && !me.tele && me.teleCd <= 0; return; }
+    if (!this.creepHeld || !me || (me.char !== 'granny' && me.char !== 'springtrap') || me.role !== 'killer' || me.teleCd > 0 || me.tele) { if (this.creepEls) this.clearCreep(); this.creepHeld = this.creepHeld && me && !me.tele && me.teleCd <= 0; return; }
     const list = this.creepTargets(S), box = $('markers');
     this.creepEls ||= [];
     while (this.creepEls.length < list.length) { const el = document.createElement('div'); el.className = 'creep-mk'; box.appendChild(el); this.creepEls.push(el); }
@@ -1604,6 +1620,21 @@ export class Game {
     for (let i = list.length; i < this.creepEls.length; i++) this.creepEls[i].style.display = 'none';
     this.creepSel = best;
     if (best && best.el) best.el.classList.add('sel');
+  }
+  // Phantom Scare on you: his face, two pinprick eyes in the dark, for a moment
+  showJumpscare() {
+    let el = document.getElementById('jumpscare');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'jumpscare';
+      el.style.cssText = 'position:fixed;inset:0;z-index:40;pointer-events:none;opacity:0;transition:opacity .5s;background:radial-gradient(ellipse at 50% 45%,rgba(60,58,20,.92) 0%,rgba(20,18,6,.96) 38%,#000 70%)';
+      el.innerHTML = '<div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:min(46vw,520px);height:min(18vw,200px)">'
+        + '<i style="position:absolute;left:18%;top:20%;width:9%;aspect-ratio:1;border-radius:50%;background:#fff;box-shadow:0 0 30px 12px rgba(255,255,255,.65)"></i>'
+        + '<i style="position:absolute;right:18%;top:20%;width:9%;aspect-ratio:1;border-radius:50%;background:#fff;box-shadow:0 0 30px 12px rgba(255,255,255,.65)"></i>'
+        + '<b style="position:absolute;left:28%;right:28%;top:66%;height:26%;background:repeating-linear-gradient(90deg,#d8d0a0 0 7%,#1a1408 7% 12%);border-radius:4px"></b></div>';
+      document.body.appendChild(el);
+    }
+    el.style.transition = 'none'; el.style.opacity = '1';
+    clearTimeout(this.jsT); this.jsT = setTimeout(() => { el.style.transition = 'opacity .5s'; el.style.opacity = '0'; }, 650);
   }
   clearCreep() { for (const el of this.creepEls || []) el.remove(); this.creepEls = null; this.creepSel = null; }
   // ---------------- Spider Mom ----------------
@@ -1894,7 +1925,7 @@ export class Game {
         case 'lantern': sound.play('lantern', e.x, e.z); this.sparks.spawn(e.x + 0.34, 1.45, e.z, 25, 0x6aff8a, 1.5, 1, 0.5); break;
         case 'snuff': sound.play('snuff', e.x, e.z); this.smoke.spawn(e.x + 0.34, 1.5, e.z, 6, 0x1a2a1a, 0.6, 2, 0.5, 0.4); if (e.by) this.feed(name(e.by) + ' snuffed a cursed lantern.'); break;
         case 'tele': this.smoke.spawn(e.x, 1, e.z, 18, 0x0a2a12, 1.2, 2, 0.5, 1); this.sparks.spawn(e.x, 1.2, e.z, 40, 0x5aff7a, 2, 1.2, 0.5); sound.play('fade', e.x, e.z, { on: true }); if (e.id === this.myId) this.teleFx = 1; break;
-        case 'tele-end': this.smoke.spawn(e.x, 1, e.z, 18, 0x0a2a12, 1.2, 2, 0.5, 1); this.sparks.spawn(e.x, 1.2, e.z, 50, 0x5aff7a, 2.5, 1.2, 0.5); sound.play('fade', e.x, e.z, { on: false }); break;
+        case 'tele-end': if (e.door) { sound.play('click', e.x, e.z); if (this.mine() && (e.ids || []).includes(this.myId)) this.feed('Springtrap stepped out of a door right next to you!', 'big'); else if (e.id === this.myId && (e.ids || []).length) this.feed(`Fazbear's Fright: ${e.ids.length} nearby.`); } this.smoke.spawn(e.x, 1, e.z, 18, 0x0a2a12, 1.2, 2, 0.5, 1); this.sparks.spawn(e.x, 1.2, e.z, 50, 0x5aff7a, 2.5, 1.2, 0.5); sound.play('fade', e.x, e.z, { on: false }); break;
         case 'marked': if (e.id === this.myId) this.feed('You have been Marked — the Harrower can see you.', 'big'); break;
         case 'msg': this.feed(e.text); break;
         case 'gen': for (const p of S.players) if (p.role === 'survivor' && Math.hypot(p.x - e.x, p.z - e.z) < 3) this.petReact(p.id, 'cheer', 2);
@@ -1993,7 +2024,23 @@ export class Game {
         }
         case 'creep': {
           this.smoke.spawn(e.x, 1, e.z, 16, 0x0a0a0a, 1.1, 2, 0.5, 1); sound.play('fade', e.x, e.z, { on: true });
+          if (e.char === 'springtrap') { sound.play('click', e.x, e.z); sound.play('click', e.tx, e.tz); }
           if (e.id === this.myId) this.teleFx = 1;
+          break;
+        }
+        case 'axethrow': sound.play('swing', e.x, e.z); sound.play('throw', e.x, e.z); if (e.id !== this.myId && this.mine() && this.mine().role === 'survivor') this.feed('Axe!'); break;
+        case 'axeback': if (e.id === this.myId) this.feed('A new axe is in your hand.'); break;
+        case 'axehit': {
+          sound.play('thunk', e.x, e.z); this.blood.spawn(e.x, 1.2, e.z, 40, 0x6a0303, 3, 1.4, -9.8, 1.2);
+          if (e.id === this.myId) { this.feed('Hit by the axe! Springtrap can see you.', 'big'); this.shake = 0.5; }
+          break;
+        }
+        case 'phantom': {
+          // the jumpscare: a scream, a flash, and his face in yours
+          const me2 = this.mine();
+          sound.play('scream', e.x, e.z, { pitch: 0.55, len: 1.1 }); sound.play('roar', e.x, e.z, { pitch: 0.7 });
+          if (e.id === this.myId) this.feed(e.ids.length ? `Scared ${e.ids.length}. Your next hit on them puts them down.` : 'Nobody saw you.');
+          else if (me2 && e.ids.includes(this.myId)) { this.feed('JUMPSCARE! You are Scared: his next hit puts you down.', 'big'); this.shake = 1.0; this.flash = 0.9; this.showJumpscare(); }
           break;
         }
         case 'spidermom': {
@@ -2171,6 +2218,12 @@ export class Game {
       ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1;
       sub = !held ? 'Go get your chainsaw' : me.aim ? (me.abT >= def.aim ? 'Release to throw!' : 'Revving…') : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       extra = me.haste > 0 ? `Morning Routine · +12% speed` : me.ab2Cd > 0 ? `${kbd('ability2')} Business Card ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Business Card ready';
+    } else if (me.char === 'springtrap') {
+      const held = me.ammo > 0, scared = this.S ? this.S.players.filter(o => o.role === 'survivor' && o.heard > 0).length : 0;
+      ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1 - (me.ammoT || 0) / def.reload;
+      sub = !held ? `New axe in ${Math.max(1, Math.ceil(def.reload - (me.ammoT || 0)))}s` : me.aim ? (me.abT >= def.aim ? 'Release to throw!' : 'Winding up…') : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready · hold RMB';
+      if (scared) sub += ` · ${scared} Scared`;
+      extra = (me.tele ? 'Through the door…' : me.teleCd > 0 ? `${kbd('item')} Security Doors ${Math.ceil(me.teleCd)}s` : `Hold ${kbd('item')} Security Doors ready`) + ' · ' + (me.ab2Cd > 0 ? `${kbd('ability2')} Phantom Scare ${Math.ceil(me.ab2Cd)}s` : kbd('ability2') + ' Phantom Scare ready');
     } else if (me.char === 'granny' && me.skin === 'grandpa') {
       const G = K.shotgun;
       ready = me.abCd <= 0; pct = me.aim ? Math.max(0, 1 - me.abT / G.raise) : me.abCd / G.cooldown;

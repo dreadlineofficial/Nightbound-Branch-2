@@ -7,6 +7,7 @@ import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
 import { makeSlappy, animateSlappy } from './slappyGlb.js';
 import { makeGrannyGlb, animateGranny } from './grannyGlb.js';
+import { makeSpringtrap, animateSpringtrap } from './springtrapGlb.js';
 import { makeRealism } from './realism.js';
 import { makeStaticKiller, animateStaticKiller, cloneStatic } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
@@ -344,6 +345,7 @@ export function makeKiller(id, sk = {}) {
   if (id === 'bateman') return makeBateman(sk);
   if (id === 'chucky') return (sk.slappy && makeSlappy(sk, DETAIL.lite)) || makeChuckyGlb(sk, DETAIL.lite) || makeDoll(sk);
   if (id === 'granny') { const g = makeGrannyGlb(sk, DETAIL.lite); if (g) return g; }
+  if (id === 'springtrap') { const g = makeSpringtrap(sk, DETAIL.lite) || (sk.rabbit && makeSpringtrap({}, DETAIL.lite)); if (g) return g; }
   if (id === 'foreman') { const g = makeForemanGlb(sk, DETAIL.lite); if (g) { applySkinFx(g, sk); return g; } }
   const R = new Rig();
   if (id === 'foreman') {
@@ -403,6 +405,20 @@ export function makeKiller(id, sk = {}) {
     R.mesh('handR', G.box(0.025, 0.26, 0.4), mat(0x8a8d90, { metal: 0.85, rough: 0.3 }), 0, -0.09, 0.29);
     R.mesh('handR', G.box(0.027, 0.11, 0.18), mat(0x5a1410, { rough: 0.5 }), 0, -0.16, 0.38, 0, 0, 0, 1, 1, 1, false);
     R.root.scale.setScalar(1.15);
+  } else if (id === 'springtrap') {
+    // stand-in until his model loads: a rotting green-yellow rabbit suit, ears up, an axe
+    const suit = mat(sk.rabbit ? 0xd8b84a : 0x7a7a3a, { map: 'cloth', rough: 0.95 }), rot = mat(0x3a2a1a, { rough: 0.8 });
+    buildBody(R, { skin: suit, top: suit, sleeve: suit, forearm: suit, pants: suit, shoes: rot, hair: suit, bulk: 1.15, legLen: 0.55, noFace: true });
+    R.mesh('head', G.sph(0.17, 16, 12), suit, 0, 0.13, 0.02, 0, 0, 0, 1, 1.05, 1.1);
+    R.mesh('head', G.box(0.18, 0.06, 0.1), rot, 0, 0.04, 0.14);
+    for (const s2 of [-1, 1]) {
+      R.mesh('head', G.cyl(0.035, 0.05, 0.36, 8), suit, s2 * 0.08, 0.42, -0.02, 0, 0, s2 * -0.15, 1, 1, 0.5);
+      R.mesh('head', G.sph(0.022, 8, 6), mat(0xffffff, { emissive: 0xf0f0ff, ei: 3 }), s2 * 0.06, 0.16, 0.17, 0, 0, 0, 1, 1, 1, false);
+    }
+    R.mesh('handR', G.cyl(0.02, 0.022, 0.6, 6), mat(0x4a3420, { map: 'wood' }), 0, -0.2, 0.05, Math.PI / 2, 0, 0);
+    R.mesh('handR', G.box(0.02, 0.18, 0.16), mat(0x7a7c80, { metal: 0.8, rough: 0.35 }), 0, -0.25, 0.32);
+    R.root.scale.setScalar(1.12);
+    R.hunch = 0.2;
   } else if (id === 'wisp') {
     const skin = mat(0xc9d6da, { map: 'skin', rough: 0.5 });
     const dress = mat(sk.dress ?? 0xd8dde0, { map: 'cloth', rough: 1, side: THREE.DoubleSide });
@@ -630,6 +646,7 @@ export function animate(R, s, dt) {
   if (R.slappy) return animateSlappy(R, s, dt);
   if (R.chucky) return animateChucky(R, s, dt);
   if (R.granny) return animateGranny(R, s, dt);
+  if (R.springtrap) return animateSpringtrap(R, s, dt);
   if (R.glb) return animateGlb(R, s, dt);
   R.t += dt;
   const t = R.t;
@@ -839,7 +856,7 @@ export function makeViewModel(id, vsk = {}, real = {}) {
   const g = new THREE.Group();
   const arm = new THREE.Group(); g.add(arm);          // right arm + weapon, animated as a whole
   const add = (parent, geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.scale.set(sx, sy, sz); parent.add(me); return me; };
-  const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8, granny: 0x9a8a80 }[id];
+  const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8, granny: 0x9a8a80, springtrap: 0x7a7a3a }[id];
   const bk = id === 'butcher' ? 1.5 : id === 'harrower' ? 1.25 : id === 'wisp' ? 0.85 : 1;
   // (Batman: black armoured sleeves and gauntlets)
   const armParts = [], leftParts = [];
@@ -1140,6 +1157,18 @@ export function makeSpear() {
   const bone = mat(0xd8ccae, { rough: 0.6 });
   const s = new THREE.Mesh(G.cyl(0.02, 0.025, 1.3), bone); s.rotation.x = Math.PI / 2; g.add(s);
   const tip = new THREE.Mesh(G.cone(0.045, 0.22, 6), bone); tip.rotation.x = Math.PI / 2; tip.position.z = 0.75; g.add(tip);
+  return g;
+}
+
+// Springtrap's thrown fire axe: child 0 spins end over end
+export function makeThrownAxe() {
+  const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin);
+  const wood = mat(0x5a3a20, { map: 'wood', rough: 0.8 }), red = mat(0x9a1a12, { rough: 0.45, metal: 0.3 }), steel = mat(0xb8bcc0, { metal: 0.85, rough: 0.3 });
+  const h = new THREE.Mesh(G.cyl(0.02, 0.024, 0.85, 6), wood); spin.add(h);
+  const head = new THREE.Mesh(G.box(0.04, 0.12, 0.2), red); head.position.set(0, 0.36, 0.06); spin.add(head);
+  const edge = new THREE.Mesh(G.box(0.03, 0.15, 0.05), steel); edge.position.set(0, 0.36, 0.18); spin.add(edge);
+  const pick = new THREE.Mesh(G.cone(0.03, 0.14, 4), red); pick.rotation.x = -Math.PI / 2; pick.position.set(0, 0.36, -0.1); spin.add(pick);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
 

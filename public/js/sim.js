@@ -68,9 +68,9 @@ export class Sim {
         carry: null, atk: 0, atkT: 0, atkHit: false, stun: 0, ab: 0, abT: 0, abCd: 0, aim: false,
         reveal: 0, sixT: 0, chase: 0, mark: 0,
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
-        ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
+        ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' || r.char === 'springtrap' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' && mode !== 'bloodmoon' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' && mode !== 'bloodmoon' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
+        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : r.item === 'trap' ? 'trap' : 'flashlight', flash: r.role === 'survivor' && r.item !== 'trap' && mode !== 'bloodmoon' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: r.role === 'survivor' && r.item === 'trap' && mode !== 'bloodmoon' ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, scare: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pu: Array.isArray(r.pu) ? r.pu.filter(k => k === 'phantomtraps').slice(0, 4) : [],
@@ -118,6 +118,7 @@ export class Sim {
         if (p.role === 'killer' && p.char === 'harrower') p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0;
         if (p.role === 'killer' && p.char === 'bateman') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
         if (p.role === 'killer' && p.char === 'granny') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && !p.dash && p.carry == null && !p.act && p.stun <= 0 && !p.atk && !p.tele && p.ab !== 1; if (p.aim && !was) p.abT = 0; }
+        if (p.role === 'killer' && p.char === 'springtrap') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk && !p.tele; if (p.aim && !was) p.abT = 0; }
         if (p.role === 'killer' && p.char === 'chucky') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && !p.leap && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
         break;
       }
@@ -314,6 +315,17 @@ export class Sim {
         this.ev({ k: 'throw', id: p.id, x: p.x, z: p.z });
         break;
       }
+      case 'axethrow': {
+        // Springtrap hurls his fire axe: a heavy, spinning arc
+        if (p.role !== 'killer' || p.char !== 'springtrap' || !p.aim || p.ammo <= 0 || p.stun > 0 || p.carry != null || p.act || p.tele) return;
+        const D = KILLERS.springtrap.ability;
+        if (p.abT < D.aim) return; // he has to wind up
+        const yaw = num(m.yaw, p.yaw), pitch = Math.max(-0.5, Math.min(0.6, num(m.pitch, 0))) + 0.06, f = fwd(yaw);
+        S.spears.push({ x: p.x + f.x * 0.6, z: p.z + f.z * 0.6, y: 1.8, vx: f.x * D.speed * Math.cos(pitch), vz: f.z * D.speed * Math.cos(pitch), vy: D.speed * Math.sin(pitch), t: 0, by: p.id, ax: 1 });
+        p.abCd = D.cooldown; p.aim = false; p.ammo = 0; p.ammoT = 0;
+        this.ev({ k: 'axethrow', id: p.id, x: p.x, z: p.z });
+        break;
+      }
       case 'sawthrow': {
         // Patrick Bateman hurls his chainsaw: it flies flat and fast, then lies where it lands
         if (p.role !== 'killer' || p.char !== 'bateman' || !p.aim || p.ammo <= 0 || p.stun > 0 || p.carry != null || p.act) return;
@@ -397,11 +409,12 @@ export class Sim {
         break;
       }
       case 'creep': {
-        if (p.role !== 'killer' || p.char !== 'granny' || p.teleCd > 0 || p.tele || p.stun > 0 || p.act || p.carry != null || p.atk || p.vault) return;
+        if (p.role !== 'killer' || (p.char !== 'granny' && p.char !== 'springtrap') || p.teleCd > 0 || p.tele || p.stun > 0 || p.act || p.carry != null || p.atk || p.vault) return;
+        if (m.kind === 'spider' && p.char !== 'granny') return;
         const L = { gen: M.gens, hook: M.cages, win: M.windows, bar: M.bars }[m.kind], o = m.kind === 'spider' ? S.spider : L && L[m.id | 0];
         if (!o || (m.kind === 'hook' && S.cageBroken[o.id]) || (m.kind === 'bar' && S.bars[o.id] === 2)) return;
         p.tele = { t: 0, x: o.x, z: o.z, g: 1 }; p.ab = 0; p.aim = false;
-        this.ev({ k: 'creep', id: p.id, x: p.x, z: p.z, tx: o.x, tz: o.z });
+        this.ev({ k: 'creep', id: p.id, x: p.x, z: p.z, tx: o.x, tz: o.z, char: p.char });
         break;
       }
       case 'chain': {
@@ -421,6 +434,18 @@ export class Sim {
           for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && (s.mv === 2 || s.act || s.vault)) { s.reveal = Math.max(s.reveal, D.reveal); s.heard = D.heard; ids.push(s.id); }
           p.ab2Cd = D.cooldown; p.ab = 1; p.abT = 0.8; p.aim = false; p.score.b += ids.length * 100;
           this.ev({ k: 'hearyou', id: p.id, x: p.x, z: p.z, ids });
+        }
+        if (p.role === 'killer' && p.char === 'springtrap' && p.ab2Cd <= 0 && !p.tele && !p.act && p.stun <= 0 && !p.atk && p.carry == null) {
+          // Phantom Scare: everyone who can see him gets the jumpscare
+          const D = KILLERS.springtrap.ability2, ids = [];
+          for (const s of S.players) {
+            if (s.role !== 'survivor' || s.st !== 'ok' || !levelsMeet(p, s)) continue;
+            const d = dist(s, p);
+            if (d > D.range || losBlocked(M, p.x, p.z, s.x, s.z, 1.4)) continue;
+            s.reveal = Math.max(s.reveal, D.reveal); s.heard = D.heard; s.webbed = Math.max(s.webbed || 0, 2); ids.push(s.id);
+          }
+          p.ab2Cd = D.cooldown; p.scare = 0.9; p.aim = false; p.score.b += ids.length * 150;
+          this.ev({ k: 'phantom', id: p.id, x: p.x, z: p.z, ids });
         }
         if (p.role === 'killer' && p.char === 'chucky' && p.ab2Cd <= 0 && !p.act && p.stun <= 0) {
           // Chucky's Laugh: every survivor in earshot gives themselves away
@@ -638,6 +663,7 @@ export class Sim {
       if (p.exposed > 0) p.exposed = Math.max(0, p.exposed - dt);
       if (p.mark > 0) p.mark = Math.max(0, p.mark - dt);
       if (p.char === 'butcher' && p.role === 'killer' && p.charges < KILLERS.butcher.ability.charges) { p.chargeT += dt; if (p.chargeT >= KILLERS.butcher.ability.cooldown) { p.chargeT = 0; p.charges++; } }
+      if (p.char === 'springtrap' && p.role === 'killer' && p.ammo < 1) { p.ammoT += dt; if (p.ammoT >= KILLERS.springtrap.ability.reload) { p.ammoT = 0; p.ammo = 1; this.ev({ k: 'axeback', id: p.id }); } }
       if (p.char === 'harrower' && p.role === 'killer' && p.ammo < KILLERS.harrower.ability.ammo) { p.ammoT += dt; if (p.ammoT >= KILLERS.harrower.ability.reload) { p.ammoT = 0; p.ammo++; } }
     }
 
@@ -664,6 +690,7 @@ export class Sim {
     this.updateSpears(dt);
     this.updateSaws(dt);
     this.updateGranny(dt);
+    this.updateSpringtrap(dt);
 
     // ---- survivor states ----
     for (const p of S.players) {
@@ -804,7 +831,7 @@ export class Sim {
     Object.assign(p, {
       role: 'killer', char, skin: 'default', perks: [], st: 'ok', hp: 2, act: null, prog: 0, healP: 0, bleed: 0, turn: 0, boost: 0, slimed: 0, mark: 0, reveal: 0,
       carry: null, atk: 0, atkT: 0, atkHit: false, stun: 1.5, ab: 0, abT: 0, abCd: 0, ab2Cd: 0, aim: false, flash: 0, flashOn: false, traps: 0, glare: 0, blind: 0, blindImm: 6,
-      charges: char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0, ammo: char === 'harrower' ? KILLERS.harrower.ability.ammo : char === 'bateman' ? 1 : 0, ammoT: 0, card: 0,
+      charges: char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0, ammo: char === 'harrower' ? KILLERS.harrower.ability.ammo : char === 'bateman' || char === 'springtrap' ? 1 : 0, ammoT: 0, card: 0,
       outcome: 'infected', diffMul: p.bot ? this.diff.killerSpeed : 1,
     });
     p.tp++;
@@ -968,7 +995,7 @@ export class Sim {
     if (K && K.char === 'foreman' && K.ab === 1 && !this.chainDmg) instantDown = true;
     // (slimed survivors are slowed and revealed, not one-shot: that made him unbeatable) // one strike from the hook, in the dark
     s.act = null; s.prog = 0;
-    if (K && K.char === 'granny' && s.heard > 0) { instantDown = true; s.heard = 0; }
+    if (K && (K.char === 'granny' || K.char === 'springtrap') && s.heard > 0) { instantDown = true; s.heard = 0; }
     if (this.mode === 'glass') instantDown = true; // Glass Bones: every hit downs
     if (K && K.disguise) (s.knows ||= {})[K.id] = true; // hit by the 'survivor' Chucky is wearing: now they know // I Hear You: she knew exactly where you were
     const wasHp = s.hp;
@@ -1406,6 +1433,26 @@ export class Sim {
   }
 
   // Patrick Bateman's thrown chainsaw
+  // ---------------- Springtrap: Security Doors, the Phantom Scare lunge ----------------
+  updateSpringtrap(dt) {
+    const S = this.S, T = KILLERS.springtrap.teleport;
+    for (const K of S.players) {
+      if (K.role !== 'killer' || K.char !== 'springtrap') continue;
+      if (K.scare > 0) K.scare = Math.max(0, K.scare - dt);
+      if (K.aim) { K.abT = Math.min(600, K.abT + dt); if (K.stun > 0 || K.carry != null || K.act) K.aim = false; }
+      if (K.tele && K.tele.g) {
+        K.tele.t += dt;
+        if (K.tele.t >= T.time) {
+          const spot = this.safeSpot(K.tele.x + 1.1, K.tele.z, K.tele.x, K.tele.z);
+          K.x = spot.x; K.z = spot.z; K.fl = 0; K.tp++; K.tele = null; K.teleCd = T.cooldown; K.haste = Math.max(K.haste || 0, T.haste);
+          // Fazbear's Fright: whoever is close to the door he comes out of is seen
+          const ids = [];
+          for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && dist(s, K) < T.fright) { s.reveal = Math.max(s.reveal || 0, T.frightReveal); ids.push(s.id); }
+          this.ev({ k: 'tele-end', id: K.id, x: K.x, z: K.z, door: 1, ids });
+        }
+      }
+    }
+  }
   // ---------------- Granny: Bat Rush, listening, sharp ears, Spider Mom ----------------
   updateGranny(dt) {
     const S = this.S, M = this.M;
@@ -1628,6 +1675,7 @@ export class Sim {
         sp.vy -= 7 * h;
         sp.x += sp.vx * h; sp.z += sp.vz * h; sp.y += sp.vy * h;
         sp.t += h;
+        if (sp.ax) sp.spin = (sp.spin || 0) + h * 14;
         if (sp.y <= 0.05 || sp.t > 2.2) { dead = true; break; }
         for (const s of S.players) {
           if (s.role !== 'survivor' || s.st !== 'ok') continue;
@@ -1635,8 +1683,8 @@ export class Sim {
           if (sp.y < top && Math.hypot(sp.x - s.x, sp.z - s.z) < 0.55) {
             const K = this.P(sp.by);
             this.damage(s, K, false);
-            s.mark = 12; s.reveal = Math.max(s.reveal, 12);
-            this.ev({ k: 'marked', id: s.id });
+            if (sp.ax) { s.reveal = Math.max(s.reveal, KILLERS.springtrap.ability.reveal); this.ev({ k: 'axehit', id: s.id, x: s.x, z: s.z }); }
+            else { s.mark = 12; s.reveal = Math.max(s.reveal, 12); this.ev({ k: 'marked', id: s.id }); }
             if (K) K.score.b += 200;
             dead = true; break;
           }
@@ -1649,7 +1697,7 @@ export class Sim {
         }
         for (const b of M.bars) if (S.bars[b.id] === 1) { const bb = barBox(b); if (sp.y < 1.05 && Math.abs(sp.x - bb.x) < bb.hx && Math.abs(sp.z - bb.z) < bb.hz) dead = true; }
       }
-      if (dead) { this.ev({ k: 'spearend', x: sp.x, y: Math.max(0.1, sp.y), z: sp.z }); S.spears.splice(i, 1); }
+      if (dead) { this.ev({ k: 'spearend', x: sp.x, y: Math.max(0.1, sp.y), z: sp.z, ax: sp.ax ? 1 : 0 }); S.spears.splice(i, 1); }
     }
   }
 

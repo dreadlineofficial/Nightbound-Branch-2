@@ -19,6 +19,8 @@ import { loadSlappy, slappyReady } from './slappyGlb.js';
 import { loadStatic } from './glbModels.js';
 import { loadScene, sceneReady } from './sceneGlb.js';
 import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom } from './grannyGlb.js';
+import { loadSpringtrap, springtrapReady } from './springtrapGlb.js';
+import { BedwarsGame } from './bedview.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS, BR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
@@ -171,6 +173,7 @@ loadStatic('beartrap'); loadStatic('taser');
 loadScene('granny_map');
 loadGranny().then(m => { if (m) { forgetArt('granny'); if (menu && menu.killerChar === 'granny') menu.setKiller('granny', menu.killerSkin); } });
 loadGrandpa().then(m => { if (m) forgetArt('granny'); });
+loadSpringtrap().then(m => { if (m) { forgetArt('springtrap'); if (menu && menu.killerChar === 'springtrap') menu.setKiller('springtrap', menu.killerSkin); if (!$('store').classList.contains('hidden')) renderStore(); } });
 loadSpiderMom();
 loadStatic('slimer').then(m => { if (!m) return; forgetArt('slimer'); if (menu && menu.killerChar === 'slimer') menu.setKiller('slimer', menu.killerSkin); });
 loadRealism('spiderman').then(m => { if (!m) return; forgetArt('spiderman'); if (menu) menu.setSurvivor(profile.survivor.char, skinId(profile.survivor.char)); if (!$('store').classList.contains('hidden')) { menu && (menu.showFor = null); renderStore(); } });
@@ -193,6 +196,7 @@ async function waitForModels(need) {
   if (!sceneReady('granny_map')) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([loadScene('granny_map'), new Promise(r => setTimeout(r, 25000))]); }
   // Granny and her granddaughter, when she's in the match
   if (need === 'granny' || (need && need.granny)) { if (!grannyReady() || !spiderOk()) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([loadGranny(), loadGrandpa(), loadSpiderMom()]), new Promise(r => setTimeout(r, 25000))]); } }
+  if (need && need.springtrap && !springtrapReady()) { loading(true, 'Something is moving in the back room…'); await Promise.race([loadSpringtrap(), new Promise(r => setTimeout(r, 25000))]); }
   if (need && need.granny) need = need.chucky;
   if (!need || (chuckyReady() && slappyReady())) return;
   loading(true, "Waking Chucky up…");
@@ -216,7 +220,7 @@ function renderShowcase() {
 }
 
 // ---------- side panel ----------
-const SECTIONS = ['p-test', 'p-play', 'p-online', 'p-lobby', 'p-loadout', 'p-settings', 'p-help', 'p-inbox', 'p-pass', 'p-friends'];
+const SECTIONS = ['p-minigames', 'p-test', 'p-play', 'p-online', 'p-lobby', 'p-loadout', 'p-settings', 'p-help', 'p-inbox', 'p-pass', 'p-friends'];
 let openSection = null;
 function openPanel(id, title, wide = false) {
   for (const p of SECTIONS) $(p).classList.toggle('hidden', p !== id);
@@ -266,6 +270,7 @@ const navActions = {
   pass: () => openPanel('p-pass', 'Progress', true),
   test: () => { renderTest(); openPanel('p-test', 'Testing Area', true); },
   fortnight: () => openFortnightHub(),
+  minigames: () => openPanel('p-minigames', 'Minigames', true),
 };
 for (const b of [...$('mainnav').children, ...$('subnav').children]) {
   b.addEventListener('mouseenter', () => { sound.init(); sound.play('hover'); if (b.dataset.scene) setScene(b.dataset.scene); });
@@ -726,7 +731,7 @@ function renderInbox() {
       : `<div class="gift">${icon('gift')}${esc(m.gift.label)}<button class="btn primary" data-claim="${m.id}">Claim</button></div>`) : '';
     return `<div class="msg ${unread ? 'unread' : ''}">${m.banner ? `<div class="msg-banner ${m.banner === true ? 'offal' : m.banner}-art" data-announce="${m.banner === true ? 'offal' : m.banner}"></div>` : m.gb ? `<div class="msg-banner gb-mini" data-announce="gb">Ghostbusters <i>×</i> Nightbound</div>` : ''}<div class="mtag">${esc(m.tag)} · v${esc(m.version)} · ${esc(m.date)}</div><h3>${esc(m.title)}</h3><ul>${m.body.map(b => `<li>${esc(b)}</li>`).join('')}</ul>${gift}</div>`;
   }).join('');
-  $('inbox-list').querySelectorAll('[data-announce]').forEach(b => b.onclick = () => showAnnounce(b.dataset.announce));
+  $('inbox-list').querySelectorAll('[data-announce]').forEach(b => b.onclick = () => { if (b.dataset.announce === 'springtrap') { closePanel(); openStore('chapters'); } else showAnnounce(b.dataset.announce); });
   $('inbox-list').querySelectorAll('[data-claim]').forEach(b => b.onclick = () => {
     const m = INBOX.find(x => x.id === b.dataset.claim);
     if (!m || profile.claimed[m.id]) return;
@@ -1132,7 +1137,7 @@ async function startHostMatch(roster, opts) {
   loading(true, 'Entering the fog…');
   await nextFrame();
   // Chucky can appear in any match (picked, random bot killer, or an Infection turn)
-  await waitForModels({ spider: roster.some(r => r.char === 'spiderman'), granny: roster.some(r => r.char === 'granny') || opts.mode === 'infection', chucky: roster.some(r => r.char === 'chucky') || opts.mode === 'infection' });
+  await waitForModels({ spider: roster.some(r => r.char === 'spiderman'), granny: roster.some(r => r.char === 'granny') || opts.mode === 'infection', springtrap: roster.some(r => r.char === 'springtrap') || opts.mode === 'infection', chucky: roster.some(r => r.char === 'chucky') || opts.mode === 'infection' });
   loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
@@ -1403,7 +1408,7 @@ async function startClientMatch(m) {
   if (m.mode === 'fortnight') closeFortnight();
   loading(true, 'Entering the fog…');
   await nextFrame();
-  await waitForModels({ spider: (m.roster || []).some(r => r.char === 'spiderman'), granny: (m.roster || []).some(r => r.char === 'granny') || m.mode === 'infection', chucky: (m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection' });
+  await waitForModels({ spider: (m.roster || []).some(r => r.char === 'spiderman'), granny: (m.roster || []).some(r => r.char === 'granny') || m.mode === 'infection', springtrap: (m.roster || []).some(r => r.char === 'springtrap') || m.mode === 'infection', chucky: (m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection' });
   loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
@@ -1700,7 +1705,7 @@ function fnShowLook() {
 function fnRender() {
   if (!fnHub || fnHub.classList.contains('hidden')) return;
   const active = fnActive(), done = profile.fn && profile.fn.done && profile.fn.done[FN.id];
-  $('fh-left').textContent = active ? 'ends in ' + fmtLeft(fnLeft()) : Date.now() < FN.start ? 'starts soon' : 'event over';
+  $('fh-left').textContent = active ? 'ends in ' + fmtLeft(fnLeft()) : 'always open';
   const me = fnEvent.me, rank = fnEvent.rank();
   $('fh-me').innerHTML = `<div><b>${me.w}</b><span>Wins</span></div><div><b>${me.k}</b><span>Eliminations</span></div><div><b>${me.m}</b><span>Matches</span></div><div><b>${rank ? '#' + rank : '–'}</b><span>Rank</span></div>`;
   const rows = fnEvent.board().slice(0, 10);
@@ -1757,7 +1762,6 @@ window.__fnPlay = () => { openFortnightHub(); fnPlayNow(); };
 fnEvent.on('board', fnRender); fnEvent.on('ads', () => {});
 // Play: join the fullest open lobby anyone is running, or open one; offline, straight into a bot match
 async function fnPlayNow() {
-  if (!fnActive()) { toast('The Fortnight event is not running right now.'); return; }
   if (session) return;
   fnState = 'search'; fnRender();
   // still connecting to the relay: give it a few seconds before playing offline
@@ -1814,7 +1818,6 @@ function fnStartLobby() {
 // friends: invite into your lobby (opening one if you're not in one yet), or join theirs
 async function fnInvite(fid) {
   sound.play('click');
-  if (!fnActive()) { toast('The Fortnight event is not running right now.'); return; }
   if (!friends.mq) { toast('Not connected to the online relay yet.'); return; }
   if (!(lobby && lobby.fn)) {
     if (lobby) leaveOnline(true);
@@ -1828,7 +1831,6 @@ async function fnInvite(fid) {
   toast('Invite sent'); fnRender();
 }
 async function fnJoinFriend(code, retry = true) {
-  if (!fnActive()) { toast('The Fortnight event is not running right now.'); return; }
   if (session) { toast('Finish or leave your match first.'); return; }
   if (lobby) leaveOnline(true);
   openFortnightHub(); fnState = 'search'; fnRender();
@@ -1882,6 +1884,30 @@ function showAwards(w, r) {
   renderShowcase();
 }
 friends.connect();
+
+// ---------- minigames: Nightcraft Bedwars ----------
+const bwCfg = { role: 'survivor', size: 2, diff: 'normal' };
+seg('bw-role', v => { bwCfg.role = v; }); seg('bw-size', v => { bwCfg.size = +v; }); seg('bw-diff', v => { bwCfg.diff = v; });
+$('mg-fn').onclick = () => { sound.play('click'); closePanel(); openFortnightHub(); };
+$('mg-bw').onclick = () => { sound.init(); sound.play('click'); startBedwars(); };
+let bedwars = null;
+async function startBedwars() {
+  if (session || bedwars) return;
+  const role = bwCfg.role, char = ownsChar(profile[role].char) ? profile[role].char : role === 'killer' ? 'butcher' : 'mara';
+  loading(true, 'Building the islands…');
+  await waitForModels({ springtrap: char === 'springtrap', granny: char === 'granny' });
+  stopBG(); $('menu').classList.add('hidden'); $('panel').classList.add('hidden'); $('menu').classList.remove('panel-open');
+  try {
+    bedwars = new BedwarsGame({ renderer, settings, me: { name: settings.name, char, role, skin: skinId(char) }, difficulty: bwCfg.diff, teamSize: bwCfg.size, onExit: (res, again) => {
+      bedwars = null;
+      if (res) { profile.stats.embers += res.embers; (profile.bw ||= { w: 0, m: 0, beds: 0 }); profile.bw.m++; if (res.won) profile.bw.w++; profile.bw.beds += res.beds; saveProfile(); toast(`Bedwars: +${res.embers} Embers`); }
+      $('menu').classList.remove('hidden'); startBG();
+      if (again) startBedwars(); else openPanel('p-minigames', 'Minigames', true);
+    } });
+    bedwars.start();
+  } catch (e) { console.error(e); toast('Bedwars failed to start: ' + e.message); bedwars = null; $('menu').classList.remove('hidden'); startBG(); }
+  loading(false);
+}
 
 // ---------- main loop ----------
 let last = performance.now();
@@ -1965,15 +1991,14 @@ function showAnnounce(kind = 'offal') {
   saveProfile(); sound.init(); sound.play('caged');
 }
 function hideAnnounce() { $('announce').classList.add('hidden'); }
-$('news-card').onclick = () => { sound.init(); if (fnActive()) { openFortnightHub(); return; } showTrailer(() => showAnnounce('granny'), true); };
+$('news-card').onclick = () => { sound.init(); sound.play('click'); if (fnActive()) { openFortnightHub(); return; } openStore('chapters'); };
 // the Fortnight event everywhere on the menu while it runs
 function fnPromo() {
   const on = fnActive(), shown = Date.now() < FN.end + 3 * 864e5;
-  $('fn-nav').classList.toggle('hidden', !shown);
-  $('fn-nav').querySelector('small').textContent = on ? 'Event' : 'Results';
+  void shown; // (the Minigames button is always there: Fortnight is permanent now)
   const nc = $('news-card');
   if (on) { nc.classList.add('fn'); nc.innerHTML = `<div class="fn-art"></div><div class="nc-txt"><span>Limited event · ends in ${fmtLeft(fnLeft())}</span><b>Fortnight</b><em>Battle royale in the city. Most wins takes <strong>${FN.prize.toLocaleString()} Embers</strong>.</em><i class="nc-go">Play now ›</i></div>`; }
-  else if (nc.classList.contains('fn')) { nc.classList.remove('fn'); nc.innerHTML = '<div class="granny-art"></div><div class="nc-txt"><span>New chapter · Watch the trailer</span><b>Granny <i>×</i> Nightbound</b></div>'; }
+  else if (nc.classList.contains('fn')) { nc.classList.remove('fn'); nc.innerHTML = '<div class="springtrap-art"></div><div class="nc-txt"><span>New chapter · Chapter IX</span><b>Springtrap <i>×</i> Nightbound</b></div>'; }
   let bar = document.querySelector('.fn-bar');
   if (false && on && !bar) { bar = document.createElement('div'); bar.className = 'fn-bar'; bar.onclick = () => { sound.init(); sound.play('click'); openFortnightHub(); }; $('menu').appendChild(bar); }
   if (bar) { bar.classList.toggle('hidden', !on); bar.innerHTML = `FORTNIGHT EVENT LIVE · <b>${FN.prize.toLocaleString()} EMBERS</b> FOR THE MOST WINS · ENDS IN ${fmtLeft(fnLeft()).toUpperCase()} · PLAY NOW ›`; }

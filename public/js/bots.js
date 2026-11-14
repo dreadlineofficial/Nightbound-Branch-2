@@ -656,6 +656,17 @@ export class Bots {
           if (g) sim.onMsg(p.id, { t: 'act', a: 'creep', kind: 'gen', id: g.id });
         }
       }
+      if (p.char === 'springtrap' && !p.tele) {
+        // Axe Throw at mid range; Phantom Scare when they are close and can see him; Security Doors to a busy generator
+        const A = KILLERS.springtrap.ability;
+        if (target && los && !b.aim && p.abCd <= 0 && p.ammo > 0 && d > 5 && d < 18 && !p.atk && this.clearLine(p.x, p.z, tx, tz, p.fl)) { b.aim = true; b.aimT = A.aim + 0.15 + D.react * 0.4; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
+        if (target && los && !target.heard && p.ab2Cd <= 0 && !b.aim && d < 12 && Math.random() < dt * 0.7) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
+        if (!target && p.teleCd <= 0 && p.carry == null && Math.random() < dt * 0.08) {
+          const busy = sim.M.gens.filter((g, i) => sim.S.gens[i].n > 0 && !sim.S.gens[i].done && Math.hypot(g.x - p.x, g.z - p.z) > 22);
+          const g = busy[Math.floor(Math.random() * busy.length)];
+          if (g) sim.onMsg(p.id, { t: 'act', a: 'creep', kind: 'gen', id: g.id });
+        }
+      }
       if (p.char === 'bateman' && target && los && p.abCd <= 0 && p.ammo > 0 && d > 5 && d < 17 && !p.atk && this.clearLine(p.x, p.z, tx, tz)) {
         if (!b.aim) { b.aim = true; b.aimT = 0.45 + D.react * 0.4; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }
@@ -663,7 +674,7 @@ export class Bots {
       if (b.aim) {
         b.aimT -= dt;
         // lead the target
-        const lead = p.skin === 'grandpa' ? 0 : d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'granny' ? 13 : 32);
+        const lead = p.skin === 'grandpa' ? 0 : d / (p.char === 'springtrap' ? KILLERS.springtrap.ability.speed : p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'granny' ? 13 : 32);
         const vx = target ? (target.x - (b.prevTX ?? target.x)) / Math.max(dt, 1e-3) : 0, vz = target ? (target.z - (b.prevTZ ?? target.z)) / Math.max(dt, 1e-3) : 0;
         const ax = tx + vx * lead * D.aim, az = tz + vz * lead * D.aim;
         p.yaw = Math.atan2(ax - p.x, az - p.z) + (Math.random() - 0.5) * (1 - D.aim) * 0.25;
@@ -673,6 +684,9 @@ export class Bots {
             sim.onMsg(p.id, { t: 'act', a: 'pounce', yaw: p.yaw });
           } else if (p.char === 'granny') {
             sim.onMsg(p.id, { t: 'act', a: 'rush', yaw: p.yaw });
+          } else if (target && p.char === 'springtrap') {
+            const v = KILLERS.springtrap.ability.speed, ft = Math.hypot(ax - p.x, az - p.z) / v, vy = (1.1 - 1.8 + 3.5 * ft * ft) / Math.max(0.05, ft);
+            sim.onMsg(p.id, { t: 'act', a: 'axethrow', yaw: p.yaw, pitch: Math.asin(Math.max(-0.5, Math.min(0.5, vy / v))) - 0.06 });
           } else if (target && p.char === 'bateman') {
             // flat, fast throw: aim low enough that the arc still crosses chest height at the target
             const ft = Math.hypot(ax - p.x, az - p.z) / 26, vy = (1.1 - 1.3 + 4.5 * ft * ft) / Math.max(0.05, ft) - 2.2;
