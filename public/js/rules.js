@@ -18,10 +18,10 @@ export const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 2 * M
 export function killerOf(S) { return S.players.find(p => p.role === 'killer'); }
 // modes can have several killers (Two Killers, Infection)
 export function killersOf(S) { return S.players.filter(p => p.role === 'killer'); }
-// (a survivor body possessed by Chucky is not something anyone can tell apart)
+// (a survivor body possessed by Chucky can't be told apart, until he hits you: then you know)
 export function nearestKiller(S, p) {
   let best = null, bd = Infinity;
-  for (const k of S.players) if (k.role === 'killer' && !k.disguise) { const d = p ? Math.hypot(k.x - p.x, k.z - p.z) : 0; if (d < bd) { bd = d; best = k; } }
+  for (const k of S.players) if (k.role === 'killer' && (!k.disguise || (p && p.knows && p.knows[k.id]))) { const d = p ? Math.hypot(k.x - p.x, k.z - p.z) : 0; if (d < bd) { bd = d; best = k; } }
   return best;
 }
 export const anyKillerHas = (S, perk) => S.players.some(k => k.role === 'killer' && has(k, perk));
@@ -42,21 +42,30 @@ export function terrorRadius(p) {
 // Max movement speed given the synced state + local intent (sprint/crouch).
 export function speedOf(p, S, sprint, crouch) {
   if (p.act || p.stun > 0 || p.vault || p.tele || p.reel || p.pull || p.leap) return 0;
+  if (p.br) {
+    // Fortnight: everyone moves the same, whatever body they wear
+    if (p.st !== 'ok') return 0;
+    let s = crouch ? 2.2 : sprint && !p.ads ? 6.2 : 4.4;
+    if (p.ads) s *= 0.62;
+    if (p.heal) s *= 0.5;
+    return s;
+  }
   if (p.role === 'survivor') {
     if (p.st === 'down') {
       // can't crawl away while being picked up or helped up
       if (S && S.players.some(o => o.act && (o.act.k === 'pickup' || o.act.k === 'heal') && o.act.id === p.id)) return 0;
       return SPEED.crawl * (has(p, 'resolve') ? 1.3 : 1);
     }
-    if (p.st !== 'ok' && p.st !== 'ghost') return 0;
+    if (p.st !== 'ok') return 0; // (a ghost stays where it is)
     if (p.snare > 0) return 0; // caught in Granny's bear trap
+    if (p.swing || p.perchT > 0) return 0; // swinging on a web, or perched up high
     let s = crouch ? SPEED.crouch * (has(p, 'hushed') ? 1.25 : 1) : sprint ? SPEED.run : SPEED.walk;
     if (!crouch && sprint && p.hp === 1 && has(p, 'fleet')) s *= 1.07;
     if (p.boost > 0) s *= p.boostMul || SPEED.hitBoost;
     if (p.slimed > 0) s *= 0.7;
     if (p.card > 0) s *= 0.8; // intimidated by a business card
     if (p.webbed > 0) s *= 0.65; // caught in Spider Mom's web
-    return s;
+    return S && modeOf(S) === 'adrenaline' ? s * 1.3 : s;
   }
   const K = KILLERS[p.char];
   // Chucky in a survivor's body: a survivor's legs, but he never tires of running
@@ -69,12 +78,13 @@ export function speedOf(p, S, sprint, crouch) {
   if (p.char === 'butcher' && p.ab === 1) s = 8.6;
   if (p.char === 'wisp') { if (p.ab === 1) s *= 1.15; else if (p.ab === 2 || p.ab === 3) s *= 0.4; }
   // (Chucky keeps full speed while coiling a pounce)
+  if (p.webK > 0) s *= 0.45; // Spider-Man's web: stuck, wading through it
   if (p.char === 'granny' && p.ab === 1) return 0; // listening
   if (p.char === 'granny' && p.dash) return 0; // (the rush moves her itself)
   if (p.char === 'granny' && p.aim) s *= 0.55;  // winding up the bat
   if ((p.char === 'harrower' || p.char === 'foreman' || p.char === 'bateman') && p.aim) s *= p.char === 'foreman' ? 0.75 : p.char === 'bateman' ? 0.6 : SPEED.aimSlow;
   if (p.diffMul) s *= p.diffMul;
-  return s;
+  return S && modeOf(S) === 'adrenaline' ? s * 1.3 : s;
 }
 
 // What can this player interact with (hold E)?
@@ -88,8 +98,9 @@ export function itemLabel(k, n) {
   return name;
 }
 export function findInteraction(M, S, p) {
+  if (p.role === 'survivor' && p.st === 'ghost') return null; // a possessed survivor's ghost is frozen until Chucky lets go
   if (p.role === 'survivor' && p.st === 'ghost') {
-    // a ghost can only repair generators
+    // (unused)
     if (p.vault) return null;
     let best = null, bd = 1.75;
     for (const g of M.gens) { const d = dist(p, g); if (!S.gens[g.id].done && !S.gatesPowered && d < bd) { bd = d; best = { k: 'repair', id: g.id, label: 'Repair generator (as a ghost)' }; } }
@@ -175,7 +186,7 @@ export function actionTime(k, p, S) {
     case 'kick': return RULES.kickTime * (has(p, 'brute') ? 0.65 : 1);
     case 'break': return RULES.breakTime * (has(p, 'brute') ? 0.65 : 1);
     case 'rescue': return RULES.rescueTime * (has(p, 'lockpick') ? 0.5 : 1) * (S && anyKillerHas(S, 'rust') ? 2 : 1);
-    case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1) * (has(p, 'pathfinder') ? 0.6 : 1) * (modeOf(S) === 'rush' ? 0.5 : 1);
+    case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1) * (has(p, 'pathfinder') ? 0.6 : 1) * (modeOf(S) === 'rush' ? 0.5 : modeOf(S) === 'adrenaline' ? 0.75 : 1);
     default: return 0;
   }
 }

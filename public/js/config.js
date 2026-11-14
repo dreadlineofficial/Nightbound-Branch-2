@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 11;
+export const NET_PROTOCOL = 13;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -35,7 +35,7 @@ export const RULES = {
   selfUnhookCost: 8,       // hook seconds lost per failed attempt
   struggleMiss: 9,         // hook seconds lost per missed struggle skill check
   wiggleNeed: 1,           // wiggle progress needed to escape the killer's grip
-  wiggleRate: 0.012,       // progress per alternating keypress (~15s of struggling)
+  wiggleRate: 0.006,       // progress per alternating keypress (~30s of struggling)
   collapse: 140,           // seconds after the gates are powered before the night claims everyone left
   hitCooldown: 2.7,
   missCooldown: 1.5,
@@ -56,11 +56,26 @@ export const MODES = {
   duo: { name: 'Two Killers', short: '2 vs 8', killers: 2, survivors: 8, desc: 'Two killers hunt eight survivors. Six generators power the gates.' },
   dark: { name: 'Lights Out', short: 'Horror', desc: 'The lights never come on. Thick fog, no auras for survivors, half-charged flashlights.' },
   rush: { name: 'Survivor Rush', short: '5 min', time: 300, desc: 'Five-minute matches. Generators and gates go twice as fast, and the killer gets a burst of speed after every hit. When the clock runs out, the gates power up and the night collapses fast.' },
+  glass: { name: 'Glass Bones', short: 'One hit', desc: 'Every hit puts a survivor straight down. To make up for it, generators repair 40% faster. One mistake and you are on the floor.' },
+  adrenaline: { name: 'Adrenaline', short: 'Fast', desc: 'Everyone moves 30% faster, generators and exit gates go 25% faster, and killer powers recharge 40% faster. Chases are frantic.' },
+  bloodmoon: { name: 'Blood Moon', short: 'Tasers', desc: 'A red moon over the map. Every 45 seconds the killer sees every survivor for 4 seconds, but every survivor starts with a 2-shot Taser instead of their item.' },
+  // Fortnight: the 5-day battle royale event (not picked from the mode lists; played from the event screen)
+  fortnight: { name: 'Fortnight', short: 'Event', br: true, event: true, desc: 'Battle royale on Nightfall Isle. Pick any killer or survivor (no powers), loot guns from chests and the ground, stay inside the fog ring, and be the last one standing.' },
   infection: { name: 'Infection', short: '2 vs 10', killers: 2, survivors: 10, bigMap: true, desc: 'No hooks. Two killers, ten survivors, on big maps built for it. Downed survivors rise as killers a few seconds later, and every 60s the infected sense every survivor. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
 };
 // killers an infected survivor can turn into
 export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman', 'chucky'];
 
+export const POSSESS_MAX = 66; // Chucky can stay in a survivor's body for 1.1 minutes
+// Power levels: a killer's dash / pounce / hook reach starts low and is bought up with Embers.
+// base and max in metres, step metres per level, cost Embers per level
+export const POWER_LV = {
+  granny: { power: 'Bat Rush', base: 25, max: 50, step: 1, cost: 10000 },
+  butcher: { power: 'Rampage', base: 20, max: 40, step: 2, cost: 2500 },
+  chucky: { power: 'Pounce', base: 7, max: 14, step: 1, cost: 3000 },
+  foreman: { power: 'Chain Hook', base: 14, max: 24, step: 1, cost: 2500 },
+};
+export const powerReach = (char, lv) => { const L = POWER_LV[char]; if (!L) return 0; const v = typeof lv === 'number' && isFinite(lv) ? lv : L.base; return Math.max(L.base, Math.min(L.max, Math.round(v / L.step) * L.step)); };
 export const KILLERS = {
   butcher: {
     id: 'butcher', name: 'The Butcher', speed: 4.6, terror: 32, weapon: 'Cleaver',
@@ -125,7 +140,8 @@ export const KILLERS = {
     id: 'granny', name: 'Granny', speed: 4.7, terror: 32, weapon: 'Baseball Bat', crossover: 'Granny (fan-made)',
     lore: 'She has kept you in her house for five days. She hears every creak of the floorboards, and she does not like guests leaving early.',
     exec: { name: 'Bedtime Trap', desc: 'Forces the survivor to their knees, sets a bear trap in front of them, and shoves their face into it.' },
-    ability: { name: 'Bat Rush', cooldown: 8, minCharge: 0.25, maxCharge: 1.0, minDist: 3, maxDist: 8, speed: 13, turn: 2.4, palletBonus: 2, slamRadius: 2.6, slamGen: 0.1, wallStun: 0.9, desc: 'Hold to wind up the bat (slowed), release to charge 3 to 8m, further the longer you wound up. Steer the charge with the mouse. She crashes straight through windows and smashes dropped pallets (each one carries her 2m further), and strikes the first survivor in her way; a Heard survivor goes straight down. Fully wound up, the charge ends in a Ground Slam: everyone around her is struck and a nearby generator is damaged. Charging into a wall stuns her.' },
+    shotgun: { name: 'Shotgun', cooldown: 2.2, raise: 0.3, range: 45, minDmg: 6, maxDmg: 36, near: 2.5, far: 22.5 },
+    ability: { name: 'Bat Rush', cooldown: 8, minCharge: 0.25, maxCharge: 1.0, minDist: 3, maxDist: 8, speed: 13, turn: 1.9, palletBonus: 2, slamRadius: 2.6, slamGen: 0.1, wallStun: 0.9, desc: 'Hold to wind up the bat (slowed), release to charge: the longer you hold, the further she goes (3m, 8m at one second, and on), up to her power level (25m to start, 50m fully levelled). Steer the charge with the mouse. She crashes straight through windows and smashes dropped pallets (each one carries her 2m further), and strikes the first survivor in her way; a Heard survivor goes straight down. Fully wound up, the charge ends in a Ground Slam: everyone around her is struck and a nearby generator is damaged. Charging into a wall stuns her.' },
     ability2: { name: 'I Hear You', key: 'R', cooldown: 25, reveal: 6, heard: 15, desc: 'Stop and listen. Every survivor who is running, repairing, healing or unhooking anywhere on the map is revealed for 6s and Heard for 15s: her next hit on a Heard survivor puts them straight down.' },
     teleport: { name: 'Creep', key: 'G', cooldown: 25, time: 1.2, haste: 3, desc: 'Hold G: every window, pallet, generator and hook on the map is marked. Release to vanish and reappear at the one in your sights, with a short burst of speed.' },
     swap: { name: 'Body Swap', key: 'V', cooldown: 6, desc: 'Switch bodies with Spider Mom, any time: Granny appears where Spider Mom was, and Spider Mom where Granny stood. Hold V to look through Spider Mom\'s eyes first, release to swap.' },
@@ -151,6 +167,14 @@ export const SURVIVORS = {
   // Ghostbusters fan-made crossover
   raghuvir: { id: 'raghuvir', name: 'Raghuvir', skin: 0xb08058, hair: 0x0e0a08, shirt: 0xb8a878, pants: 0xb0a070, hairStyle: 'short', big: true, gb: true },
   abeer: { id: 'abeer', name: 'Abeer', skin: 0xa87650, hair: 0x120c08, shirt: 0xb8a878, pants: 0xb0a070, hairStyle: 'short', gb: true },
+  // Minecraft fan-made crossover (model: "Minecraft - Steve" by Vincent Yanez, sketchfab.com/vinceyanez, CC BY 4.0)
+  steve: { id: 'steve', name: 'Steve', skin: 0xb5835a, hair: 0x3b2a1a, shirt: 0x00a8a8, pants: 0x3a3a9a, hairStyle: 'short', fan: true },
+  // Marvel fan-made crossover (model: "Spiderman_topy" by sabra, sketchfab.com/sabrayf, CC BY 4.0)
+  spiderman: { id: 'spiderman', name: 'Spider-Man', skin: 0x8a1418, hair: 0x8a1418, shirt: 0x9a1a1e, pants: 0x1a2040, hairStyle: 'short', fan: true,
+    // limited: 500,000 Embers, in the Store until the end of 7 Nov 2026 (UTC), then gone for good
+    limited: { price: 500000, until: Date.UTC(2026, 10, 8, 0, 0) }, hookEscapes: 5, hookChance: 0.3,
+    swing: { name: 'Web Swing', range: 18, cooldown: 15, perch: 5, desc: 'Aim at a wall, tree or object within 18m and press F to swing to it (15s cooldown). Look up as you fire to land on top of it and stay up there for 5s, out of the killer\'s reach.' },
+    web: { name: 'Web Shooters', shots: 4, range: 20, slow: 0.45, time: 4, carryTime: 2.5, cd: 0.6, desc: 'Press R to fire a web where you aim (4 shots, 20m). A webbed killer is slowed by 55% for 4s; a killer carrying someone is forced to drop them.' } },
 };
 
 export const SURV_PERKS = {
@@ -185,13 +209,15 @@ export const KILLER_PERKS = {
   fury:       { name: 'Endgame Fury',  icon: '♨', desc: 'Once the exit gates are powered, gain +8% movement speed.' },
   irongrip:   { name: 'Iron Grip',     icon: '✠', desc: 'Survivors you carry struggle free 30% slower.' },
   stalker:    { name: 'Stalker',       icon: '◐', desc: 'Terror radius -14m. Your lunge reaches 20% farther.' },
+  stunless:   { name: 'Stunless',      icon: '➤', desc: 'Your dash and pounce powers (Bat Rush, Rampage, Pounce) are never stopped or stunned by walls or objects: you slide off them and keep going. Traps still stop you.' },
+  extreme:    { name: 'Extreme Mode',  icon: '∞', only: 'granny', desc: 'Granny only. Once the exit gates are powered, Bat Rush has no limit: hold as long as you like and she keeps going.' },
 };
 
 // perk prices in Embers (perks not listed are free); exclusive perks cost 2,500
 export const PERK_PRICES = {
   medic: 1500, hushed: 1500, sixth: 2000, lockpick: 1500, acrobat: 1500, resolve: 2000, fleet: 2000,
   triage: 2500, overclock: 2500, exposure: 2500, pathfinder: 2500, containment: 2500, exorcist: 2500,
-  static: 1500, dread: 1500, brute: 1500, rust: 2000, sentry: 2000, fury: 1500, irongrip: 2000, stalker: 2500,
+  static: 1500, dread: 1500, brute: 1500, rust: 2000, sentry: 2000, fury: 1500, irongrip: 2000, stalker: 2500, stunless: 6000, extreme: 500000,
 };
 export const PERK_SLOTS = 4;
 // ---------------- Sidekicks (cosmetic companions, for survivors and killers) ----------------
@@ -236,6 +262,16 @@ export const LORE = {
     'Started the entire Ghostbusters business. It fell into shambles, since after the Ghostbusters\' success of saving the world, nobody needed them anymore. When ghosts started re-appearing, it was too late. Raghuvir had gotten possessed.',
     'Thankfully, Abeer was able to force the demon to un-possess him. Unfortunately, once both were united, a portal opened up, and the entity grabbed both, pulling them into the realm of Nightbound.',
     'Somewhere, in some alternate universe, things went differently. They were saved. But the entity? It can warp reality to get what it wants.',
+  ] },
+  steve: { title: 'The Long Night', story: [
+    'A fan-made crossover. Steve has survived more nights than anyone can count: he builds a shelter before sunset, lights a torch, and waits for the morning.',
+    'One night he dug a little too deep. The tunnel opened into fog, the fog opened into a clearing, and the sun never came up.',
+    'He does not have his pickaxe, his torches or his bed. He has his blocky hands, a flashlight that someone left behind, and a lot of practice running from things in the dark.',
+  ] },
+  spiderman: { title: 'The Wall-Crawler', story: [
+    'One night the city went quiet. No sirens, no traffic, no lights in the windows. Peter swung toward the only light left: a campfire burning on a rooftop that should not have been there.',
+    'When he landed, the rooftop was a clearing in the woods and the skyline was gone. His spider-sense has not stopped buzzing since.',
+    'Here nobody needs saving from a mugger. They need someone fast enough to pull them off a killer\'s shoulder. He only has a few cartridges of web fluid left, so he makes every shot count.',
   ] },
   abeer: { title: 'The Partner', story: [
     'Was with the Ghostbusters ever since it had started. After the business fell into shambles, and Raghuvir got possessed, he ended up un-possessing Raghuvir.',
@@ -320,6 +356,14 @@ export const SKINS = {
     { id: 'realism', name: 'Realism', price: 6000, glb: 'ray', desc: 'A fully realistic Ghostbuster: worn khaki flight suit, straps, name patch and a heavy proton pack. (Model: "Ghostbusters - Dr. Ray Stantz" by spinningblade, CC BY 4.0.)' },
     { id: 'slimed', name: 'Slimed', price: 3500, desc: 'He got slimed. It glows.', fx: [['face', { kind: 'r', skin: 0xb08058 }], 'fringehair', 'specs', ['protonpack', {}], ['wand', {}], ['tint', { color: 0x8aff6a, k: 0.35, e: 0x2a8a1a, ei: 0.5 }]] },
   ],
+  steve: [
+    { id: 'default', name: 'Steve', price: 0, desc: 'The original. Cyan shirt, blue jeans, and a face that has seen a thousand nights. (Model: "Minecraft - Steve" by Vincent Yanez, CC BY 4.0.)' },
+    { id: 'night', name: 'Night Shift', price: 2500, tint: 0x8a8ab0, desc: 'Steve after one night too many in the fog: everything a shade colder.' },
+    { id: 'gilded', name: 'Gilded', price: 6000, tint: 0xffd27a, desc: 'Struck it rich in the mines. Shines a little too much for somewhere this dark.' },
+  ],
+  spiderman: [
+    { id: 'default', name: 'Classic Suit', price: 0, glb: 'spiderman', desc: 'Red and blue, raised webbing, silver lenses. Your friendly neighbourhood Spider-Man. (Model: "Spiderman_topy" by sabra, CC BY 4.0.)' },
+  ],
   abeer: [
     { id: 'default', name: 'Ghostbuster', price: 0, desc: 'Khaki flight suit, proton pack, name tag. Ready to bust.', fx: [['face', { kind: 'a', skin: 0xa87650 }], 'mophair', ['protonpack', {}], ['nametag', {}], ['wand', {}]] },
     { id: 'street', name: 'Navy Jacket', price: 1500, shirt: 0x161c30, pants: 0x1a1c22, desc: 'Off duty: navy hooded jacket with a red stripe.', fx: [['face', { kind: 'a', skin: 0xa87650 }], 'mophair', ['stripe', { color: 0xc01e1e }]] },
@@ -358,11 +402,12 @@ export const SKINS = {
     { id: 'default', name: 'Good Guy', price: 0, desc: 'Denim overalls, striped shirt, red hair and a kitchen knife. Hi, I\'m Chucky. Wanna play?' },
     { id: 'charred', name: 'Burnt Out', price: 2500, tint: 0x141210, tintK: 0.88, glow: 0x6a1400, glowK: 0.12, desc: 'Pulled from the toy factory fire. Charred black and still smouldering.' },
     { id: 'voodoo', name: 'Voodoo', price: 4500, tint: 0x7aff8a, tintK: 0.3, glow: 0x0a6a1a, glowK: 0.7, desc: 'Ade due Damballa. A sickly green glow from the inside.' },
+    { id: 'slappy', name: 'Slappy', price: 6000, slappy: true, desc: 'The ventriloquist\'s dummy who talks back. His own body, his own stiff, puppet-like moves, and an iron-banded wooden mallet instead of the knife. (Model: "slappy_animations" by Howard the Lipscomb, CC BY 4.0.)' },
   ],
   granny: [
     { id: 'default', name: 'House Dress', price: 0, desc: 'Her grey nightgown, her bloody bat, and the stare. You know the one.' },
     { id: 'bloodbath', name: 'Spring Cleaning', price: 3000, tint: 0x8a1010, tintK: 0.35, desc: 'She has been busy. Most of the red is not hers.' },
-    { id: 'grandpa', name: 'Grandpa', price: 5000, grandpa: true, desc: 'Her husband takes the shift: deaf as a post, but he brought his shotgun, and he hits harder than he looks.' },
+    { id: 'grandpa', name: 'Grandpa', price: 25000, god: true, grandpa: true, desc: 'GOD TIER: changes how you play. Her husband takes the shift with his shotgun: hold RMB to raise it, release to fire (replaces Bat Rush). Survivors get a second health bar against him: three long-range shots put anyone down, but up close the spread barely scratches them. The farther the shot, the harder it hits.' },
     { id: 'ghost', name: 'Pale Visitor', price: 4500, tint: 0xd8e4f0, tintK: 0.5, glow: 0x6a8aa8, glowK: 0.35, desc: 'Drained of colour, glowing faintly, like something that stayed in the house long after it should have left.' },
   ],
   bateman: [
@@ -400,11 +445,267 @@ export const CHAPTER_OF = Object.fromEntries(CHAPTERS.filter(c => !c.base).map(c
 export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) || {};
 
 // ---------------- Inbox: version notes & gifts ----------------
-export const VERSION = '2.27.1';
+// email updates: the Buttondown newsletter's username (empty: the option stays hidden)
+export const NEWSLETTER = 'nightbound';
+// ---------------- Power Ups (Store): permanent unlocks, switched on and off in the Store ----------------
+export const POWERUPS = {
+  phantomtraps: { name: 'Phantom Traps', price: 20000, role: 'survivor', desc: 'Your Ghost Traps are invisible to the killer. Your team still sees them; the killer only finds out when they step in one.' },
+};
+export const VERSION = '2.56.2';
+// Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
+// automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
   {
-    id: 'v2.27.1', version: '2.27.1', date: 'Nov 2026', title: 'Nightbound has moved', tag: 'Notice',
-    body: ['Updates now continue at https://froodyofficial-maker.github.io/Nightbound/ . This page will no longer be updated.'],
+    id: 'v2.56.2', version: '2.56.2', date: 'Nov 2026', title: 'Fortnight: party codes, invites that arrive', tag: 'Update',
+    body: [
+      'Party codes: in a Fortnight lobby your 5-letter party code is shown on the event screen (with a Copy button). Friends type it into "Join with code" to join you, no friend request needed.',
+      'Invites no longer get lost: they wait on the relay for 2 minutes, so a friend still gets yours if their game was loading or briefly offline.',
+      'The game reconnects to the online relay much faster after a slow start or a dropped connection.',
+      'Joining a friend retries once by itself, and the drop waits a few seconds for anyone who joins at the last moment.',
+    ],
+  },
+  {
+    id: 'v2.56.1', version: '2.56.1', date: 'Nov 2026', title: 'Fortnight: play with friends', tag: 'Update',
+    body: [
+      'The Fortnight event screen has a Friends box: press Invite next to any online friend and you both drop in together (it opens a lobby for you if you are not in one yet).',
+      'Your friends get an invite card wherever they are in the menus; one press puts them in your lobby.',
+      'Friends already in a Fortnight lobby show a Join button, on the event screen and in the Friends panel.',
+      'Inviting someone holds the drop for at least 30 seconds so they have time to get in.',
+    ],
+  },
+  {
+    id: 'v2.56.0', version: '2.56.0', date: 'Nov 2026', title: 'Fortnight moves to Nightfall City (+ first person, new menu)', tag: 'Event', email: true, banner: 'fn', image: 'public/img/fortnight-email.jpg',
+    body: [
+      'The Fortnight event has a brand new map: Nightfall City, an island almost twice the size of the old one, with a town square, downtown blocks of shops and apartments, suburbs of houses with yards, the Rust Docks warehouses, parks, a filling station, wooded hills and beaches.',
+      'Over 100 buildings you can walk into, each with loot of its own in every room, plus chests, sacks and rucksacks everywhere.',
+      'Night, but you can see: street lamps, lit windows and neon signs light the streets.',
+      'First person mode: press V in a match (or pick it on the event screen). Your gun sways, kicks and lines up when you aim.',
+      'Better animations: guns lowered while sprinting, reloading and healing poses, recoil, and players fall when eliminated.',
+      'Smoother: the whole city is drawn in a few dozen batches and loot is lighter to draw.',
+      'A cleaner main menu: three big choices, everything else in one row, and the event on its own card.',
+    ],
+  },
+  {
+    id: 'v2.55.0', version: '2.55.0', date: 'Nov 2026', title: 'Fortnight: a 5-day battle royale event', tag: 'Event', email: true, banner: 'fn', image: 'public/img/fortnight-email.jpg',
+    body: [
+      'For five days only, Nightbound becomes a battle royale. Drop onto Nightfall Isle in broad daylight: a brand new map five times the size of a regular one, with mountains to climb, rolling hills, farms, chapels and 30 little cabins to explore, for up to 16 players.',
+      'Wear any killer or survivor you own. Nobody has powers: everyone plays by the same rules.',
+      'Loot Revolvers, Trench SMGs, Pump Shotguns, Ranger Rifles and Hunting Rifles from chests, the ground, and the sacks and rucksacks hidden all over the island, in five grades from Worn to Bloodied. Patch up with Bandages and Med Kits, and stack Ward on top of your health.',
+      'The fog closes in round by round. Stay inside the ring and be the last one standing.',
+      'Grand prize: the player with the most wins when the event ends gets 500,000 Embers. The leaderboard is live for everyone on the event screen.',
+      'Press Play to matchmake with everyone online. Any number of real players can join a lobby; bots fill the rest of the island.',
+    ],
+  },
+  {
+    id: 'v2.54.0', version: '2.54.0', date: 'Nov 2026', title: 'Online Rebuilt', tag: 'Update', email: true,
+    body: [
+      'Online matches have a brand new connection: joining a room now takes a fraction of a second instead of up to 15.',
+      'Players link straight to the host whenever their networks allow it. If a direct link isn\'t possible, or drops mid-match, the game carries on through the relay and reconnects directly by itself.',
+      'If the relay hiccups, everyone reconnects automatically instead of being kicked from the match.',
+      'Fixed: the Weekly Awards reveal could pop up while you were in a lobby and quietly take you out of the room.',
+      'Everyone in a room needs this version: refresh the page if a friend can\'t join.',
+    ],
+  },
+  {
+    id: 'v2.53.0', version: '2.53.0', date: 'Nov 2026', title: 'New Survivor: Steve', tag: 'Update',
+    body: [
+      'Fan-made crossover: Steve joins the survivors, free for everyone. Blocky, stubborn, and very used to long nights.',
+      'Two new outfits for him in the Store: Night Shift and Gilded.',
+      'Model: "Minecraft - Steve" by Vincent Yanez (CC BY 4.0).',
+    ],
+  },
+  {
+    id: 'v2.52.0', version: '2.52.0', date: 'Nov 2026', title: 'Power Ups', tag: 'Update',
+    body: [
+      'New in the Store: Power Ups, permanent upgrades you unlock once and switch on or off any time.',
+      'Phantom Traps (20,000 Embers): your Ghost Traps are invisible to the killer. Your team still sees them, and the killer never hears you set one down.',
+    ],
+  },
+  {
+    id: 'v2.51.0', version: '2.51.0', date: 'Nov 2026', title: 'Edit Your Sidekick', tag: 'Update',
+    body: [
+      'New: Edit Ted (Store > Sidekicks). Set each of his lines to Play, Bleep or Off.',
+      'Bleep swaps the line for a censor bleep and stars out the swearing in the subtitles. One tap for Family friendly.',
+      'Your choices apply to every Ted you hear, including other players\' Teds online.',
+      'Fixed: the floating boxes some players saw on maps. A generator\'s aura is now the outline of the generator itself.',
+    ],
+  },
+  {
+    id: 'v2.50.0', version: '2.50.0', date: 'Nov 2026', title: 'Spider-Man Balance', tag: 'Update',
+    body: [
+      'Spider-Man\'s Web Swing now reaches 18m (was 20m) and has a 15-second cooldown (was 4s).',
+    ],
+  },
+  {
+    id: 'v2.49.0', version: '2.49.0', date: 'Nov 2026', title: 'Granny Fixes & Map Vote Fix', tag: 'Update',
+    body: [
+      'Granny swings her bat with her original, full attack animation again: the big overhead wind-up, the strike and the follow-through.',
+      'Granny can now be picked as the bot killer when you play as a survivor.',
+      'Fixed: choosing "Vote (you + the bots)" for the map in bot matches now always opens the map vote (it is also the default).',
+    ],
+  },
+  {
+    id: 'v2.48.0', version: '2.48.0', date: 'Nov 2026', title: 'New: the Testing Area', tag: 'Update', email: true,
+    body: [
+      'A Testing Area on the main menu: try any survivor or killer, any outfit, any perk and any power level for free, even ones you do not own.',
+      'Pick the bots you face, the map and the mode. Passive bots let you practise without being hurt: killer bots still chase you, but they cannot land a hit.',
+      'Test matches give no XP, Embers, rank or weekly-award stats.',
+    ],
+  },
+  {
+    id: 'v2.47.0', version: '2.47.0', date: 'Nov 2026', title: 'New Map Vote Screen', tag: 'Update',
+    body: [
+      'The map vote now happens right before the match: when the host starts (or you press Ready against bots), everyone gets a full-screen map select with a picture of each map, live vote counts and a 10-second timer.',
+      'Bots in empty slots vote too. Most votes wins; ties are settled at random. The match starts as soon as everyone has voted.',
+    ],
+  },
+  {
+    id: 'v2.46.0', version: '2.46.0', date: 'Nov 2026', title: 'Map Voting Against Bots', tag: 'Update',
+    body: [
+      'Bot matches can now vote on the map too: pick "Vote (you + the bots)" under Map, choose one of three maps (or Random), and the bots cast their votes alongside you. Most votes wins; ties are settled at random.',
+    ],
+  },
+  {
+    id: 'v2.45.0', version: '2.45.0', date: 'Nov 2026', title: 'Spider-Man: Web Swing', tag: 'Update', email: true,
+    body: [
+      'Spider-Man can now swing like the Foreman\'s chain: aim at a wall, tree or object within 20m and press F to web it and swing straight there.',
+      'Look up as you fire to land on top of it. He can stay up there for 5 seconds, out of the killer\'s reach, before dropping back down (or press F again to swing on). 4s cooldown.',
+      'Spider-Man bots use it too, mostly to get away when the killer is right behind them.',
+    ],
+  },
+  {
+    id: 'v2.44.0', version: '2.44.0', date: 'Nov 2026', title: 'New Killer Perks: Stunless & Extreme Mode', tag: 'Update', email: true,
+    body: [
+      'Stunless (6,000 Embers): your dash and pounce powers (Bat Rush, Rampage, Pounce) are never stopped or stunned by walls or objects. You slide off them and keep going. Traps still stop you.',
+      'Extreme Mode (Granny only, 500,000 Embers): once the exit gates are powered, Bat Rush has no limit. Hold as long as you like and she keeps going.',
+      'Find them in Loadout > Killer > Perks.',
+    ],
+  },
+  {
+    id: 'v2.43.0', version: '2.43.0', date: 'Nov 2026', title: 'Killer Power Levels & a Granny Rebalance', tag: 'Update', email: true,
+    body: [
+      'Killer power levels: dash, pounce and hook powers now start shorter and get longer as you level them up with Embers (Loadout > Killer, under the character name).',
+      'Granny\'s Bat Rush starts at 25m and levels up 1m at a time to 50m (10,000 Embers per metre). She also turns a little slower while rushing.',
+      'The Butcher\'s Rampage: 20m to start, up to 40m (2m per level, 2,500 Embers). Chucky\'s Pounce: 7m to 14m (3,000 Embers per metre). The Foreman\'s Chain Hook: 14m to 24m (2,500 Embers per metre).',
+    ],
+  },
+  {
+    id: 'v2.42.0', version: '2.42.0', date: 'Nov 2026', title: 'Get Updates by Email', tag: 'Update',
+    body: [
+      'New in Settings: "Get the latest updates and news by email". Tick it, enter your email and press Subscribe, then click the link in the confirmation email.',
+      'Only big updates are emailed: new characters, limited editions, new modes and what changed. Small tweaks never are, and every email has an unsubscribe link. You need to be 13 or older to sign up.',
+    ],
+  },
+  {
+    id: 'v2.41.0', version: '2.41.0', date: 'Nov 2026', title: 'New Chucky Outfit: Slappy', tag: 'Update',
+    body: [
+      'Slappy the ventriloquist\'s dummy is a new outfit for Chucky (6,000 Embers, Store > Characters > Chucky).',
+      'He has his own hand-made animations: a stiff, puppet-like walk and run, a slow wrong-way head turn, an overhead swing with his iron-banded wooden mallet, a pounce, carrying, a limp wobble when stunned, and a mallet execution.',
+      'Model: "slappy_animations" by Howard the Lipscomb (sketchfab.com/1310545), CC BY 4.0.',
+    ],
+  },
+  {
+    id: 'v2.40.0', version: '2.40.0', date: 'Nov 2026', title: 'Map Voting', tag: 'Update',
+    body: [
+      'Online lobbies now vote on the map. Every lobby gets three maps that suit the game mode, plus Random; click one to vote (you can change your mind). The map with the most votes is played; ties are settled at random.',
+      'A new set of maps comes up after every match. The host can still pick a map directly (Map: Players vote / Random / a specific map).',
+    ],
+  },
+  {
+    id: 'v2.39.0', version: '2.39.0', date: 'Nov 2026', title: 'Carrying: Longer Struggle, Gentler Drops', tag: 'Update',
+    body: [
+      'Struggling free from the killer\'s shoulder now takes twice as long.',
+      'When the killer drops a survivor (Q), they land on their feet, injured, instead of on the ground. The same goes for a Chucky possession ending mid-carry.',
+    ],
+  },
+  {
+    id: 'v2.38.0', version: '2.38.0', date: 'Nov 2026', title: 'Chucky Possession Fixes', tag: 'Update',
+    body: [
+      'A possessed survivor\'s ghost can no longer move or repair: it stays frozen where it was until Chucky leaves the body.',
+      'Possession now lasts at most 1.1 minutes (1:06). When time runs out Chucky is forced back into his doll; his HUD shows the time left.',
+      'Anyone Chucky hits while wearing a survivor\'s body now knows it is him: that bot treats the body as the killer from then on.',
+    ],
+  },
+  {
+    id: 'v2.37.0', version: '2.37.0', date: 'Nov 2026', title: 'Three New Game Modes', tag: 'Update',
+    body: [
+      'Glass Bones: every hit puts a survivor straight down, but generators repair 40% faster. No second chances.',
+      'Adrenaline: everyone moves 30% faster, generators and gates go 25% faster, and killer powers recharge 40% faster.',
+      'Blood Moon: a red moon rises. Every 45 seconds the killer sees every survivor for 4 seconds, but every survivor carries a 2-shot Taser.',
+      'Pick them under Game mode when you play against bots, or in an online lobby.',
+    ],
+  },
+  {
+    id: 'v2.36.0', version: '2.36.0', date: 'Nov 2026', title: 'Weekly Awards: Best Survivor & Best Killer', tag: 'Update',
+    body: [
+      'Every week the whole player base competes for two titles: Best Survivor (most escapes that week) and Best Killer (most kills). Ties go to the higher score. Each winner gets 100,000 Embers, and one player can win both.',
+      'The first awards are revealed TODAY, 5 November at 18:00 UTC, then every week at the same time. This first week counts every escape and kill you have ever made.',
+      'Open Progress to see the live top 3 for each title, your own week, and the countdown. Winners are announced in-game the next time you open Nightbound after the reveal.',
+    ],
+  },
+  {
+    id: 'v2.35.0', version: '2.35.0', date: 'Nov 2026', title: 'Spider-Man: Limited Edition', tag: 'Update',
+    body: [
+      'Spider-Man is now a LIMITED character: 500,000 Embers, and only in the Store until 7 November (end of day, UTC). After that he leaves the Store forever and can never be bought again.',
+      'Already played a match as Spider-Man? He is yours to keep, free.',
+      'Spider-Man gets 5 attempts to unhook himself, with a 30% chance each (everyone else: 3 attempts at 4%).',
+      'Fixed Spider-Man\'s arms glitching while standing idle: his rig now rests with the arms down, so every pose looks natural.',
+    ],
+  },
+  {
+    id: 'v2.34.0', version: '2.34.0', date: 'Nov 2026', title: 'Gift Embers to Friends', tag: 'Update',
+    body: [
+      'You can now gift Embers to your friends: open Friends (top right), press Gift next to a friend, pick an amount (or type one, up to 50,000) and Send.',
+      'Gifts arrive instantly if your friend is online, and are waiting for them the next time they open the game if not. Each gift shows up in your chat with that friend.',
+    ],
+  },
+  {
+    id: 'v2.33.0', version: '2.33.0', date: 'Nov 2026', title: 'New Survivor: Spider-Man', tag: 'Update',
+    body: [
+      'Spider-Man swings into the fog (fan-made crossover, free for everyone). Fully rigged 3D model with the survivor walk, run, crouch, vault, repair, heal, down and carried animations.',
+      'His own power, Web Shooters: press R to fire a web where you aim (4 shots, 20m). A webbed killer is slowed by 55% for 4 seconds, and a killer carrying a survivor is forced to drop them on the spot.',
+      'Spider-Man bots use their webs too, mostly to pull teammates off the killer\'s shoulder.',
+      'Model: "Spiderman_topy" by sabra (sketchfab.com/sabrayf), CC BY 4.0.',
+    ],
+  },
+  {
+    id: 'v2.32.0', version: '2.32.0', date: 'Nov 2026', title: 'God Tier Grandpa & a Limitless Bat Rush', tag: 'Update',
+    body: [
+      'Grandpa is now the first GOD TIER outfit (25,000 Embers; already own him? He stays yours). He changes how Granny plays: his shotgun replaces Bat Rush. Hold RMB to raise it, release to fire.',
+      'Against Grandpa every survivor gets a second health bar (shown under each name). Three long-range shots put anyone down, but the spread barely scratches you up close: the farther the shot, the harder it hits (about 6 damage point-blank, up to 36 from 22m and beyond). Being healed fills the bar again.',
+      'Bat Rush has no limit any more: the longer Granny holds RMB, the further she charges (about 8m at one second, 15m at two, and on). A full wind-up still ends in a Ground Slam.',
+    ],
+  },
+  {
+    id: 'v2.31.0', version: '2.31.0', date: 'Nov 2026', title: 'Graphics Overhaul: Realistic Mode', tag: 'Update',
+    body: [
+      'Realistic mode rebuilt from the ground up. Every outdoor map now uses real photo-scanned materials: forest floor, mud, snow, weathered brick, old stone, rusted metal, planks and tree bark, with true relief and roughness.',
+      'Trails are worn into the ground and blend naturally into the forest floor. Pines are now real fir trees made of hundreds of needle fronds, and the grass sways in the wind.',
+      'New lighting: moonlight shafts break through the branches, ambient occlusion grounds every wall and prop, real night contrast, and colour fades to blue-grey in the dark like it does for your eyes.',
+      'Classic mode is unchanged and still runs on low-end laptops. Low and Potato quality keep the light textures too.',
+    ],
+  },
+  {
+    id: 'v2.30.0', version: '2.30.0', date: 'Nov 2026', title: 'Nightbound for Windows', tag: 'Update',
+    body: [
+      'Free download: Nightbound as a Windows desktop app (Store, App tab). It opens the latest version of the game in its own window.',
+    ],
+  },
+  {
+    id: 'v2.29.0', version: '2.29.0', date: 'Nov 2026', title: 'Friends & Chat', tag: 'Update',
+    body: [
+      'Friends: every player has a friend code (the people icon, top right). Add friends by code; requests wait for them even if they are offline.',
+      'See which friends are online and whether they are in the menu, a lobby or a match. Join a friend\'s lobby in one click.',
+      'Invite online friends into your lobby, and chat with them from the Friends panel.',
+    ],
+  },
+  {
+    id: 'v2.28.0', version: '2.28.0', date: 'Nov 2026', title: 'Ranks, Levels & Season 1', tag: 'Update', gift: { embers: 1000, label: 'Season 1 launch gift: 1,000 Embers' },
+    body: [
+      'Player level: every match earns XP; your level shows next to your name.',
+      'Ranks: a survivor rank and a killer rank, Ash IV up to Iridescent I. Good matches earn pips, bad ones lose them. The results screen shows your XP and rank change.',
+      'Season 1: The Long Night. A free 30-tier season pass (Progress in the main menu) with Embers on every tier and two season badges. 60 days.',
+    ],
   },
   {
     id: 'v2.27.0', version: '2.27.0', date: 'Nov 2026', title: 'Granny: Body Swap & a Wilder Bat Rush', tag: 'Update',

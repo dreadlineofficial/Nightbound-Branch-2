@@ -5,18 +5,22 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { initPhoto } from './pbr.js';
 import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
+import { slappyReady } from './slappyGlb.js';
 import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom } from './grannyGlb.js';
-import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
+import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices, tedPref, tedText } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
 import { bakeArm } from './fpArms.js';
 import { foremanReady, batmanReady } from './foremanGlb.js';
 let KB_SETTINGS = null;
 const kbd = id => `<kbd>${keyLabel(KB_SETTINGS, id).replace(/[<>&]/g, '')}</kbd>`;
 import { staticReady, cloneStatic } from './glbModels.js';
+import { BRView } from './brview.js';
 import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat, HOOK_Y } from './models.js';
 import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
@@ -55,13 +59,45 @@ const SanitizeShader = {
       if (any(bad)) v = vec3(0.0);
       gl_FragColor = vec4(clamp(v, 0.0, 48.0), 1.0); }`,
 };
-const PostShader = {
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, red: { value: 0 }, desat: { value: 0 }, flash: { value: 0 }, vig: { value: 0.9 }, grain: { value: 0.01 }, pulse: { value: 0 } },
+// moonlight shafts (realistic look): bright sky pixels around the moon are smeared toward it, so
+// the light breaks through branches and over walls as visible rays
+const RaysShader = {
+  uniforms: { tDiffuse: { value: null }, moon: { value: new THREE.Vector2(0.5, 0.5) }, on: { value: 0 }, aspect: { value: 1.7 }, col: { value: new THREE.Color(0.55, 0.65, 0.9) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float time, red, desat, flash, vig, grain, pulse; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 moon; uniform float on, aspect; uniform vec3 col; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      if (on > 0.001) {
+        vec2 d = moon - vUv; vec2 st = d / 32.0;
+        float j = fract(sin(dot(vUv * 913.0, vec2(12.9898, 78.233))) * 43758.5453);
+        vec2 uv = vUv + st * j; float acc = 0.0, w = 1.0;
+        for (int i = 0; i < 32; i++) {
+          vec3 s = texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb;
+          float l = dot(s, vec3(0.2126, 0.7152, 0.0722));
+          acc += smoothstep(0.035, 0.4, l) * w; w *= 0.97; uv += st;
+        }
+        float fall = exp(-length(d * vec2(aspect, 1.0)) * 1.6);
+        c.rgb += col * acc / 32.0 * fall * on * 0.55;
+      }
+      gl_FragColor = c;
+    }`,
+};
+
+const PostShader = {
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, red: { value: 0 }, desat: { value: 0 }, flash: { value: 0 }, vig: { value: 0.9 }, grain: { value: 0.01 }, pulse: { value: 0 }, real: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float time, red, desat, flash, vig, grain, pulse, real; varying vec2 vUv;
     float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + time*7.0) * 43758.5453); }
     void main(){
       vec4 c = texture2D(tDiffuse, vUv);
+      if (real > 0.0) {
+        // lens: faint colour fringing toward the frame edges
+        vec2 ca = (vUv - 0.5) * 0.0028 * real;
+        c.r = texture2D(tDiffuse, vUv + ca).r; c.b = texture2D(tDiffuse, vUv - ca).b;
+        // night vision (Purkinje shift): in the dark the eye loses colour and sees blue-grey
+        float lq = dot(max(c.rgb, 0.0), vec3(0.2126, 0.7152, 0.0722));
+        c.rgb = mix(c.rgb, vec3(0.62, 0.72, 1.0) * lq, (1.0 - smoothstep(0.0, 0.16, lq)) * 0.5 * real);
+      }
       float l = dot(max(c.rgb, 0.0), vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(c.rgb, vec3(l), desat);
       // grade (scene is still linear HDR here): slightly cool shadows, warm highlights,
@@ -79,6 +115,21 @@ const PostShader = {
       gl_FragColor = c;
     }`,
 };
+
+// ambient occlusion for the realistic look: soft contact shadows where walls meet the ground,
+// under props and in corners. Only solid surfaces feed it (no grass cards, fog, sky or particles).
+class NightAO extends GTAOPass {
+  constructor(scene, camera, w, h, k) { super(scene, camera, w * k, h * k); this.k = k; }
+  setSize(w, h) { super.setSize(Math.max(1, Math.round(w * this.k)), Math.max(1, Math.round(h * this.k))); }
+  overrideVisibility() {
+    const cache = this._visibilityCache;
+    this.scene.traverse(o => {
+      cache.set(o, o.visible);
+      const m = o.material;
+      if (o.isPoints || o.isLine || o.isSprite || (m && !Array.isArray(m) && (m.transparent || m.alphaTest > 0 || m.isShaderMaterial || m.depthWrite === false || m.side === THREE.BackSide))) o.visible = false;
+    });
+  }
+}
 
 // ---------- particles ----------
 class Particles {
@@ -256,7 +307,7 @@ class BloodDecals {
 }
 
 // how a player looks to everyone else: a body possessed by Chucky still looks like its survivor
-const lookRole = p => p.disguise ? 'survivor' : p.role;
+const lookRole = p => p.look || (p.disguise ? 'survivor' : p.role); // (look: Fortnight's chosen body)
 // killers played over the shoulder: Chucky, and Chucky inside a survivor's body
 // killers drawn from a GLB model: their first-person arms are cut from it
 const GLB_KILLERS = new Set(['granny', 'foreman', 'slimer']);
@@ -285,8 +336,15 @@ function killerViewParts(id, sk) {
   }
   return out;
 }
+const hookTries = p => (SURVIVORS[p.char] && SURVIVORS[p.char].hookEscapes) || 3;
 const isTpv = p => !!p && (p.disguise || !!(KILLERS[p.char] && KILLERS[p.char].tpv));
 // Chucky's pounce arc
+// Spider-Man: height along a web swing (an arc up toward the strand's anchor), or perched up high
+function swingLift(p) {
+  const W = p.swing;
+  if (W) { const f = Math.min(1, W.t / W.d), base = (W.y0 || 0) + ((W.y1 || 0) - (W.y0 || 0)) * f; return base + Math.sin(f * Math.PI) * (W.up ? 1.2 : 0.9); }
+  return p.perchT > 0 ? p.perchY || 0 : 0;
+}
 function leapLift(p) {
   const L = p.leap; if (L) return Math.sin(Math.min(1, L.t / L.d) * Math.PI) * (L.h || 0.6);
   const f = p.hop ? Math.min(1, p.hop.t / p.hop.d) : p.hopF || 0; // Chucky's jump
@@ -327,7 +385,17 @@ export class Game {
   start() {
     resetVoices(); KB_SETTINGS = this.settings;
     const q = QUALITY[this.settings.quality] || QUALITY.medium;
+    initPhoto(this.renderer, this.settings.quality);
     this.W = buildWorld(this.M, this.settings.quality);
+    // Blood Moon mode: a red moon, red-tinged fog and moonlight
+    { const S0 = this.session.state && this.session.state(); if (S0 && S0.mode === 'bloodmoon' && !this.M.indoor) {
+      const W = this.W, red = new THREE.Color(0xff3a26);
+      if (W.moon) W.moon.color.set(0xff8a70);
+      if (W.scene.fog) W.scene.fog.color.lerp(new THREE.Color(0x3a0806), 0.6);
+      if (W.scene.background && W.scene.background.isColor) W.scene.background.lerp(new THREE.Color(0x3a0806), 0.6);
+      if (W.sky && W.sky.material.uniforms) { W.sky.material.uniforms.mid.value.lerp(new THREE.Color(0x3a0a08), 0.7); W.sky.material.uniforms.bot.value.lerp(new THREE.Color(0x3a0806), 0.6); }
+      if (W.sky) W.sky.traverse(o => { if (o !== W.sky && o.material && o.material.color && (o.isSprite || o.geometry && o.geometry.type === 'CircleGeometry')) o.material.color.copy(red); });
+    } }
     this.scene = this.W.scene;
     this.camera = new THREE.PerspectiveCamera(this.settings.fov || 75, innerWidth / innerHeight, 0.05, q.far);
     this.q = q; this.pr = q.pixel; this.ftAvg = 1 / 60; this.drT = 0; this.fpsT = 0; this.fpsN = 0;
@@ -360,10 +428,19 @@ export class Game {
       const rt = real ? new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 }) : undefined;
       this.composer = new EffectComposer(r, rt);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
+      if (real && !this.M.city) { // (the city skips ambient occlusion: it costs too much on a map this size)
+        const hi = this.settings.quality === 'high';
+        this.ao = new NightAO(this.scene, this.camera, innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), hi ? 0.75 : 0.5);
+        this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.4, thickness: 1.2, scale: 1.15, samples: hi ? 16 : 10, distanceFallOff: 1, screenSpaceRadius: false });
+        this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: hi ? 16 : 8 });
+        this.ao.blendIntensity = 0.9;
+        this.composer.addPass(this.ao);
+      }
       // guard: one bad (NaN / infinite) pixel would otherwise be smeared by bloom into growing black squares
       this.composer.addPass(new ShaderPass(SanitizeShader));
+      if (real && !this.M.indoor) { this.rays = new ShaderPass(RaysShader); this.composer.addPass(this.rays); }
       if (q.bloom) { this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.5, 0.8); this.composer.addPass(this.bloom); }
-      this.post = new ShaderPass(PostShader); this.composer.addPass(this.post);
+      this.post = new ShaderPass(PostShader); this.post.uniforms.real.value = real ? 1 : 0; this.composer.addPass(this.post);
       this.composer.addPass(new OutputPass());
     } else { this.composer = null; this.post = null; }
     // HUD
@@ -381,6 +458,7 @@ export class Game {
     this.role = me ? me.role : 'survivor';
     if (this.role === 'killer' && !isTpv(me)) this.setupKillerView(me);
     this.buildStaticHUD(S);
+    if (S && S.mode === 'fortnight' && this.M.br) { this.br = new BRView(this); if (this.scene.fog && !this.M.city) this.scene.fog.density *= 0.42; }
     sound.ambience(true);
     this.onResize();
   }
@@ -491,10 +569,16 @@ export class Game {
       this.keys.add(e.code);
       sound.init();
       if (e.code === 'Escape') { if (this.endShown) return; this.pause(!this.paused); return; }
+      if (this.br) { this.br.onKey(e.code, true); return; }
       if (e.code === 'Space') this.onSpace();
       if (e.code === 'KeyQ') this.send({ t: 'act', a: 'drop-carry' });
       if (e.code === 'KeyG' && this.mine() && this.mine().role === 'killer' && this.mine().char === 'granny') { const m = this.mine(); if (m.teleCd <= 0 && !m.tele && m.carry == null) this.creepHeld = true; else this.feed(m.tele ? 'Already creeping…' : m.carry != null ? 'Not while carrying someone.' : `Creep recharging (${Math.ceil(m.teleCd)}s)`); }
       if (e.code === 'KeyG') this.send({ t: 'act', a: 'trap' });
+      if (e.code === 'KeyR' && this.mine() && this.mine().role === 'survivor' && this.mine().char === 'spiderman') {
+        const m = this.mine();
+        if (m.st === 'ok' && !m.act && m.webs > 0) { m.yaw = this.camYaw; this.send({ t: 'act', a: 'web', yaw: this.camYaw }); }
+        else if (!(m.webs > 0)) this.feed('Out of web fluid.');
+      }
       if (e.code === 'KeyR' && this.mine() && this.mine().char === 'lamplighter') this.send({ t: 'act', a: 'teleport', yaw: this.mine().yaw });
       if (e.code === 'KeyR' && this.mine() && this.mine().role === 'killer' && KILLERS[this.mine().char].ability2) this.send({ t: 'act', a: 'ability2' });
       if (e.code === 'KeyG' && this.mine() && this.mine().role === 'killer' && (this.mine().char === 'chucky' || this.mine().disguise)) this.send({ t: 'act', a: 'possess' });
@@ -505,6 +589,11 @@ export class Game {
         else if (m.swapCd > 0) this.feed(`Body Swap in ${Math.ceil(m.swapCd)}s`);
         else if (m.carry != null) this.feed('Not while carrying someone.');
         else { this.swapHeld = true; this.swapT = this.t; }
+      }
+      if (e.code === 'KeyF' && this.mine() && this.mine().role === 'survivor' && this.mine().char === 'spiderman' && this.mine().st === 'ok') {
+        const m = this.mine();
+        if ((m.swingCd || 0) > 0) this.feed(`Web Swing recharging (${Math.ceil(m.swingCd)}s)`);
+        else this.send({ t: 'act', a: 'swing', yaw: this.camYaw, pitch: this.camPitch });
       }
       if (e.code === 'KeyF' && this.mine() && this.mine().role === 'killer') { const ex = findExecute(this.M, this.S, this.mine()); if (ex) this.send({ t: 'act', a: 'execute', id: ex.id }); }
       if ((e.code === 'KeyA' || e.code === 'KeyD') && this.mine() && this.mine().st === 'carried') {
@@ -517,6 +606,7 @@ export class Game {
       if (e.code === 'KeyT') { const b = this.takeoverTarget(); if (b) this.send({ t: 'act', a: 'takeover', id: b.id }); }
     } else {
       this.keys.delete(e.code);
+      if (this.br) { this.br.onKey(e.code, false); return; }
       if (e.code === 'KeyV' && this.swapHeld) { this.swapHeld = false; this.send({ t: 'act', a: 'bodyswap' }); }
       if (e.code === 'KeyG' && this.creepHeld) { this.creepHeld = false; const t = this.creepSel; if (t) this.send({ t: 'act', a: 'creep', kind: t.kind, id: t.id }); this.clearCreep(); }
     }
@@ -527,6 +617,7 @@ export class Game {
     const me = this.mine();
     if (!me) return;
     if (down && document.pointerLockElement !== this.renderer.domElement) return;
+    if (this.br) { this.br.onMouse(e, down); return; }
     if (me.role === 'killer') {
       if (e.button === 0 && down) {
         if (!me.atk && me.carry == null && me.stun <= 0 && !me.act && !(me.char === 'wisp' && me.ab) && !(me.char === 'butcher' && me.ab === 1)) { this.pred.atk = this.t + 0.4; if (this.isHost) {} }
@@ -570,7 +661,7 @@ export class Game {
     const S = this.S, me = this.mine();
     if (!me || !S) return;
     if (this.skill && this.skill.phase === 'active') { this.resolveSkill(); return; }
-    if (me.st === 'caged') { if (me.stage === 1 && me.esc < 3) this.send({ t: 'act', a: 'esc' }); return; }
+    if (me.st === 'caged') { if (me.stage === 1 && me.esc < hookTries(me)) this.send({ t: 'act', a: 'esc' }); return; }
     const v = findSpace(this.M, S, me);
     // Chucky: Space is a jump. Over a window or pallet it is a quick hop across, anywhere else a leap
     if (!v && me.role === 'killer' && me.char === 'chucky' && !me.hop && !me.vault && !me.leap && me.stun <= 0 && !me.act && me.carry == null) {
@@ -600,7 +691,7 @@ export class Game {
       this.lastSnap = S;
       const p = playerById(S, this.myId);
       if (p) {
-        const forced = (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') || !!p.reel || !!p.pull || !!p.leap || !!p.dash;
+        const forced = (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') || !!p.reel || !!p.pull || !!p.leap || !!p.dash || !!p.swing || p.perchT > 0;
         if (!this.me || p.tp !== this.myTp || forced) {
           this.myTp = p.tp;
           this.me = { x: p.x, z: p.z, yaw: this.me ? this.me.yaw : p.yaw, pitch: this.me ? this.me.pitch : 0, vault: null, mv: 0, cr: 0, fl: p.fl || 0, sp: p.sp };
@@ -627,6 +718,7 @@ export class Game {
     if (me && me.role !== this.role) this.switchRole(me, S);
     this.handleLocal(dt, S, me);
     this.updateChars(dt, S, me);
+    if (this.br) this.br.frame(dt, S, me);
     this.updateSidekicks(dt, S, me);
     this.updateTorchLight();
     this.updateTraps(S);
@@ -651,6 +743,14 @@ export class Game {
     this.updateHUD(dt, S, me);
     this.sparks.update(dt); this.blood.update(dt); this.smoke.update(dt); this.decals.update(dt); this.updateBleeding(dt, S);
     { const m = this.mine(); this.scratches.update(dt, !!m && m.role === 'killer'); }
+    if (this.rays) {
+      const v = this._mv || (this._mv = new THREE.Vector3());
+      v.set(30, 60, 20).normalize().multiplyScalar(400).add(this.camera.position).project(this.camera);
+      const ru = this.rays.uniforms, inFront = v.z < 1;
+      ru.moon.value.set(v.x * 0.5 + 0.5, v.y * 0.5 + 0.5); ru.aspect.value = this.camera.aspect;
+      const off = Math.max(Math.abs(v.x), Math.abs(v.y));
+      ru.on.value = inFront ? 1 - Math.min(1, Math.max(0, (off - 1) / 1.2)) : 0;
+    }
     if (this.composer) { this.post.uniforms.time.value = this.t; this.composer.render(dt); }
     else this.renderer.render(this.scene, this.camera);
     this.perf(dt);
@@ -661,9 +761,9 @@ export class Game {
   handleLocal(dt, S, me) {
     if (!me) return;
     // mouse look
-    const sens = (this.settings.sens || 1) * 0.0022;
+    const sens = (this.settings.sens || 1) * 0.0022 * (this.br && this.br.ads ? (this.br.fov < 30 ? 0.3 : 0.6) : 1);
     const inv = this.settings.invert ? -1 : 1;
-    if (me.role === 'killer') {
+    if (me.role === 'killer' || me.br) {
       let dyaw = Math.max(-0.6, Math.min(0.6, -this.mdx * sens));
       if (me.char === 'butcher' && me.ab === 1) dyaw = Math.max(-1.3 * dt, Math.min(1.3 * dt, dyaw));
       if (me.stun > 0) dyaw = 0;
@@ -680,10 +780,10 @@ export class Game {
     if (eHeld !== this.eHeld) { this.eHeld = eHeld; this.sendIn(); }
 
     // movement
-    const free = me.role === 'killer' || me.st === 'ok' || me.st === 'down';
+    const free = me.br ? me.st === 'ok' : me.role === 'killer' || me.st === 'ok' || me.st === 'down';
     if (free && !this.paused && S.phase === 'play') {
       const mi = this.moveInput();
-      const yaw = me.role === 'killer' ? me.yaw : this.camYaw;
+      const yaw = me.role === 'killer' || me.br ? me.yaw : this.camYaw;
       const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = -Math.cos(yaw), rz = Math.sin(yaw);
       let mx = fx * mi.f + rx * mi.r, mz = fz * mi.f + rz * mi.r;
       const m = Math.hypot(mx, mz); if (m > 1) { mx /= m; mz /= m; }
@@ -776,7 +876,7 @@ export class Game {
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && (p.skin === 'grandpa' ? grandpaReady() : grannyReady())) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && (p.skin === 'grandpa' ? grandpaReady() : grannyReady())) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
@@ -785,7 +885,10 @@ export class Game {
       }
       const R = c.rig, local = p.id === this.myId;
       const execing = p.role === 'killer' && p.act && p.act.k === 'execute';
-      const hidden = p.st === 'dead' || p.st === 'out' || (p.st === 'ghost' && !local) || (local && p.role === 'killer' && !execing && !isTpv(p));
+      // Fortnight: an eliminated player falls and lies there for a couple of seconds first
+      if (p.br) { if (p.st === 'dead' && c.brSt !== 'dead') c.deadAt = this.t; c.brSt = p.st; }
+      const corpse = p.br && p.st === 'dead' && c.deadAt != null && this.t - c.deadAt < 2.6;
+      const hidden = (p.st === 'dead' && !corpse) || p.st === 'out' || (p.st === 'ghost' && !local) || (local && p.role === 'killer' && !execing && !isTpv(p));
       R.root.visible = !hidden;
       // smoothing. Other players are already interpolated between network updates (clients:
       // snapshots; host: the remote player's own position stream), so only a light filter is
@@ -801,7 +904,7 @@ export class Game {
       c.spd += (spd - c.spd) * Math.min(1, dt * 8);
       c.yaw += angDiff(c.yaw, tyaw) * (local ? 1 : 1 - Math.exp(-dt * (interp ? 30 : 12)));
       // scratch marks: a running survivor leaves a trail every half metre or so, scattered either side
-      if (p.role === 'survivor' && p.st === 'ok' && !p.disguise && !p.vault && !p.fl && (p.mv === 2 || c.spd > 3.2) && jump <= 4) {
+      if (p.role === 'survivor' && p.st === 'ok' && !p.br && !p.disguise && !p.vault && !p.fl && (p.mv === 2 || c.spd > 3.2) && jump <= 4) {
         c.scratchD = (c.scratchD || 0) + Math.hypot(c.x - ox, c.z - oz);
         if (c.scratchD > 0.55) {
           c.scratchD = 0;
@@ -810,7 +913,7 @@ export class Game {
         }
       } else c.scratchD = 0;
       // the Foreman flung up to a high hook point, then dropping back down
-      c.lift = (c.lift || 0) + (pullLift(p) + leapLift(p) - (c.lift || 0)) * Math.min(1, dt * 20);
+      c.lift = (c.lift || 0) + (pullLift(p) + leapLift(p) + swingLift(p) - (c.lift || 0)) * Math.min(1, dt * 20);
       // floors (Granny's House): how high they stand, eased so a level change never pops
       const hTo = this.M.stairs ? heightAt(this.M, { x: c.x, z: c.z, fl: p.fl, sp: p.sp }) : 0;
       c.h = c.h == null || jump > 4 ? hTo : c.h + (hTo - c.h) * Math.min(1, dt * 14);
@@ -836,6 +939,8 @@ export class Game {
         else if (p.st === 'down') anim = 'down';
         else if (p.st === 'carried') anim = 'carried';
         else if (p.st === 'caged') anim = 'caged';
+        else if (p.swing) anim = 'vault';
+        else if (p.perchT > 0) anim = 'crouch';
         else if (vaulting) { anim = 'vault'; const d = p.vault.d || 0.7; y = Math.sin(Math.min(1, c.vaultT / d) * Math.PI) * 0.55; }
         else if (p.act) anim = p.act.k === 'repair' ? 'repair' : (p.act.k === 'heal' || p.act.k === 'self') ? 'heal' : 'work';
         else if (p.cr) anim = c.spd > 0.3 ? 'crouchwalk' : 'crouch';
@@ -850,7 +955,7 @@ export class Game {
         if (vaulting) { const d = p.vault.d || 1.7; y = Math.sin(Math.min(1, c.vaultT / d) * Math.PI) * 0.5; }
         if (execing) st.exec = { f: p.act.t / RULES.execTime, char: p.char, role: 'killer' };
         st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0; st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
-        if (p.char === 'granny') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; }
+        if (p.char === 'granny') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; st.shot = c.shotAt != null && this.t - c.shotAt < 0.7 ? (this.t - c.shotAt) / 0.7 : null; }
         if (p.atk === 1) { c.atkT = (c.atkPrev === 1 ? c.atkT + dt : 0); st.atkF = c.atkT / (RULES.lungeTime * (p.atkAmbush ? 1.4 : 1)); }
         c.atkPrev = p.atk;
         st.atkHit = p.atkHit; st.tele = !!p.tele; st.dark = p.char === 'foreman' && p.ab === 1;
@@ -1098,16 +1203,17 @@ export class Game {
   petVoice(line, x, z) {
     const heard = Math.hypot(x - sound.lx, z - sound.lz) < 40;
     if (!heard) return -1;
-    const len = sound.clip('ted/' + line, x, z) || 2.5; // (2.5s of subtitle if audio is unavailable)
+    const bleep = tedPref(line) === 'bleep';
+    const len = (bleep ? sound.bleep(sound.clipLen('ted/' + line), x, z) : sound.clip('ted/' + line, x, z)) || 2.5; // (2.5s of subtitle if audio is unavailable)
     if (this.settings.subs === false) return len;
     let el = document.getElementById('subs');
     if (!el) { el = document.createElement('div'); el.id = 'subs'; this.hud.appendChild(el); }
-    const show = txt => { el.innerHTML = `<b>Ted:</b> ${String(txt).replace(/[<>&]/g, '')}`; el.classList.add('show'); };
+    const show = txt => { const s = String(txt), tag = s.endsWith(' <i>(bleeped)</i>'); el.innerHTML = `<b>Ted:</b> ${(tag ? s.slice(0, -17) : s).replace(/[<>&]/g, '')}${tag ? ' <i>(bleeped)</i>' : ''}`; el.classList.add('show'); };
     for (const h of this.capT || []) clearTimeout(h);
     this.capT = [];
     const caps = TED_CAPTIONS[line];
-    if (caps && caps.length) for (const [at, txt] of caps) this.capT.push(setTimeout(() => show(txt), at * 1000));
-    else show(TED_LINES[line]);
+    if (caps && caps.length && !bleep) for (const [at, txt] of caps) this.capT.push(setTimeout(() => show(txt), at * 1000));
+    else show(bleep ? tedText(line) + ' <i>(bleeped)</i>' : TED_LINES[line]);
     clearTimeout(this.subsT); this.subsT = setTimeout(() => el.classList.remove('show'), (len + 0.8) * 1000);
     return len;
   }
@@ -1155,6 +1261,7 @@ export class Game {
   updateCamera(dt, S, me) {
     const cam = this.camera;
     if (!me) return;
+    if (this.br) { this.br.camera(dt, S, me); return; }
     let target = me;
     if (me.role === 'survivor' && (me.st === 'dead' || me.st === 'out')) {
       if (!this.spectate || !['ok', 'down', 'carried', 'caged'].includes(this.spectate.st)) this.cycleSpectate(true);
@@ -1218,6 +1325,7 @@ export class Game {
     if (target.disguise) h = 1.5;
     // Chucky is played over the shoulder: the camera follows his facing, mouse pitch tilts it
     if (tpv) h = (me.disguise ? 1.5 : 1.05) + (tc && tc.lift || 0);
+    else if (tc && tc.lift) h += tc.lift; // up on a web swing or a perch
     const floorH = (tc && tc.h) || 0, camL = levelOf(this.M, target.fl);
     h += floorH;
     const yaw = tpv ? me.yaw : this.camYaw, pitch = tpv ? Math.max(-0.35, Math.min(1.0, 0.28 - me.pitch * 0.8)) : this.camPitch;
@@ -1442,6 +1550,15 @@ export class Game {
   }
   // taser darts: a jagged electric line from the survivor to where it struck, crackling for a moment
   updateZaps(S, dt) {
+    for (const st of (this.strands ||= [])) {
+      st.t += dt; const c = this.chars.get(st.id), p = S && playerById(S, st.id);
+      const pos = st.line.geometry.attributes.position;
+      if (c) pos.setXYZ(0, c.rig.root.position.x, c.rig.root.position.y + 1.5, c.rig.root.position.z);
+      pos.setXYZ(1, st.ax, st.ay, st.az); pos.needsUpdate = true;
+      if (!(p && p.swing) && st.t > 0.15) st.line.material.opacity -= dt * 4;
+    }
+    for (const st of this.strands.filter(s => s.line.material.opacity <= 0 || s.t > 3)) { this.scene.remove(st.line); st.line.geometry.dispose(); st.line.material.dispose(); }
+    this.strands = this.strands.filter(s => s.line.material.opacity > 0 && s.t <= 3);
     for (const z of (this.zaps ||= [])) {
       z.t += dt;
       const pos = z.line.geometry.attributes.position;
@@ -1454,6 +1571,7 @@ export class Game {
     for (const z of this.zaps.filter(z => z.t > 0.45)) this.scene.remove(z.line);
     this.zaps = this.zaps.filter(z => z.t <= 0.45);
     // a tazed killer crackles with sparks
+    for (const p of S.players) if (p.webK > 0 && Math.random() < 0.35) this.smoke.spawn(p.x + (Math.random() - 0.5) * 0.7, 0.3 + Math.random() * 1.5, p.z + (Math.random() - 0.5) * 0.7, 1, 0xf4f4ec, 0.2, 0.7, -0.5, 0.25);
     for (const p of S.players) if (p.zap > 0 && Math.random() < 0.6) this.sparks.spawn(p.x + (Math.random() - 0.5) * 0.6, 0.6 + Math.random() * 1.4, p.z + (Math.random() - 0.5) * 0.6, 2, 0x8ad8ff, 1.5, 0.3, 0, 0.6, 0.5);
   }
   // ---------------- Granny's Creep: markers on every window, pallet, generator and hook ----------------
@@ -1509,7 +1627,11 @@ export class Game {
     this.trapMeshes ||= new Map();
     const live = new Set((S.traps || []).map(t => t.id));
     for (const [id, m] of this.trapMeshes) if (!live.has(id)) { this.scene.remove(m); this.trapMeshes.delete(id); }
+    const killerEyes = (() => { const m = this.mine(); return !!m && m.role === 'killer'; })();
     for (const t of S.traps || []) {
+      // Phantom Traps (Power Up): the killer never sees them
+      if (t.inv && killerEyes) { const m = this.trapMeshes.get(t.id); if (m) m.visible = false; continue; }
+      if (this.trapMeshes.has(t.id) && !this.trapMeshes.get(t.id).visible) this.trapMeshes.get(t.id).visible = true;
       if (this.trapMeshes.has(t.id)) { const m = this.trapMeshes.get(t.id); m.userData.glow.material.opacity = 0.5 + Math.sin(this.t * 6) * 0.3; continue; }
       const g = new THREE.Group(); g.position.set(t.x, 0, t.z);
       const model = cloneStatic('ghosttrap');
@@ -1574,6 +1696,7 @@ export class Game {
 
   // ---------------- auras ----------------
   updateAuras(S, me) {
+    if (this.br) return;
     if (!me) return;
     const K = killerOf(S);
     const killerView = me.role === 'killer';
@@ -1638,6 +1761,7 @@ export class Game {
 
   // ---------------- events from the host ----------------
   onEvents(evs) {
+    if (this.br) this.br.onEvents(evs);
     if (!evs || !evs.length || this.disposed) return;
     const S = this.S || this.session.state(), me = this.mine();
     const name = id => { const p = S && playerById(S, id); return p ? p.name : '?'; };
@@ -1658,6 +1782,37 @@ export class Game {
           if (e.by === this.myId) { this.feed('You took the ' + (ITEMS[e.item] || ITEMS.flashlight).name + ' and left your ' + (ITEMS[e.left] || ITEMS.flashlight).name + '.'); this.flashHeld = false; }
           break;
         }
+        case 'webswing': {
+          sound.play('thwip', e.x, e.z);
+          const c = this.chars.get(e.id);
+          if (c) {
+            const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+            const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xf2f2ea, transparent: true, opacity: 0.95, depthWrite: false })); line.frustumCulled = false;
+            this.scene.add(line); (this.strands ||= []).push({ line, id: e.id, ax: e.ax, az: e.az, ay: e.up ? 3.2 : 1.6, t: 0 });
+          }
+          if (e.id === this.myId) this.feed(e.up ? 'Thwip! Up you go.' : 'Thwip!');
+          break;
+        }
+        case 'perch': if (e.id === this.myId) this.feed('Perched up high for 5s: the killer can\'t reach you. Press F to swing on.', 'big'); break;
+        case 'web': {
+          // a pale strand shot from the wrist, and a splat where it lands
+          const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(e.x, 1.35, e.z), new THREE.Vector3(e.tx, e.hit ? 1.3 : 1.1, e.tz)]);
+          const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xf2f2ea, transparent: true, opacity: 0.95, depthWrite: false }));
+          this.scene.add(line);
+          const t0 = this.t, fade = () => { const k = (this.t - t0) / 0.7; if (k >= 1 || this.disposed) { this.scene.remove(line); g.dispose(); line.material.dispose(); return; } line.material.opacity = 0.95 * (1 - k); requestAnimationFrame(fade); };
+          requestAnimationFrame(fade);
+          sound.play('thwip', e.x, e.z);
+          this.smoke.spawn(e.tx, 1.2, e.tz, 8, 0xf0f0e8, 0.7, 0.8, -1, 0.3);
+          if (e.id === this.myId && !e.hit) this.feed(`Missed. ${e.left} web${e.left === 1 ? '' : 's'} left.`);
+          break;
+        }
+        case 'webhit': {
+          sound.play('thunk', e.x, e.z);
+          if (e.id === this.myId) { this.feed(e.freed != null ? 'Webbed! You dropped ' + name(e.freed) + '.' : 'Webbed! You are stuck in it.', 'big'); this.shake = 0.4; }
+          else if (e.by === this.myId) this.feed(e.freed != null ? 'Thwip! ' + name(e.id) + ' dropped ' + name(e.freed) + '!' : 'Thwip! ' + name(e.id) + ' is webbed and slowed.', 'big');
+          else if (e.freed === this.myId) this.feed('Spider-Man webbed the killer: you are free!', 'big');
+          break;
+        }
         case 'taser': {
           const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12 * 3), 3));
           const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x9ae0ff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -1674,7 +1829,7 @@ export class Game {
           break;
         }
         case 'taserdead': if (e.id === this.myId) this.feed('Your Taser is out of shots. Swap it at a chest.'); break;
-        case 'trapset': if (e.id === this.myId) this.feed('Ghost Trap set.'); sound.play('click', e.x, e.z); break;
+        case 'trapset': if (e.id === this.myId) this.feed(e.inv ? 'Phantom Trap set. The killer can\'t see it.' : 'Ghost Trap set.'); if (!(e.inv && this.mine() && this.mine().role === 'killer')) sound.play('click', e.x, e.z); break;
         case 'trapped': {
           const by = S && playerById(S, e.by);
           this.feed(`The killer stepped in ${by ? by.name + "'s" : 'a'} Ghost Trap!`, e.by === this.myId || e.id === this.myId ? 'big' : '');
@@ -1696,7 +1851,7 @@ export class Game {
           break;
         case 'possessed':
           if (e.id === this.myId) { this.feed(`You are inside ${name(e.id)}. Nobody knows. Down a survivor and hook them, then press G to let go.`, 'big'); this.flash = 0.5; }
-          if (e.ghost === this.myId) { this.feed('You have been possessed! You are a ghost now: nobody can see you. Keep repairing generators (10% slower).', 'big'); this.flash = 0.6; this.shake = 0.6; }
+          if (e.ghost === this.myId) { this.feed('You have been possessed! Your ghost is frozen until Chucky leaves your body (at most 1:06).', 'big'); this.flash = 0.6; this.shake = 0.6; }
           break;
         case 'depossessed':
           if (e.by === this.myId) this.feed('You leave the body and return to your doll.', 'big');
@@ -1794,6 +1949,23 @@ export class Game {
           if (e.id === this.myId) this.shake = 0.25 + (e.charge || 0) * 0.3;
           break;
         }
+        case 'shot': {
+          // Grandpa's shotgun: the blast, a muzzle flash, the pellets' path, and blood if it found someone
+          sound.play('shotgun', e.x, e.z);
+          const c = this.chars.get(e.id); if (c) c.shotAt = this.t;
+          const dx = e.ex - e.x, dz = e.ez - e.z, L = Math.hypot(dx, dz) || 1, fx = dx / L, fz = dz / L;
+          this.sparks.spawn(e.x + fx * 1.0, 1.45, e.z + fz * 1.0, 26, 0xffc060, 5, 0.18, 0, 0.6);
+          this.smoke.spawn(e.x + fx * 1.1, 1.45, e.z + fz * 1.1, 6, 0x8a8478, 0.6, 1.4, 0.3, 0.5);
+          this.tracer(e.x + fx * 1.0, e.z + fz * 1.0, e.ex, e.ez);
+          if (e.to != null) {
+            this.blood.spawn(e.ex, 1.2, e.ez, 14 + e.dmg, 0x6a0303, 2.2, 1.0, -9.8, 0.8);
+            const tgt = S && playerById(S, e.to);
+            if (e.to === this.myId) { this.shake = 0.35 + e.dmg / 60; this.flash = 0.18 + e.dmg / 120; this.feed(`Shot from ${e.d}m: -${e.dmg} (${tgt ? Math.max(0, tgt.shp ?? 100) : '?'} left)`); }
+            if (e.id === this.myId) this.feed(`Hit ${tgt ? tgt.name : ''} from ${e.d}m: ${e.dmg} damage${e.d < 8 ? ' (too close: back off for more)' : ''}`);
+          } else if (e.id === this.myId) this.feed('Missed.');
+          if (e.id === this.myId) { this.shake = Math.max(this.shake, 0.45); if (this.view) this.view.userData.recoil = 1; }
+          break;
+        }
         case 'rushhit': {
           sound.play('thunk', e.x, e.z); this.blood.spawn(e.x, 1.1, e.z, 40, 0x6a0303, 2.6, 1.2, -9.8, 0.8);
           if (e.id === this.myId) { this.shake = 0.8; if (this.view) this.view.userData.bloody = 1; }
@@ -1850,7 +2022,8 @@ export class Game {
           break;
         }
         case 'chainland': sound.play('thud', e.x, e.z); this.smoke.spawn(e.x, 0.3, e.z, 10, 0x2a2622, 1.4, 1.2, 0.3, 0.6); if (e.id === this.myId) this.shake = 0.8; break;
-        case 'pulse': if (me && me.role === 'survivor' && me.st === 'ok') { this.feed('The infected can sense you…', 'big'); this.flash = 0.2; } else if (me && me.role === 'killer') this.feed('You sense the living.'); break;
+        case 'pulse': if (e.moon) { if (me && me.role === 'survivor' && me.st === 'ok') { this.feed('The Blood Moon shows you to the killer!', 'big'); this.flash = 0.2; } else if (me && me.role === 'killer') this.feed('The Blood Moon reveals every survivor.', 'big'); break; }
+          if (me && me.role === 'survivor' && me.st === 'ok') { this.feed('The infected can sense you…', 'big'); this.flash = 0.2; } else if (me && me.role === 'killer') this.feed('You sense the living.'); break;
         case 'exposed': if (me && me.role === 'survivor') this.feed(`${name(e.by)}'s Exposure: the killer is revealed!`, e.by === this.myId ? 'big' : ''); if (e.id === this.myId) this.feed('Exposed! The survivors can see you.', 'big'); break;
         case 'overclock': this.sparks.spawn(e.x, 1.5, e.z, 30, 0x8affff, 2, 0.8, -6); if (me && me.role === 'survivor') this.feed('Overclock: another generator jumped ahead.'); break;
         case 'laststand': if (e.id === this.myId) { this.feed('You are the last survivor! Survive 45 seconds.', 'big'); this.flash = 0.4; } sound.play('powered'); break;
@@ -1859,6 +2032,7 @@ export class Game {
         case 'stun': { this.petReact(e.id, 'jump', 1); const p = S && playerById(S, e.id); if (p) { sound.play('stun', p.x, p.z); this.sparks.spawn(p.x, 2.2, p.z, 12, 0xffffff, 1.5, 0.6, 0); } if (e.id === this.myId) this.shake = 0.8; this.feed(name(e.id) + ' was stunned!'); break; }
         case 'kick': { const g = this.M.gens[e.id]; sound.play('kick', g.x, g.z); this.sparks.spawn(g.x, 1.0, g.z, 25, 0xffd080, 3, 0.6, -9); break; }
         case 'vault': if (e.id !== this.myId) sound.play('vault', e.x, e.z, { fast: e.fast }); break;
+        case 'dropped': if (e.id === this.myId) this.feed('Dropped! You are back on your feet: run.', 'big'); break;
         case 'struggle': {
           const c = this.M.cages[e.cage]; if (c) { sound.play('fade', c.x, c.z, { on: true }); this.sparks.spawn(c.x, 0.4, c.z, 40, 0xff3010, 2, 1.6, 1.2); }
           if (e.id === this.myId) { this.feed('The Entity has come for you! Hit the skill checks to hold it off.', 'big'); this.flash = 0.4; }
@@ -1938,13 +2112,13 @@ export class Game {
     const teamOf = p => (p.role === 'survivor' && (p.st !== 'ghost' || p.id === this.myId)) || p.disguise || p.outcome === 'infected';
     $('team').classList.toggle('compact', S.players.filter(teamOf).length > 5);
     $('team').innerHTML = S.players.filter(teamOf).map(p =>
-      `<div class="tm ${p.id === this.myId ? 'me' : ''}" id="tm-${esc(p.id)}"><div class="tm-por">${icon('healthy')}</div><div class="tm-body"><div class="tm-name">${esc(p.name)}${p.bot ? '<small>BOT</small>' : ''}${p.id === this.myId ? '<small>YOU</small>' : ''}</div><div class="tm-stage"><i></i><i></i></div><div class="tm-bar"><div></div></div></div></div>`).join('');
+      `<div class="tm ${p.id === this.myId ? 'me' : ''}" id="tm-${esc(p.id)}"><div class="tm-por">${icon('healthy')}</div><div class="tm-body"><div class="tm-name">${esc(p.name)}${p.bot ? '<small>BOT</small>' : ''}${p.id === this.myId ? '<small>YOU</small>' : ''}</div><div class="tm-stage"><i></i><i></i></div><div class="tm-bar"><div></div></div>${this.grandpaOn(S) ? '<div class="tm-shp" title="Shotgun health: three long-range shots put you down"><div></div></div>' : ''}</div></div>`).join('');
     this.hudCache = {};
     const k = (x) => `<kbd>${x}</kbd>`;
     $('controls-hint').innerHTML = me.disguise
       ? `${k(moveLabel(this.settings))} move · ${k('LMB')} strike · ${k(keyLabel(this.settings, 'interact'))} pick up / hook · ${k(keyLabel(this.settings, 'space'))} vault · ${k(keyLabel(this.settings, 'item'))} let go (after a down and a hook) · ${k(keyLabel(this.settings, 'status'))} status`
       : me.st === 'ghost'
-      ? `${k(moveLabel(this.settings))} move · ${k(keyLabel(this.settings, 'interact'))} repair generators · nobody can see you`
+      ? 'You are a frozen ghost · Chucky has your body (1:06 at most) · nobody can see you'
       : me.role === 'killer'
       ? `${k(moveLabel(this.settings))} move · ${k('LMB')} strike · ${k('RMB')} ${esc(KILLERS[me.char].ability.name)}${me.char === 'lamplighter' ? ` · ${k(keyLabel(this.settings, 'ability2'))} Shadow Step` : KILLERS[me.char].ability2 ? ` · ${k(keyLabel(this.settings, 'ability2'))} ${esc(KILLERS[me.char].ability2.name)}` : ''} · ${k(keyLabel(this.settings, 'interact'))} interact · ${k(keyLabel(this.settings, 'execute'))} execute · ${k(keyLabel(this.settings, 'space'))} ${me.char === 'chucky' ? 'jump' : 'vault'}${me.char === 'chucky' ? ` · ${k(keyLabel(this.settings, 'item'))} possess · ${k(keyLabel(this.settings, 'split'))} soul split` : ''} · ${k(keyLabel(this.settings, 'drop'))} drop · ${k(keyLabel(this.settings, 'status'))} status`
       : `${k(moveLabel(this.settings))} move · ${k(keyLabel(this.settings, 'run'))} run · ${k(keyLabel(this.settings, 'crouch'))} crouch · ${k(keyLabel(this.settings, 'interact'))} interact · ${k('RMB')} flashlight · ${k(keyLabel(this.settings, 'item'))} ghost trap · ${k(keyLabel(this.settings, 'space'))} vault / barricade / skill check · ${k(keyLabel(this.settings, 'emotes'))} emotes · ${k(keyLabel(this.settings, 'status'))} status`;
@@ -1957,9 +2131,9 @@ export class Game {
   powerHTML(me) {
     if (me.disguise) {
       const done = me.pdowns >= 1 && me.pcages >= 1;
-      return { ready: done, active: true, pct: 0, html: `<div class="pwt"><div class="pwn">Possession</div><div class="pws">Down ${Math.min(1, me.pdowns)}/1 · Hook ${Math.min(1, me.pcages)}/1</div><div class="keyl">${done ? '' + kbd('item') + ' let go of the body' : 'Nobody knows it\'s you'}</div></div><div class="pwi">${icon('knife')}<div class="cd"></div></div>` };
+      return { ready: done, active: true, pct: 0, html: `<div class="pwt"><div class="pwn">Possession</div><div class="pws">${Math.floor((me.possT || 0) / 60)}:${String(Math.ceil(me.possT || 0) % 60).padStart(2, '0')} left · Down ${Math.min(1, me.pdowns)}/1 · Hook ${Math.min(1, me.pcages)}/1</div><div class="keyl">${done ? '' + kbd('item') + ' let go of the body' : 'Nobody knows it\'s you'}</div></div><div class="pwi">${icon('knife')}<div class="cd"></div></div>` };
     }
-    const K = KILLERS[me.char], def = K.ability;
+    const K = KILLERS[me.char]; let def = K.ability;
     let ready = false, pct = 0, sub = '', pips = '', extra = '';
     if (me.char === 'butcher') {
       ready = me.charges > 0 && !me.ab;
@@ -1987,7 +2161,7 @@ export class Game {
     } else if (me.char === 'chucky') {
       const coil = me.aim ? Math.min(1, Math.max(0, (me.abT || 0) - 0.1) / def.coil) : 0;
       ready = me.abCd <= 0 && !me.leap; pct = me.aim ? 1 - coil : me.abCd / def.cooldown;
-      sub = me.leap ? 'Pouncing!' : me.aim ? `Coiling… ${Math.round(def.min + (def.max - def.min) * coil)}m` : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
+      sub = me.leap ? 'Pouncing!' : me.aim ? `Coiling… ${Math.round(def.min + ((me.reach || def.max) - def.min) * coil)}m` : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       const mm = t => Math.floor(t / 60) + ':' + String(Math.ceil(t % 60)).padStart(2, '0');
       extra = (me.ab2Cd > 0 ? `${kbd('ability2')} Laugh ${Math.ceil(me.ab2Cd)}s` : "" + kbd('ability2') + " Laugh ready") + ' · ' + (me.harmless ? 'Possessing…' : me.possCd > 0 ? `${kbd('item')} Possess ${mm(me.possCd)}` : '' + kbd('item') + ' Possess ready');
       const S = this.S, oneLeft = S && !S.gatesPowered && S.gensNeeded - S.gensDone === 1 && (S.dolls || []).length;
@@ -1997,12 +2171,20 @@ export class Game {
       ready = held && me.abCd <= 0; pct = held ? me.abCd / def.cooldown : 1;
       sub = !held ? 'Go get your chainsaw' : me.aim ? (me.abT >= def.aim ? 'Release to throw!' : 'Revving…') : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       extra = me.haste > 0 ? `Morning Routine · +12% speed` : me.ab2Cd > 0 ? `${kbd('ability2')} Business Card ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Business Card ready';
+    } else if (me.char === 'granny' && me.skin === 'grandpa') {
+      const G = K.shotgun;
+      ready = me.abCd <= 0; pct = me.aim ? Math.max(0, 1 - me.abT / G.raise) : me.abCd / G.cooldown;
+      sub = me.aim ? (me.abT < G.raise ? 'Raising…' : 'Release to fire!') : me.abCd > 0 ? 'Pumping… ' + me.abCd.toFixed(1) + 's' : 'Ready · hold RMB';
+      def = { name: 'Shotgun' };
+      const SW = K.swap;
+      const swapTxt = !this.S.spider ? '' : this.swapHeld ? ' · Spider Mom\'s eyes: release V to swap' : me.swapCd > 0 ? ` · <kbd>V</kbd> ${SW.name} ${Math.ceil(me.swapCd)}s` : ` · <kbd>V</kbd> ${SW.name} ready`;
+      extra = 'Long shots hit hardest · ' + (me.tele ? 'Creeping…' : me.teleCd > 0 ? `${kbd('item')} Creep ${Math.ceil(me.teleCd)}s` : `Hold ${kbd('item')} Creep ready`) + ' · ' + (me.ab === 1 ? 'Listening…' : me.ab2Cd > 0 ? `${kbd('ability2')} I Hear You ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' I Hear You ready') + swapTxt;
     } else if (me.char === 'granny') {
       const T = K.teleport;
       const charge = Math.max(0, Math.min(1, (me.abT - def.minCharge) / (def.maxCharge - def.minCharge)));
       ready = me.abCd <= 0 && !me.dash; pct = me.aim ? 1 - charge : me.abCd / def.cooldown;
       const heard = this.S ? this.S.players.filter(o => o.role === 'survivor' && o.heard > 0).length : 0;
-      sub = me.dash ? 'Rushing!' : me.aim ? (me.abT < def.minCharge ? 'Winding up…' : `Release! ${Math.round(def.minDist + charge * (def.maxDist - def.minDist))}m`) : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready · hold RMB';
+      sub = me.dash ? 'Rushing!' : me.aim ? (me.abT < def.minCharge ? 'Winding up…' : `Release! ${Math.round(Math.min(me.perks.includes('extreme') && this.S && this.S.gatesPowered ? 999 : me.reach || 25, def.minDist + Math.max(0, (me.abT - def.minCharge) / (def.maxCharge - def.minCharge)) * (def.maxDist - def.minDist)))}m`) : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready · hold RMB';
       if (heard) sub += ` · ${heard} Heard`;
       const SW = K.swap;
       const swapTxt = !this.S.spider ? '' : this.swapHeld ? ' · Spider Mom\'s eyes: release V to swap' : me.swapCd > 0 ? ` · <kbd>V</kbd> ${SW.name} ${Math.ceil(me.swapCd)}s` : ` · <kbd>V</kbd> ${SW.name} ready`;
@@ -2026,18 +2208,36 @@ export class Game {
       html: `<div class="pwt"><div class="pwn">${esc(def.name)}</div><div class="pws">${sub}</div>${pips ? `<div class="pips">${pips}</div>` : ''}<div class="keyl">${extra}</div></div><div class="pwi">${icon(POWER_ICON[me.char])}<div class="cd"></div></div>` };
   }
 
+  // a brief streak of light along the shotgun's path
+  tracer(x0, z0, x1, z1) {
+    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x0, 1.45, z0), new THREE.Vector3(x1, 1.2, z1)]);
+    const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffd890, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.scene.add(l);
+    const t0 = this.t, step = () => { const k = (this.t - t0) / 0.12; if (k >= 1 || this.disposed) { this.scene.remove(l); g.dispose(); l.material.dispose(); return; } l.material.opacity = 0.85 * (1 - k); requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+  // Grandpa (god-tier outfit) is in the match: survivors carry a second, shotgun health bar
+  grandpaOn(S) { return !!S && S.players.some(k => k.role === 'killer' && k.char === 'granny' && k.skin === 'grandpa'); }
+
   // the survivor's item card (changes when you swap at a chest)
   renderItemHUD(me) {
     this.hudItem = me.item;
     $('item').innerHTML = this.itemHTML(me);
   }
   itemHTML(me) {
-    if (me.item === 'taser') return `<div class="iti">${icon('taser')}</div><div class="itt"><div class="itn">Taser <span id="trapn"></span></div><div class="keyl"><kbd>RMB</kbd> fire at the killer (3s stun)</div></div>`;
-    return me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl">${kbd('item')} set a trap in front of you</div></div>`
-      : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>RMB</kbd> hold to blind the killer</div></div>`;
+    const web = me.char === 'spiderman' ? `<div class="keyl web-l">${kbd('ability2')} Web Shooters <b id="webn">×${me.webs || 0}</b> · ${kbd('execute')} Web Swing</div>` : '';
+    if (me.item === 'taser') return `<div class="iti">${icon('taser')}</div><div class="itt"><div class="itn">Taser <span id="trapn"></span></div><div class="keyl"><kbd>RMB</kbd> fire at the killer (3s stun)</div>${web}</div>`;
+    return me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn">Ghost Trap <span id="trapn"></span></div><div class="keyl">${kbd('item')} set a trap in front of you</div>${web}</div>`
+      : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>RMB</kbd> hold to blind the killer</div>${web}</div>`;
   }
   updateHUD(dt, S, me) {
     if (!me) return;
+    if (this.br) {
+      this.flash = Math.max(0, this.flash - dt * 2.5);
+      if (this.post) { const u = this.post.uniforms; u.red.value = me.st === 'ok' && me.life < 30 ? 0.3 : 0; u.flash.value = this.flash; u.pulse.value = 0; u.desat.value += ((me.st === 'ok' ? 0.04 : 0.7) - u.desat.value) * Math.min(1, dt * 2); }
+      else $('fx-red').style.opacity = Math.min(1, this.flash * 0.8).toFixed(2);
+      return;
+    }
     if (me.role === 'survivor' && me.item !== this.hudItem) this.renderItemHUD(me);
     // flashlight battery, and the killer's view whiting out when a torch is in his eyes
     if (me.role === 'survivor') {
@@ -2045,8 +2245,9 @@ export class Game {
       if (bar) bar.style.width = (Math.max(0, me.flash) / RULES.flashBattery * 100).toFixed(1) + '%';
       $('item').classList.toggle('active', !!this.flashHeld && me.flash > 0);
       $('item').classList.toggle('empty', me.item === 'trap' ? !(me.traps > 0) : me.item === 'taser' ? !(me.tasers > 0) : me.flash <= 0);
+      const wn = document.getElementById('webn'); if (wn) wn.textContent = '×' + (me.webs || 0);
       const tn = document.getElementById('trapn'); if (tn) tn.textContent = '×' + ((me.item === 'taser' ? me.tasers : me.traps) || 0);
-      $('crosshair').classList.toggle('hidden', !((this.flashHeld && me.flash > 0) || (me.item === 'taser' && me.tasers > 0 && me.st === 'ok')));
+      $('crosshair').classList.toggle('hidden', !((this.flashHeld && me.flash > 0) || (me.item === 'taser' && me.tasers > 0 && me.st === 'ok') || (me.char === 'spiderman' && me.webs > 0 && me.st === 'ok')));
     }
     const glare = me.role === 'killer' ? Math.max((me.glare || 0) * 0.75, me.blind > 0 ? Math.min(1, me.blind / 1.2) : 0) : 0;
     if (Math.abs(glare - (this.glareShown || 0)) > 0.01) { this.glareShown = glare; $('glare').style.opacity = glare.toFixed(2); }
@@ -2074,6 +2275,7 @@ export class Game {
       el.querySelector('.tm-bar').style.visibility = f > 0 ? 'visible' : 'hidden';
       el.querySelector('.tm-bar div').style.width = (f * 100).toFixed(1) + '%';
       el.querySelectorAll('.tm-stage i').forEach((pp, i) => pp.classList.toggle('on', p.stage > i));
+      const sb = el.querySelector('.tm-shp div'); if (sb) { const v = p.shp ?? 100; sb.style.width = v.toFixed(0) + '%'; sb.parentNode.classList.toggle('low', v <= 40); }
     }
     // killer power + attack recovery ring
     if (me.role === 'killer') {
@@ -2110,9 +2312,8 @@ export class Game {
           if (me.mark > 0) status = `Marked <small>The Harrower can see you · ${Math.ceil(me.mark)}s</small>`;
           if (me.card > 0) status = `Intimidated <small>Slowed and revealed · ${Math.ceil(me.card)}s</small>`;
         } else if (me.st === 'ghost') {
-          if (me.act) { prog = me.prog; label = 'Repairing (as a ghost)'; }
-          else { const it = findInteraction(this.M, S, me); if (it) kp(keyLabel(this.settings, 'interact'), it.label); }
-          status = 'You are a ghost<small>Chucky took your body. Nobody can see you. Repair generators (10% slower) until he lets go.</small>';
+          const holder = S.players.find(o => o.disguise);
+          status = `You are a ghost<small>Chucky took your body. You are frozen until he leaves it${holder && holder.possT > 0 ? ` · ${Math.ceil(holder.possT)}s at most` : ''}.</small>`;
         } else if (me.st === 'down') {
           status = me.healP > 0 ? 'Being helped up' : 'You are dying<small>Crawl to safety — a teammate can help you up</small>';
           if (me.healP > 0) { prog = me.healP; label = 'Recovering'; }
@@ -2123,7 +2324,7 @@ export class Game {
         } else if (me.st === 'carried') {
           status = `Struggle!<small>Alternate ${kbd('left')} ${kbd('right')} to break free</small>`; prog = me.wig; label = 'Wiggle';
         } else if (me.st === 'caged') {
-          status = `Hooked<small>${Math.ceil(me.cageT)}s left${me.stage === 1 && me.esc < 3 ? ` · ${kbd('space')} try to unhook yourself (${3 - me.esc} left)` : me.stage >= 2 ? ' · hit the skill checks to fight off the Entity' : ''}</small>`;
+          status = `Hooked<small>${Math.ceil(me.cageT)}s left${me.stage === 1 && me.esc < hookTries(me) ? ` · ${kbd('space')} try to unhook yourself (${hookTries(me) - me.esc} left)` : me.stage >= 2 ? ' · hit the skill checks to fight off the Entity' : ''}</small>`;
           prog = me.cageT / me.cageMax; label = me.stage >= 2 ? 'Struggle phase' : 'Hooked';
         } else if (me.st === 'dead' || me.st === 'out') {
           const tb = this.takeoverTarget();
@@ -2219,6 +2420,7 @@ export class Game {
     if (document.pointerLockElement) { this.skipPause = true; document.exitPointerLock(); }
     $('pause').classList.add('hidden');
     const me = playerById(S, this.myId);
+    if (this.br) { const r = this.br.results(S, me); $('results-title').textContent = r.title; $('results-list').innerHTML = r.rows; $('results').classList.remove('hidden'); if (this.o.onEnd) this.o.onEnd(S, me); return; }
     const cats = { survivor: ['Objectives', 'Altruism', 'Survival', 'Boldness'], killer: ['Brutality', 'Deviousness', 'Hunter', 'Sacrifice'] };
     const rows = S.players.map(p => {
       const c = cats[p.role];
@@ -2265,6 +2467,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    if (this.br) { this.br.dispose(); this.br = null; }
     this.unbind();
     if (document.pointerLockElement) { this.skipPause = true; document.exitPointerLock(); }
     sound.stopAll();

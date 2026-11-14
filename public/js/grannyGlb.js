@@ -185,7 +185,7 @@ export function makeGrannyGlb(sk = {}, lite = false) {
     const R = new AnimRig('grandpa', sk, lite);
     Object.assign(R, { kind: 'killer', killer: 'granny', glb: true, granny: true, grandpa: true });
     // Granny's states -> his clips
-    R.clipMap = { idle: 'idle', Walk: 'walk', Hit: 'attack', arrowHit: 'arrowHit', pepperHit: 'peppered', freezeTrap: 'frozen', Look: 'search', lookBed: 'underbed' };
+    R.clipMap = { idle: 'idle', Walk: 'walk', Hit: 'attack', Shoot: 'shootGun', arrowHit: 'arrowHit', pepperHit: 'peppered', freezeTrap: 'frozen', Look: 'search', lookBed: 'underbed' };
     R.root.traverse(o => { if (o.isMesh && /Glasses|Hat_Santa|RedEyes|Ragdoll/i.test(o.name)) o.visible = false; });
     return R;
   }
@@ -207,6 +207,9 @@ export function makeSpiderMom(lite = false) {
 // pick Granny's clip for the game state, blend toward it, scrub one-shots
 export function animateGranny(R, s, dt) {
   R.t += dt;
+  if (s.atk === 1 && R.prevAtk !== 1 && !s.dash && !s.aim) R.hitT = 0; else if (R.hitT != null) R.hitT += dt * 1.85;
+  if (!s.atk) R.hitT = null;
+  R.prevAtk = s.atk;
   const A = R.acts, sp = s.speed || 0;
   let want = 'idle', rate = 1, scrub = null, fast = false;
   if (s.exec && s.exec.role === 'killer') {
@@ -214,13 +217,16 @@ export function animateGranny(R, s, dt) {
     const f = s.exec.f;
     if (f < 0.34) { want = 'lookBed'; rate = 1.2; } else if (f < 0.6) { want = 'Hit'; scrub = 0.25 + (f - 0.34) / 0.26 * 0.6; fast = true; } else want = 'Look';
   }
+  else if (R.grandpa && s.shot != null) { want = 'Shoot'; scrub = 0.42 + s.shot * 0.5; fast = true; } // the blast and the pump
+  else if (R.grandpa && s.aim) { want = 'Shoot'; scrub = 0.4; fast = true; }   // shotgun raised to the shoulder
   else if (s.dash) { want = 'Hit'; scrub = 0.45; fast = true; }        // Bat Rush: mid-swing, charging forward
   else if (s.aim) { want = 'Hit'; scrub = 0.18; fast = true; }         // winding up the bat
   else if (s.blind) { want = 'pepperHit'; rate = 1; fast = true; }
   else if (s.frozen) { want = 'freezeTrap'; rate = 1; fast = true; }
   else if (s.stun) { want = 'arrowHit'; rate = 0.9; fast = true; }
-  else if (s.atk === 1) { want = 'Hit'; scrub = 0.2 + Math.min(1, s.atkF || 0) * 0.4; fast = true; }
-  else if (s.atk === 2 && !s.atkHit) { want = 'Hit'; scrub = 0.6 + (s.recF || 0) * 0.35; }
+  // her original swing from the Granny game, played whole: from the start of the lunge, 1.85x speed so the
+  // bat lands (~0.77s into the clip) as the lunge strikes, then the full follow-through
+  else if ((s.atk === 1 || s.atk === 2) && R.hitT != null && R.hitT < 2.43) { want = 'Hit'; scrub = R.hitT / 2.43; fast = true; }
   else if (s.act === 'pickup' || s.act === 'cage' || s.act === 'bear' || s.act === 'break' || s.act === 'kick') { want = 'lookBed'; rate = s.act === 'break' || s.act === 'kick' ? 1.6 : 1.2; }
   else if (s.listen) { want = 'Look'; rate = 1.2; }
   else if (sp > 0.3) { want = 'Walk'; rate = Math.min(2.6, Math.max(0.7, sp / 1.7)); }

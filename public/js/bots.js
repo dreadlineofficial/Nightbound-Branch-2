@@ -2,7 +2,7 @@
 import { findPath, cellPos, cellOf, losBlocked, barBox, moveCircle, levelOf, losL, levelsMeet, heightAt } from './map.js';
 import { stepMover, startVault } from './movement.js';
 import { dist, fwd, angDiff, killerOf, killersOf, nearestKiller, modeOf, findSpace, findInteraction, vaultDuration, terrorRadius, playerById, canExecuteTarget, findExecute, itemCharge } from './rules.js';
-import { HALF, KILLERS } from './config.js';
+import { HALF, KILLERS, SURVIVORS } from './config.js';
 
 export class Bots {
   constructor(sim) {
@@ -65,6 +65,17 @@ export class Bots {
       this.survivor(p, dt); this.flashBot(p, dt);
       const K = nearestKiller(S, p);
       if (p.traps > 0 && p.st === 'ok' && K && dist(p, K) < 7 && K.mv && Math.random() < dt * 0.35) this.sim.onMsg(p.id, { t: 'act', a: 'trap' });
+      // Spider-Man: swing away from a killer who is right on him (often up onto a wall or a tree)
+      if (p.char === 'spiderman' && p.st === 'ok' && !p.act && !p.swing && !(p.swingCd > 0) && !(p.perchT > 0) && K && dist(p, K) < 6 && Math.random() < dt * 0.9) {
+        const away = Math.atan2(p.x - K.x, p.z - K.z) + (Math.random() - 0.5) * 1.4;
+        this.sim.onMsg(p.id, { t: 'act', a: 'swing', yaw: away, pitch: Math.random() < 0.6 ? 0.5 : 0 });
+      }
+      // Spider-Man: web the killer off a teammate's shoulder, or slow him when he is closing in
+      if (p.char === 'spiderman' && p.webs > 0 && p.st === 'ok' && !p.act && K && !(K.webK > 0) && K.stun <= 0 && !losBlocked(this.sim.M, p.x, p.z, K.x, K.z, 1.2)
+        && ((K.carry != null && dist(p, K) < 16) || (dist(p, K) < 7 && K.mv)) && Math.random() < dt * (K.carry != null ? 2.5 : 0.8)) {
+        const yaw = Math.atan2(K.x - p.x, K.z - p.z) + (Math.random() - 0.5) * (1 - this.sim.diff.aim) * 0.2;
+        this.sim.onMsg(p.id, { t: 'act', a: 'web', yaw });
+      }
       // taser: shoot the killer when he closes in (or has a teammate on his shoulder)
       if (p.item === 'taser' && p.tasers > 0 && p.st === 'ok' && !p.act && K && K.stun <= 0 && dist(p, K) < 7 && (K.carry != null || dist(p, K) < 4.5) && !losBlocked(this.sim.M, p.x, p.z, K.x, K.z, 1.2) && Math.random() < dt * 1.2) {
         const yaw = Math.atan2(K.x - p.x, K.z - p.z) + (Math.random() - 0.5) * (1 - this.sim.diff.aim) * 0.3;
@@ -253,7 +264,7 @@ export class Bots {
     }
     if (p.st === 'caged') {
       this.setE(p, b, false);
-      if (p.stage === 1 && p.esc < 3 && p.cageT < p.cageMax - 8 && Math.random() < dt * 0.05) sim.onMsg(p.id, { t: 'act', a: 'esc' });
+      if (p.stage === 1 && p.esc < ((SURVIVORS[p.char] && SURVIVORS[p.char].hookEscapes) || 3) && p.cageT < p.cageMax - 8 && Math.random() < dt * 0.05) sim.onMsg(p.id, { t: 'act', a: 'esc' });
       return;
     }
     if (p.st === 'down') {
@@ -470,7 +481,10 @@ export class Bots {
   // ---------- killer ----------
   // a possessed survivor's ghost: nobody can see or touch it, so it just keeps the generators going
   ghost(p, dt) {
-    const sim = this.sim, S = sim.S, M = sim.M, b = this.brain(p);
+    // a possessed survivor's ghost is frozen until Chucky lets go
+    const b = this.brain(p); this.setE(p, b, false); this.move(p, b, 0, 0, dt, false); return;
+    // eslint-disable-next-line no-unreachable
+    const sim = this.sim, S = sim.S, M = sim.M;
     const it = findInteraction(M, S, p);
     if (it && it.k === 'repair') { const g = M.gens[it.id]; p.yaw = Math.atan2(g.x - p.x, g.z - p.z); this.setE(p, b, true); this.move(p, b, 0, 0, dt, false); return; }
     this.setE(p, b, false);
@@ -613,14 +627,19 @@ export class Bots {
       }
       if (p.char === 'chucky' && !p.harmless && target && los && p.abCd <= 0 && !p.leap && d > 3 && d < 7.5 && !p.atk && this.clearLine(p.x, p.z, tx, tz)) {
         // coil just long enough to reach where they will be
-        const A = KILLERS.chucky.ability, lead = Math.min(d + 2.4, A.max);
-        if (!b.aim) { b.aim = true; b.aimT = 0.1 + Math.max(0, (lead - A.min) / (A.max - A.min)) * A.coil + D.react * 0.2; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
+        const A = KILLERS.chucky.ability, AM = p.reach || A.max, lead = Math.min(d + 2.4, AM);
+        if (!b.aim) { b.aim = true; b.aimT = 0.1 + Math.max(0, (lead - A.min) / (AM - A.min)) * A.coil + D.react * 0.2; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }
       if (p.char === 'chucky' && !p.harmless && !target && p.ab2Cd <= 0 && Math.random() < dt * 0.15) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
       if (p.char === 'granny' && !p.tele) {
         // Bat Rush: wind up just long enough to reach them, then charge
-        const RB = KILLERS.granny.ability;
-        if (target && los && !b.aim && !p.dash && p.abCd <= 0 && !p.ab && !p.atk && d > 3.2 && d < RB.maxDist + 0.5 && this.clearLine(p.x, p.z, tx, tz, p.fl)) {
+        const RB = KILLERS.granny.ability, GS = KILLERS.granny.shotgun;
+        // Grandpa: raise the shotgun at range (it only hurts from a distance), then fire
+        if (p.skin === 'grandpa') {
+          if (target && los && !b.aim && p.abCd <= 0 && !p.ab && !p.atk && d > 7 && d < 32 && this.clearLine(p.x, p.z, tx, tz, p.fl)) {
+            b.aim = true; b.aimT = GS.raise + 0.15 + D.react * 0.35; sim.onMsg(p.id, { t: 'in', e: false, aim: true });
+          }
+        } else if (target && los && !b.aim && !p.dash && p.abCd <= 0 && !p.ab && !p.atk && d > 3.2 && d < RB.maxDist + 0.5 && this.clearLine(p.x, p.z, tx, tz, p.fl)) {
           const k = Math.max(0, Math.min(1, (d + 0.8 - RB.minDist) / (RB.maxDist - RB.minDist)));
           b.aim = true; b.aimT = RB.minCharge + k * (RB.maxCharge - RB.minCharge) + 0.05 + D.react * 0.15; sim.onMsg(p.id, { t: 'in', e: false, aim: true });
         }
@@ -644,7 +663,7 @@ export class Bots {
       if (b.aim) {
         b.aimT -= dt;
         // lead the target
-        const lead = d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'granny' ? 13 : 32);
+        const lead = p.skin === 'grandpa' ? 0 : d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'granny' ? 13 : 32);
         const vx = target ? (target.x - (b.prevTX ?? target.x)) / Math.max(dt, 1e-3) : 0, vz = target ? (target.z - (b.prevTZ ?? target.z)) / Math.max(dt, 1e-3) : 0;
         const ax = tx + vx * lead * D.aim, az = tz + vz * lead * D.aim;
         p.yaw = Math.atan2(ax - p.x, az - p.z) + (Math.random() - 0.5) * (1 - D.aim) * 0.25;

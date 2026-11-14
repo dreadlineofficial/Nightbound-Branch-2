@@ -7,6 +7,9 @@ import { tex } from './textures.js';
 import { mat, mergeGeos } from './models.js';
 
 export const LOOK = {
+  // Fortnight's island: broad daylight (the only map that isn't played at night)
+  isle: { day: true, fog: 0xa9c4dc, density: 0.42, hemi: [0xd6e8ff, 0x5a5236, 2.3], amb: 0x8a96a8, moon: [0xfff0d4, 3.6], sky: [0x2f6fc4, 0x86b6e6], moonDisc: 0xfffbe8, halo: 0xffe8b0,
+    ground: [0x5c7d34, 0x6f9040, 0x8a7350, 0x5e4a32, 0x6c5c3a, 0x3e5228], groundTex: 'ground2', ruins: false, trees: 'pine', bushes: 1, bush: 0x3e5a28, grass: 1, grassTint: 0xb8c878, lamp: 0xffd090, groundFog: 0xe0ecf8, groundFogK: 0.2 },
   woods: { fog: 0x1b2126, density: 1, hemi: [0x5e6878, 0x30261a, 1.75], amb: 0x2e3440, moon: [0xcad6f2, 2.7], sky: [0x04060b, 0x0e1520], moonDisc: 0xf2f4ff, halo: 0x9fb0d8,
     ground: [0x3d4a2c, 0x56603a, 0x5a4632, 0x3a2c20, 0x4a3a26, 0x2c2a1e], groundTex: 'ground2', ruins: true, trees: 'pine', bushes: 1, bush: 0x2a3420, grass: 1, grassTint: 0x9aa070, lamp: 0xffb060, groundFog: 0x6a7480, groundFogK: 1 },
   marsh: { fog: 0x161e14, density: 1.35, hemi: [0x5e7a62, 0x2a2414, 1.6], amb: 0x24302a, moon: [0xd0e8c0, 2.2], sky: [0x040805, 0x0e1a10], moonDisc: 0xe8f8d8, halo: 0x9ac890,
@@ -14,7 +17,7 @@ export const LOOK = {
   carnival: { fog: 0x1c1220, density: 1.1, hemi: [0x7a5a7a, 0x2a1a14, 1.6], amb: 0x2e2434, moon: [0xf0d0e0, 2.4], sky: [0x070410, 0x1a0e22], moonDisc: 0xffe8f0, halo: 0xd890b0,
     ground: [0x4a3a28, 0x5a4630, 0x2a2828, 0x3a2c20, 0x5a4a30, 0x2a221a], groundTex: 'ground2', ruins: false, trees: 'dead', bushes: 0.35, bush: 0x3a3420, grass: 0.35, grassTint: 0x8a8050, lamp: 0xffd080, groundFog: 0x8a6a8a, groundFogK: 1.2 },
   granny: { fog: 0x161a1e, density: 1.15, hemi: [0x5a6470, 0x2a2018, 1.6], amb: 0x2a3038, moon: [0xc0cce0, 2.4], sky: [0x030407, 0x0c1118], moonDisc: 0xeef2ff, halo: 0x8a9ab8,
-    ground: [0x343c26, 0x4a5232, 0x4e3e2c, 0x30261a, 0x3e3222, 0x262418], groundTex: 'ground2', ruins: true, trees: 'dead', bushes: 0.5, bush: 0x262e1c, grass: 0.8, grassTint: 0x8a9060, lamp: 0xffa850, groundFog: 0x5a6470, groundFogK: 1.4 },
+    ground: [0x343c26, 0x4a5232, 0x4e3e2c, 0x30261a, 0x3e3222, 0x262418], groundTex: 'ground2', ruins: false, trees: 'dead', bushes: 0.5, bush: 0x262e1c, grass: 0.8, grassTint: 0x8a9060, lamp: 0xffa850, groundFog: 0x5a6470, groundFogK: 1.4 },
   snow: { fog: 0x222c3a, density: 0.95, hemi: [0x8aa0c4, 0x2a3240, 1.45], amb: 0x2e3648, moon: [0xc8d8f4, 2.3], sky: [0x03060e, 0x0e1a30], moonDisc: 0xf4f8ff, halo: 0xa8c0e8,
     ground: [0xc8d2e0, 0xdde4f0, 0x9aa2ae, 0xb0bac8, 0xc0c8d4, 0x9aa4b4], groundTex: 'snow', ruins: false, snowcaps: true, trees: 'snowpine', bushes: 0.4, bush: 0xb8c4d0, grass: 0, grassTint: 0x8a8a70, lamp: 0xffc070, groundFog: 0xc8d8f0, groundFogK: 1.6, particles: 'snow' },
 };

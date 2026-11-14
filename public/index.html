@@ -32,19 +32,24 @@
       <p>One hunts. Four survive the night.</p>
     </header>
 
-    <nav id="mainnav" class="mainnav">
-      <button data-act="play-survivor" data-scene="survivor"><span>Play as Survivor</span><small>Quick match against bots</small></button>
-      <button data-act="play-killer" data-scene="killer"><span>Play as Killer</span><small>Hunt down bot survivors</small></button>
-      <button data-act="online"><span>Online Match</span><small>Host a lobby or join friends</small></button>
-      <button data-act="loadout"><span>Loadout</span><small>Characters &amp; perks</small></button>
-      <button data-act="store"><span>Store <span class="newtag">NEW DLC</span></span><small>Chapters, characters &amp; outfits</small></button>
-      <button data-act="settings"><span>Settings</span><small>Graphics, controls, audio</small></button>
-      <button data-act="help"><span>How to Play</span><small>Rules &amp; controls</small></button>
+    <nav id="mainnav" class="mainnav v2">
+      <button data-act="play-survivor" data-scene="survivor" class="prim"><span>Play as Survivor</span><small>Quick match against bots</small></button>
+      <button data-act="play-killer" data-scene="killer" class="prim"><span>Play as Killer</span><small>Hunt down bot survivors</small></button>
+      <button data-act="online" class="prim"><span>Online Match</span><small>Host a lobby or join friends</small></button>
+    </nav>
+    <nav id="subnav" class="subnav">
+      <button data-act="fortnight" class="fn-nav" id="fn-nav"><span>Fortnight</span><small>Event</small></button>
+      <button data-act="loadout"><span>Loadout</span></button>
+      <button data-act="store"><span>Store</span><small class="dot">New</small></button>
+      <button data-act="pass"><span>Progress</span></button>
+      <button data-act="test"><span>Testing</span></button>
+      <button data-act="settings"><span>Settings</span></button>
+      <button data-act="help"><span>How to Play</span></button>
     </nav>
 
     <div class="showcase" id="showcase"></div>
     <button class="news-card" id="news-card"><div class="granny-art"></div><div class="nc-txt"><span>New chapter · Watch the trailer</span><b>Granny <i>×</i> Nightbound</b></div></button>
-    <div class="topright"><button class="inbox-btn" id="inbox-btn" title="Inbox"><span class="ib-ico"></span><span class="badge hidden" id="inbox-badge"></span></button><div class="profile" id="profile"></div></div>
+    <div class="topright"><button class="inbox-btn friends-btn" id="friends-btn" title="Friends"><span class="fr-ico"></span><span class="badge hidden" id="friends-badge"></span></button><button class="inbox-btn" id="inbox-btn" title="Inbox"><span class="ib-ico"></span><span class="badge hidden" id="inbox-badge"></span></button><div class="profile" id="profile"></div></div>
     <div class="last-updated" id="last-updated" title=""></div>
     <div id="show-drag" class="hidden"><span>Drag to rotate · Scroll to zoom</span></div>
 
@@ -53,6 +58,7 @@
       <div class="panel-body">
         <!-- bot match -->
         <section id="p-play" class="hidden">
+          <button class="store-fn fn-card hidden" data-fn><div class="fn-art"></div><div><b>Fortnight event</b><span>Battle royale · 500,000 Embers to the most wins</span></div></button>
           <div class="field"><label>Game mode</label><select id="bots-gm"></select></div>
           <p class="hint gm-desc" id="bots-gm-desc"></p>
           <div class="field"><label>Role</label>
@@ -62,17 +68,38 @@
           <div class="field hidden" id="bots-survivors-row"><label>Survivors to hunt</label>
             <div class="seg" id="bots-surv"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4" class="on">4</button></div></div>
           <div class="field" id="bots-killer-row"><label>Bot killer</label>
-            <select id="bots-killer"><option value="random">Random</option><option value="butcher">The Butcher</option><option value="wisp">The Wisp</option><option value="harrower">The Harrower</option><option value="lamplighter">The Lamplighter</option><option value="slimer">The Slimer (fan-made)</option><option value="foreman">The Foreman (OFFAL)</option><option value="bateman">Patrick Bateman (fan-made)</option><option value="chucky">Chucky (fan-made)</option></select></div>
+            <select id="bots-killer"><option value="random">Random</option><option value="butcher">The Butcher</option><option value="wisp">The Wisp</option><option value="harrower">The Harrower</option><option value="lamplighter">The Lamplighter</option><option value="slimer">The Slimer (fan-made)</option><option value="foreman">The Foreman (OFFAL)</option><option value="bateman">Patrick Bateman (fan-made)</option><option value="chucky">Chucky (fan-made)</option><option value="granny">Granny (fan-made)</option></select></div>
           <div class="field"><label>Bot difficulty</label>
             <div class="seg" id="bots-diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
           <div class="field"><label>Map</label>
-            <select id="bots-map"><option value="random">Random</option><option value="granny">Granny's House (new)</option><option value="woods">Gravemoor Woods</option><option value="meatworks">Hollow Pines Meatworks</option><option value="marsh">Blackwater Marsh (new)</option><option value="carnival">Hollowmere Carnival (new)</option><option value="snow">Coldwater Pass (new)</option><option value="quarantine">Quarantine Woods (Infection)</option><option value="outbreak">Outbreak Fairground (Infection)</option></select></div>
+            <select id="bots-map"><option value="vote">Vote (you + the bots)</option><option value="random">Random</option><option value="granny">Granny's House (new)</option><option value="woods">Gravemoor Woods</option><option value="meatworks">Hollow Pines Meatworks</option><option value="marsh">Blackwater Marsh (new)</option><option value="carnival">Hollowmere Carnival (new)</option><option value="snow">Coldwater Pass (new)</option><option value="quarantine">Quarantine Woods (Infection)</option><option value="outbreak">Outbreak Fairground (Infection)</option></select></div>
           <div class="loadout-mini" id="bots-loadout"></div>
           <div class="actions"><button class="btn primary big" id="btn-bots-start">Ready</button></div>
         </section>
 
+        <section id="p-test" class="hidden">
+          <p class="hint">Try any character, outfit, perk and power level for free. Test matches give no XP, Embers or rank.</p>
+          <div class="field"><label>Role</label><div class="seg" id="test-role"><button data-v="survivor" class="on">Survivor</button><button data-v="killer">Killer</button></div></div>
+          <div class="test-grid">
+            <div class="field"><label>Character</label><select id="test-char"></select></div>
+            <div class="field"><label>Outfit</label><select id="test-skin"></select></div>
+            <div class="field" id="test-item-row"><label>Item</label><select id="test-item"><option value="flashlight">Flashlight</option><option value="trap">Ghost Trap</option><option value="taser">Taser</option></select></div>
+            <div class="field hidden" id="test-reach-row"><label id="test-reach-l">Power reach</label><input type="range" id="test-reach"></div>
+            <div class="field" id="test-opp-row"><label>Bot killer</label><select id="test-opp"></select></div>
+            <div class="field hidden" id="test-surv-row"><label>Survivors to hunt</label><div class="seg" id="test-surv"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4" class="on">4</button></div></div>
+            <div class="field"><label>Map</label><select id="test-map"></select></div>
+            <div class="field"><label>Game mode</label><select id="test-gm"></select></div>
+            <div class="field"><label>Bots</label><div class="seg" id="test-bots"><button data-v="normal" class="on">Normal</button><button data-v="passive">Passive (killers can't hurt)</button></div></div>
+            <div class="field"><label>Bot difficulty</label><div class="seg" id="test-diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
+          </div>
+          <div class="lo-sub"><span>Perks</span><span id="test-perk-n"></span></div>
+          <div class="test-perks" id="test-perks"></div>
+          <div class="actions"><button class="btn primary big" id="btn-test-start">Start testing</button></div>
+        </section>
+
         <!-- online -->
         <section id="p-online" class="hidden">
+          <button class="store-fn fn-card hidden" data-fn><div class="fn-art"></div><div><b>Fortnight event</b><span>Matchmaking with everyone online · bots fill the rest</span></div></button>
           <div class="online-grid">
             <div class="ocard">
               <h3>Host a match</h3>
@@ -96,10 +123,11 @@
           <div class="lobby-grid">
             <div>
               <div class="slots" id="lobby-slots"></div>
+              <div class="map-vote hidden" id="map-vote"></div>
               <div class="host-opts" id="lobby-host-opts">
                 <div class="field"><label>Game mode</label><select id="lobby-gm"></select></div>
                 <label class="check"><input type="checkbox" id="lobby-fill" checked> Fill empty slots with bots</label>
-                <div class="field"><label>Map</label><select id="lobby-map"><option value="random">Random</option><option value="granny">Granny's House (new)</option><option value="woods">Gravemoor Woods</option><option value="meatworks">Hollow Pines Meatworks</option><option value="marsh">Blackwater Marsh</option><option value="carnival">Hollowmere Carnival</option><option value="snow">Coldwater Pass</option><option value="quarantine">Quarantine Woods (Infection)</option><option value="outbreak">Outbreak Fairground (Infection)</option></select></div>
+                <div class="field"><label>Map</label><select id="lobby-map"><option value="vote">Players vote</option><option value="random">Random</option><option value="granny">Granny's House (new)</option><option value="woods">Gravemoor Woods</option><option value="meatworks">Hollow Pines Meatworks</option><option value="marsh">Blackwater Marsh</option><option value="carnival">Hollowmere Carnival</option><option value="snow">Coldwater Pass</option><option value="quarantine">Quarantine Woods (Infection)</option><option value="outbreak">Outbreak Fairground (Infection)</option></select></div>
                 <div class="field"><label>Bot difficulty</label><div class="seg" id="lobby-diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
               </div>
               <div class="chat"><div id="chat-log"></div><input id="chat-in" maxlength="120" placeholder="Say something… (Enter)"></div>
@@ -125,6 +153,11 @@
         <!-- settings -->
         <section id="p-settings" class="hidden">
           <div class="field"><label>Player name</label><input id="set-name" maxlength="16"></div>
+          <div class="field news-opt hidden" id="news-opt"><label class="check"><input type="checkbox" id="news-on"> Get the latest updates and news by email</label>
+            <div class="news-form hidden" id="news-form"><p class="hint">Big updates only: new characters, limited editions, new modes and what changed. Small tweaks are never emailed. Every email has an unsubscribe link.</p>
+              <div class="news-row"><input id="news-email" type="email" maxlength="120" placeholder="you@example.com" autocomplete="email"><button class="btn primary" id="news-send">Subscribe</button></div>
+              <label class="check"><input type="checkbox" id="news-age"> I am 13 or older</label>
+              <p class="hint" id="news-msg"></p></div></div>
           <div class="field"><label>Graphics quality</label>
             <div class="seg" id="set-quality"><button data-v="potato">Very Low</button><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
             <p class="hint" id="set-quality-hint"></p></div>
@@ -153,6 +186,8 @@
         </section>
 
         <!-- help -->
+        <section id="p-pass" class="hidden"><div id="pass-body"></div></section>
+        <section id="p-friends" class="hidden"><div id="friends-body"></div></section>
         <section id="p-help" class="hidden">
           <div class="help">
             <div>
@@ -198,7 +233,7 @@
   <div id="store" class="hidden">
     <div class="st-top">
       <div class="st-title">Store</div>
-      <nav class="st-tabs" id="st-tabs"><button data-t="chapters" class="on">Chapters</button><button data-t="characters">Characters</button><button data-t="collections">Collections</button><button data-t="sidekicks">Sidekicks</button></nav>
+      <nav class="st-tabs" id="st-tabs"><button data-t="chapters" class="on">Chapters</button><button data-t="characters">Characters</button><button data-t="collections">Collections</button><button data-t="sidekicks">Sidekicks</button><button data-t="powerups">Power Ups <span class="newtag">NEW</span></button><button data-t="app">App <span class="newtag">FREE</span></button></nav>
       <div class="st-wallet" id="st-wallet"></div>
       <button class="st-close" id="st-close" title="Back (Esc)">Back</button>
     </div>
@@ -266,6 +301,7 @@
 
   <div id="loading" class="overlay hidden"><div class="loading-text">Entering the fog…</div></div>
   <div id="toast"></div>
+  <div id="invite-card" class="hidden"></div>
 
   <script>
     // If the module scripts never start (file:// or a very old browser), explain what to do.

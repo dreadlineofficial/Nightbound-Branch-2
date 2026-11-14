@@ -1,14 +1,17 @@
 // Procedural 3D models: rigged characters, killers, props. Every character mesh has an
 // "aura" twin (fresnel glow, drawn through walls) that can be toggled on.
+import { STEVE_JOINTS, STEVE_PARTS, STEVE_SKIN } from './steveGeo.js';
 import * as THREE from 'three';
 import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
+import { makeSlappy, animateSlappy } from './slappyGlb.js';
 import { makeGrannyGlb, animateGranny } from './grannyGlb.js';
 import { makeRealism } from './realism.js';
 import { makeStaticKiller, animateStaticKiller, cloneStatic } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
 import { GFX, realistic, surface } from './gfx.js';
+import { photoMaterial } from './pbr.js';
 
 // ---------- aura material ----------
 const auraMats = new Map();
@@ -51,6 +54,8 @@ export function mat(color, opts = {}) {
   if (realistic()) {
     if (m.normalMap) m.normalScale.set(1.6, 1.6);
     m.envMapIntensity = (opts.metal ?? 0) > 0.4 ? 1.2 : 0.55;
+    // real photo-scanned surface (streams in; props keep about half of their own colour)
+    if (opts.map && opts.photo !== false) photoMaterial(m, opts.photo || opts.map, opts.uvm ?? 2, opts.tint ?? 0.55);
   }
   stdCache.set(key, m);
   return m;
@@ -195,7 +200,49 @@ function buildHand(R, jn, s, skin, b = 1, nails = false) {
 }
 
 const FEMALE = { mara: true, june: true };
+// Steve (fan-made crossover): the blocky original, his six boxes hung on the survivor joints so every
+// survivor animation drives him. Model: "Minecraft - Steve" by Vincent Yanez (sketchfab.com/vinceyanez), CC BY 4.0.
+let steveMat = null;
+function makeSteve(sk = {}) {
+  const R = new Rig(), J = STEVE_JOINTS;
+  if (!steveMat) {
+    const tex = new THREE.TextureLoader().load(STEVE_SKIN);
+    tex.flipY = false; tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.colorSpace = THREE.SRGBColorSpace;
+    steveMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0 });
+  }
+  const m = sk.tint != null ? (() => { const c = steveMat.clone(); c.color = new THREE.Color(sk.tint); return c; })() : steveMat;
+  R.joint('tilt', null, 0, 0, 0);
+  R.joint('hips', 'tilt', ...J.hips);
+  R.joint('spine', 'hips', ...J.spine);
+  R.joint('head', 'spine', ...J.head);
+  for (const s of ['L', 'R']) {
+    R.joint('sh' + s, 'spine', ...J['sh' + s]); R.joint('el' + s, 'sh' + s, ...J['el' + s]); R.joint('hand' + s, 'el' + s, ...J['hand' + s]);
+    R.joint('lg' + s, 'hips', ...J['lg' + s]); R.joint('kn' + s, 'lg' + s, ...J['kn' + s]);
+  }
+  for (const part of Object.values(STEVE_PARTS)) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(part.pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(part.uv, 2));
+    g.computeVertexNormals();
+    R.mesh(part.joint, g, m);
+  }
+  R.kind = 'survivor'; R.steve = true;
+  R.finalize();
+  // wounds: blood on the blocks when injured / dying
+  const bloodM = new THREE.MeshStandardMaterial({ color: 0x6a0606, emissive: 0x2a0000, roughness: 0.18 });
+  const cube = new THREE.BoxGeometry(1, 1, 1);
+  const part = (jn, x, y, z, sx, sy, sz) => { const b = new THREE.Mesh(cube, bloodM); b.position.set(x, y, z); b.scale.set(sx, sy, sz); b.visible = false; R.j[jn].add(b); return b; };
+  const group = list => ({ set visible(v) { for (const b of list) b.visible = v; } });
+  R.wounds = {
+    light: group([part('spine', 0.06, 0.45, 0.112, 0.11, 0.11, 0.01), part('shL', 0.01, -0.2, 0.112, 0.06, 0.08, 0.01)]),
+    heavy: group([part('spine', -0.05, 0.25, 0.112, 0.17, 0.17, 0.01), part('lgR', 0, -0.2, 0.112, 0.06, 0.11, 0.01), part('head', 0.08, 0.2, 0.225, 0.08, 0.06, 0.01), part('knL', 0, -0.15, 0.112, 0.06, 0.06, 0.01)]),
+  };
+  applySkinFx(R, sk);
+  return R;
+}
+
 export function makeSurvivor(def, sk = {}) {
+  if (def.id === 'steve') return makeSteve(sk);
   const R = new Rig();
   const fem = !!FEMALE[def.id];
   def = { ...def, shirt: sk.shirt ?? def.shirt, pants: sk.pants ?? def.pants, hair: sk.hair ?? def.hair };
@@ -295,7 +342,7 @@ export function makeKiller(id, sk = {}) {
     return R;
   }
   if (id === 'bateman') return makeBateman(sk);
-  if (id === 'chucky') return makeChuckyGlb(sk, DETAIL.lite) || makeDoll(sk);
+  if (id === 'chucky') return (sk.slappy && makeSlappy(sk, DETAIL.lite)) || makeChuckyGlb(sk, DETAIL.lite) || makeDoll(sk);
   if (id === 'granny') { const g = makeGrannyGlb(sk, DETAIL.lite); if (g) return g; }
   if (id === 'foreman') { const g = makeForemanGlb(sk, DETAIL.lite); if (g) { applySkinFx(g, sk); return g; } }
   const R = new Rig();
@@ -580,6 +627,7 @@ export function animate(R, s, dt) {
   if (R.fxTick) R.fxTick(dt, (R.t || 0) + dt);
   if (R.retarget) { animate(R.proc, s, dt); R.copy(); return; }
   if (R.staticGlb) return animateStaticKiller(R, s, dt);
+  if (R.slappy) return animateSlappy(R, s, dt);
   if (R.chucky) return animateChucky(R, s, dt);
   if (R.granny) return animateGranny(R, s, dt);
   if (R.glb) return animateGlb(R, s, dt);
@@ -967,7 +1015,13 @@ export function makeGenerator() {
     bulbs.push(add(G.sph(0.06), bm, 0.3 + (i - 1) * 0.16, 1.82, 0.25));
   }
   add(G.box(0.55, 0.03, 0.06), dark, 0.3, 1.76, 0.25);
-  const auraM = new THREE.Mesh(G.box(1.3, 1.3, 1.0), auraMat(0xffffff)); auraM.position.y = 0.65; auraM.visible = false; auraM.renderOrder = 10; g.add(auraM);
+  // the aura (seen through walls) is the generator's own outline, not a box: a merged copy of its parts
+  const parts = []; g.updateMatrixWorld(true);
+  g.traverse(o => { if (o.isMesh && o.geometry) { const gg = o.geometry.index ? o.geometry : null; parts.push({ geo: gg || o.geometry, matrix: o.matrix.clone() }); } });
+  let auraM;
+  try { auraM = new THREE.Mesh(mergeGeos(parts.filter(q => q.geo.index)), auraMat(0xffffff)); auraM.scale.setScalar(1.03); }
+  catch { auraM = new THREE.Mesh(G.box(1.1, 1.0, 0.85), auraMat(0xffffff)); auraM.position.y = 0.55; }
+  auraM.visible = false; auraM.renderOrder = 10; g.add(auraM);
   g.userData = { pistons, bulbs, body, aura: auraM };
   return g;
 }
@@ -1179,6 +1233,44 @@ export function pineGeo(seed) {
     layers.push({ geo: g, matrix: M(0, 2.2 + i * 1.08, 0, (rnd() - 0.5) * 0.12, rnd() * 6, (rnd() - 0.5) * 0.12), color: new THREE.Color(0.085 * shade, 0.105 * shade, 0.05 * shade) });
   }
   return { trunk, leaves: mergeGeos(layers) };
+}
+// realistic pine: a trunk and ~80 drooping fir fronds (alpha cards, two crossed planes each),
+// with normals bent outward from the crown so the tree lights softly like real foliage
+export function pineCards(seed, snow = false) {
+  let a = seed * 9301 + 49297; const rnd = () => { a = (a * 9301 + 49297) % 233280; return a / 233280; };
+  const trunk = mergeGeos([{ geo: new THREE.CylinderGeometry(0.06, 0.32, 10, 10, 4), matrix: new THREE.Matrix4().makeTranslation(0, 5, 0) }]);
+  const parts = [], whorls = 15, top = 10.4, bottom = 1.5;
+  const e = new THREE.Euler(), qq = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1);
+  for (let w = 0; w < whorls; w++) {
+    const f = w / (whorls - 1), y = bottom + f * (top - bottom - 0.4) + (rnd() - 0.5) * 0.25;
+    const L = 0.45 + 2.5 * Math.pow(1 - f, 0.95) + rnd() * 0.3, n = f > 0.8 ? 4 : 6, ph = rnd() * 6.28;
+    for (let b = 0; b < n; b++) {
+      const yaw = ph + b / n * Math.PI * 2 + (rnd() - 0.5) * 0.5, pitch = -(0.12 + f * 0.1 + rnd() * 0.18), droop = 0.18 + rnd() * 0.16;
+      for (const roll of [0, 1.15 + rnd() * 0.3]) {
+        const g = new THREE.PlaneGeometry(L, L * 0.5 + 0.25, 4, 1); g.translate(L / 2, 0, 0); g.rotateX(-Math.PI / 2 + roll);
+        const p = g.attributes.position;
+        for (let k = 0; k < p.count; k++) { const t = p.getX(k) / L; p.setY(k, p.getY(k) - droop * t * t * L); }
+        e.set(0, yaw, pitch, 'YZX'); qq.setFromEuler(e);
+        parts.push({ geo: g, matrix: new THREE.Matrix4().compose(new THREE.Vector3(0, y, 0), qq, one) });
+      }
+    }
+  }
+  // a few short fronds capping the tip
+  for (let i = 0; i < 4; i++) { const g = new THREE.PlaneGeometry(0.9, 0.4); g.translate(0.45, 0, 0); g.rotateZ(1.1); parts.push({ geo: g, matrix: new THREE.Matrix4().makeRotationY(i * 1.57).setPosition(0, top - 0.6, 0) }); }
+  const leaves = mergeGeos(parts);
+  const p = leaves.attributes.position, nrm = leaves.attributes.normal, col = new Float32Array(p.count * 3), v = new THREE.Vector3();
+  const mid = 4.8, snowC = new THREE.Color(0.86, 0.9, 0.96), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), r = Math.hypot(x, z);
+    v.set(x, (y - mid) * 0.45 + 0.9, z).normalize(); nrm.setXYZ(i, v.x, v.y, v.z);
+    const crown = (y - bottom) / (top - bottom), inner = Math.min(1, r / (0.5 + 2.6 * (1 - crown)));
+    const k = (0.45 + 0.55 * inner) * (0.72 + 0.4 * crown);
+    c.setRGB(k, k * (0.98 + rnd() * 0.06), k * 0.95);
+    if (snow) c.lerp(snowC, Math.max(0, Math.min(1, inner * 1.2 - 0.25)) * 0.75);
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  leaves.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return { trunk, leaves };
 }
 export function bushGeo(seed) {
   const g = new THREE.IcosahedronGeometry(0.7, 2), p = g.attributes.position;
