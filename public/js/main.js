@@ -21,6 +21,7 @@ import { loadScene, sceneReady } from './sceneGlb.js';
 import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom } from './grannyGlb.js';
 import { loadSpringtrap, springtrapReady } from './springtrapGlb.js';
 import { BedwarsGame } from './bedview.js';
+import { BW_MAPS, bwRoster } from './bedwars.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS, BR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
@@ -67,21 +68,6 @@ const profile = Object.assign({
   owned: {}, skins: {}, claimed: {}, readInbox: {},
 }, store.get('profile', {}));
 profile.owned ||= {}; profile.skins ||= {}; profile.claimed ||= {}; profile.readInbox ||= {}; profile.dlc ||= {}; profile.seen ||= {};
-// Nightbound has moved: every visit, a notice with the new address
-const MOVED_URL = 'https://froodyofficial-maker.github.io/Nightbound/';
-if (!window.__GXD) setTimeout(() => {
-  const d = document.createElement('div');
-  d.id = 'moved-note';
-  d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.82);font-family:inherit';
-  d.innerHTML = `<div style="max-width:520px;margin:16px;padding:28px 26px;background:#120b0b;border:1px solid #7a1a1a;border-radius:10px;color:#e8dccb;text-align:center;box-shadow:0 0 40px #000">
-    <div style="letter-spacing:.2em;color:#d23a2a;font-size:13px;margin-bottom:10px">NOTICE</div>
-    <h2 style="margin:0 0 12px;font-size:26px">Nightbound has moved</h2>
-    <p style="margin:0 0 18px;line-height:1.5">Updates now continue at a new address. This page will no longer be updated.</p>
-    <a href="${MOVED_URL}" style="display:inline-block;padding:10px 18px;background:#a5221a;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;word-break:break-all">${MOVED_URL}</a>
-    <div style="margin-top:16px"><button id="moved-ok" style="padding:8px 16px;background:transparent;color:#bba;border:1px solid #554;border-radius:6px;cursor:pointer">Continue here anyway</button></div></div>`;
-  document.body.appendChild(d);
-  d.querySelector('#moved-ok').onclick = () => d.remove();
-}, 400);
 // the Scarred Chucky and Chucky DBD outfits were withdrawn (v2.25.1): anyone who bought one gets the embers back
 for (const [id, price] of [['scarred', 5500], ['dbd', 6000]]) if (profile.owned['chucky:' + id]) {
   delete profile.owned['chucky:' + id]; profile.stats = profile.stats || {}; profile.stats.embers = (profile.stats.embers || 0) + price;
@@ -731,7 +717,7 @@ function renderInbox() {
       : `<div class="gift">${icon('gift')}${esc(m.gift.label)}<button class="btn primary" data-claim="${m.id}">Claim</button></div>`) : '';
     return `<div class="msg ${unread ? 'unread' : ''}">${m.banner ? `<div class="msg-banner ${m.banner === true ? 'offal' : m.banner}-art" data-announce="${m.banner === true ? 'offal' : m.banner}"></div>` : m.gb ? `<div class="msg-banner gb-mini" data-announce="gb">Ghostbusters <i>×</i> Nightbound</div>` : ''}<div class="mtag">${esc(m.tag)} · v${esc(m.version)} · ${esc(m.date)}</div><h3>${esc(m.title)}</h3><ul>${m.body.map(b => `<li>${esc(b)}</li>`).join('')}</ul>${gift}</div>`;
   }).join('');
-  $('inbox-list').querySelectorAll('[data-announce]').forEach(b => b.onclick = () => { if (b.dataset.announce === 'springtrap') { closePanel(); openStore('chapters'); } else showAnnounce(b.dataset.announce); });
+  $('inbox-list').querySelectorAll('[data-announce]').forEach(b => b.onclick = () => { showAnnounce(b.dataset.announce); });
   $('inbox-list').querySelectorAll('[data-claim]').forEach(b => b.onclick = () => {
     const m = INBOX.find(x => x.id === b.dataset.claim);
     if (!m || profile.claimed[m.id]) return;
@@ -779,8 +765,8 @@ if (profile.lastVersion !== VERSION) {
 // ---------- bot match ----------
 const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'random', diff: 'normal', map: 'vote', gm: 'classic' };
 // game mode pickers (bot match and lobby)
-const gmOptions = () => Object.entries(MODES).filter(([, m]) => !m.event).map(([id, m]) => `<option value="${id}">${m.name} (${m.short})</option>`).join('');
-$('bots-gm').innerHTML = gmOptions(); $('lobby-gm').innerHTML = gmOptions();
+const gmOptions = (inLobby = false) => Object.entries(MODES).filter(([, m]) => !m.event && (inLobby || !m.bw)).map(([id, m]) => `<option value="${id}">${m.name} (${m.short})</option>`).join('');
+$('bots-gm').innerHTML = gmOptions(); $('lobby-gm').innerHTML = gmOptions(true);
 const gmDesc = gm => (MODES[gm] || MODES.classic).desc;
 $('bots-gm-desc').textContent = gmDesc('classic');
 $('bots-gm').addEventListener('change', e => { botsCfg.gm = e.target.value; $('bots-gm-desc').textContent = gmDesc(botsCfg.gm); renderBotsPanel(); });
@@ -833,7 +819,7 @@ function renderTest() {
   $('test-opp-row').classList.toggle('hidden', role !== 'survivor'); $('test-surv-row').classList.toggle('hidden', role !== 'killer');
   $('test-opp').innerHTML = '<option value="random">Random</option>' + Object.values(KILLERS).map(d => `<option value="${d.id}" ${d.id === T.opp ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
   $('test-map').innerHTML = ['random', ...Object.keys(MAP_NAMES).filter(m => !BR_MAPS[m])].map(m => `<option value="${m}" ${m === T.map ? 'selected' : ''}>${m === 'random' ? 'Random' : esc(MAP_NAMES[m])}</option>`).join('');
-  $('test-gm').innerHTML = Object.entries(MODES).filter(([, m]) => !m.event).map(([id, m]) => `<option value="${id}" ${id === T.gm ? 'selected' : ''}>${m.name} (${m.short})</option>`).join('');
+  $('test-gm').innerHTML = Object.entries(MODES).filter(([, m]) => !m.event && !m.bw).map(([id, m]) => `<option value="${id}" ${id === T.gm ? 'selected' : ''}>${m.name} (${m.short})</option>`).join('');
   const L = role === 'killer' && POWER_LV[c];
   $('test-reach-row').classList.toggle('hidden', !L);
   if (L) { const r = $('test-reach'); r.min = L.base; r.max = L.max; r.step = L.step; r.value = T.reach[c] ?? L.max; $('test-reach-l').textContent = `${L.power} reach: ${r.value}m`; }
@@ -1238,7 +1224,8 @@ async function detectModeHint() {
 }
 const modeText = (m, label) => m === 'relay' ? 'Connected through the game server. Friends join at this same address with the code.' : `Online room (${label || 'direct + relay'}). Friends anywhere can join with this code from their copy of the game or the shared link.`;
 
-$('btn-host').addEventListener('click', async () => {
+$('btn-host').addEventListener('click', () => hostLobby());
+async function hostLobby(gm = 'classic') {
   sound.init(); sound.play('click');
   loading(true, 'Opening a room…');
   try {
@@ -1253,14 +1240,16 @@ $('btn-host').addEventListener('click', async () => {
       if (!p) return;
       lobby.players = lobby.players.filter(x => x.id !== id);
       if (session && session.isHost && lobby.inGame) session.playerLeft(id);
+      if (bedwars && lobby.inGame) bedwars.playerLeft(id);
       addChat(null, p.name + ' left.');
       broadcastLobby();
     });
     net.on('closed', r => { toast(r); leaveOnline(true); });
-    showLobby();
+    if (gm === 'bedwars') { lobby.gm = 'bedwars'; lobby.bw = { map: bwCfg.map, size: bwCfg.size, pvp: bwCfg.pvp, together: false }; lobby.diff = bwCfg.diff; }
+    showLobby(); broadcastLobby();
   } catch (e) { console.error(e); toast(e.message || String(e)); }
   loading(false);
-});
+}
 
 function sanitizeLoadout(role, char, perks) {
   const defs = role === 'killer' ? KILLERS : SURVIVORS, pool = role === 'killer' ? KILLER_PERKS : SURV_PERKS;
@@ -1273,6 +1262,11 @@ function hostMsg(id, m) {
   if (!m || typeof m !== 'object') return;
   if (m.t === 'ping') { lobby.net.send(id, { t: 'pong', c: m.c }, true); return; }
   if (m.t === 'vote' && lobby.voting) { if (lobby.players.some(x => x.id === id)) lobby.voting.cast(id, String(m.map)); return; }
+  if (lobby.inGame && bedwars) {
+    if (m.t === 'hello') lobby.net.send(id, { t: 'reject', reason: 'A Bedwars match is in progress. Try again when it ends.' });
+    else bedwars.remote(id, m);
+    return;
+  }
   if (lobby.inGame && session && session.isHost) {
     if (m.t === 'hello') lobby.net.send(id, { t: 'reject', reason: 'A match is in progress. Try again when it ends.' });
     else session.remote(id, m);
@@ -1296,7 +1290,7 @@ function hostMsg(id, m) {
       return;
     }
     const cap = lobbyCaps();
-    if (lobby.players.length >= cap.k + cap.s) { lobby.net.send(id, { t: 'reject', reason: 'The lobby is full.' }); return; }
+    if (lobby.players.length >= (lobby.gm === 'bedwars' ? 16 : cap.k + cap.s)) { lobby.net.send(id, { t: 'reject', reason: 'The lobby is full.' }); return; }
     const killerTaken = lobby.players.filter(p => p.role === 'killer').length >= cap.k;
     const survCount = lobby.players.filter(p => p.role === 'survivor').length;
     let role = m.role === 'killer' && !killerTaken ? 'killer' : 'survivor';
@@ -1339,7 +1333,7 @@ function voteWinner() {
   const tied = cands.filter(c => n(c) === top);
   return tied[Math.floor(Math.random() * tied.length)];
 }
-function lobbyCaps() { if (lobby && lobby.gm === 'fortnight') return { k: 9999, s: 9999 }; const m = MODES[lobby && lobby.gm] || MODES.classic; return { k: m.killers || 1, s: m.survivors || 4 }; }
+function lobbyCaps() { if (lobby && lobby.gm === 'fortnight') return { k: 9999, s: 9999 }; if (lobby && lobby.gm === 'bedwars') return { k: 16, s: 16 }; const m = MODES[lobby && lobby.gm] || MODES.classic; return { k: m.killers || 1, s: m.survivors || 4 }; }
 function applyLoadout(p, m) {
   let role = m.role === 'killer' ? 'killer' : 'survivor';
   const cap = lobbyCaps();
@@ -1353,7 +1347,7 @@ function applyLoadout(p, m) {
 }
 function broadcastLobby() {
   if (!lobby || !lobby.isHost) return;
-  lobby.net.broadcast({ t: 'lobby', players: lobby.players.map(({ loadouts, ...p }) => p), fill: lobby.fill, diff: lobby.diff, map: lobby.map || 'vote', gm: lobby.gm || 'classic', code: lobby.code, cands: lobby.cands || [], votes: lobby.votes || {}, fnAt: lobby.fn ? lobby.fn.at : 0 });
+  lobby.net.broadcast({ t: 'lobby', players: lobby.players.map(({ loadouts, ...p }) => p), fill: lobby.fill, diff: lobby.diff, map: lobby.map || 'vote', gm: lobby.gm || 'classic', code: lobby.code, cands: lobby.cands || [], votes: lobby.votes || {}, fnAt: lobby.fn ? lobby.fn.at : 0, bw: lobby.bw || null });
   renderLobby();
 }
 
@@ -1380,14 +1374,16 @@ function clientMsg(m) {
   if (!m || typeof m !== 'object' || !lobby) return;
   switch (m.t) {
     case 'welcome': lobby.myId = m.id; break;
-    case 'lobby': if (lobby.fn) { lobby.fn.at = m.fnAt || lobby.fn.at; setTimeout(fnRender, 0); } lobby.players = m.players; lobby.fill = m.fill; lobby.diff = m.diff; lobby.map = m.map; lobby.gm = MODES[m.gm] ? m.gm : 'classic'; lobby.cands = Array.isArray(m.cands) ? m.cands : []; lobby.votes = m.votes || {}; renderLobby(); break;
+    case 'lobby': if (lobby.fn) { lobby.fn.at = m.fnAt || lobby.fn.at; setTimeout(fnRender, 0); } lobby.players = m.players; lobby.fill = m.fill; lobby.diff = m.diff; lobby.map = m.map; lobby.gm = MODES[m.gm] ? m.gm : 'classic'; lobby.bw = m.bw || null; lobby.cands = Array.isArray(m.cands) ? m.cands : []; lobby.votes = m.votes || {}; renderLobby(); break;
     case 'reject': toast(m.reason); leaveOnline(true); break;
     case 'chat': addChat(m.name, m.text); break;
     case 'mapvote': showVote(m); break;
     case 'start': closeMapSelect(); startClientMatch(m); break;
+    case 'bwstart': lobby.inGame = true; launchBedwars({ roster: m.roster, cfg: m.cfg, net: lobby.net, mode: 'client', myId: lobby.myId }); break;
+    case 'bws': case 'bwb': case 'bwe': case 'bwfix': if (bedwars) bedwars.onNet(m); break;
     case 's': case 'ev': if (session && !session.isHost) session.onMsg(m); break;
     case 'pong': if (typeof m.c === 'number') { const rtt = performance.now() - m.c; netStat.ping = netStat.ping == null ? rtt : netStat.ping + (rtt - netStat.ping) * 0.3; } break;
-    case 'tolobby': if (session) { endSession(); stopBG(); } lobby.inGame = false; showLobby(); break;
+    case 'tolobby': if (bedwars) { bedwars.exit({ remote: true }); break; } if (session) { endSession(); stopBG(); } lobby.inGame = false; showLobby(); break;
   }
 }
 // connection quality for players who joined: round-trip time to the host and how we're connected
@@ -1442,11 +1438,19 @@ function renderLobby() {
     ? `<div class="slot ${role}"><span class="si">${icon(role === 'killer' ? POWER_ICON[p.char] : 'healthy')}</span><span class="nm">${esc(p.name)}${p.host ? ' · Host' : ''}${p.id === lobby.myId ? ' (you)' : ''}</span><span class="ch">${esc(charName(p))}</span></div>`
     : `<div class="slot ${role} empty"><span class="si">${icon(role === 'killer' ? 'warrant' : 'healthy')}</span><span class="nm">${lobby.fill ? (role === 'killer' ? 'Bot killer' : 'Bot survivor') : 'Empty slot'}</span></div>`;
   let html = '';
-  for (let i = 0; i < cap.k; i++) html += slot(killers[i], 'killer');
-  for (let i = 0; i < cap.s; i++) html += slot(survs[i], 'survivor');
+  const bw = lobby.gm === 'bedwars';
+  $('lobby-bw').classList.toggle('hidden', !bw); $('lobby-map').closest('.field').classList.toggle('hidden', bw); $('lobby-fill').closest('label').classList.toggle('hidden', bw);
+  if (bw) {
+    const o = lobby.bw || { map: 'skies', size: 2, pvp: '1.8', together: false }, M = BW_MAPS[o.map] || BW_MAPS.skies;
+    $('lobby-bw-map').value = o.map; $('lobby-bw-map').disabled = !lobby.isHost; setSeg('lobby-bw-size', String(o.size)); setSeg('lobby-bw-pvp', o.pvp); $('lobby-bw-together').checked = !!o.together; $('lobby-bw-together').disabled = !lobby.isHost;
+    html = ps.map(p => slot(p, p.role)).join('') + `<p class="hint">${esc(M.name)} · ${M.teams} teams · ${o.pvp} PvP · bots fill every empty spot. Pick Survivor or Killer to play as your own character.</p>`;
+  } else {
+    for (let i = 0; i < cap.k; i++) html += slot(killers[i], 'killer');
+    for (let i = 0; i < cap.s; i++) html += slot(survs[i], 'survivor');
+  }
   $('lobby-slots').innerHTML = html;
   // the map vote happens on its own screen when the host starts the match
-  $('map-vote').classList.toggle('hidden', lobby.map !== 'vote');
+  $('map-vote').classList.toggle('hidden', lobby.map !== 'vote' || bw);
   $('map-vote').innerHTML = '<p class="hint">Map: everyone votes on a map screen right before the match starts.</p>';
   const me = myLobbyPlayer();
   if (me) {
@@ -1503,6 +1507,7 @@ function addChat(name, text) {
 $('btn-leave-lobby').addEventListener('click', () => leaveOnline());
 $('btn-lobby-start').addEventListener('click', () => {
   if (!lobby || !lobby.isHost) return;
+  if (lobby.gm === 'bedwars') { startBedwarsOnline(); return; }
   const ps = lobby.players;
   const roster = ps.map(p => ({ id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, pet: p.pet || '', pu: Array.isArray(p.loadouts?.survivor?.pu) ? p.loadouts.survivor.pu : [], bot: false, ...(p.role === 'killer' ? { lv: +(p.loadouts?.killer?.lv) || undefined, og: !!p.loadouts?.killer?.og } : {}) }));
   const used = roster.filter(r => r.role === 'survivor').map(r => r.char);
@@ -1731,9 +1736,9 @@ function fnRender() {
   fnHub.querySelectorAll('#fh-view button').forEach(b => b.classList.toggle('on', (b.dataset.v === 'fp') === !!settings.fnFP));
   // the queue
   const go = $('fh-go'), q = $('fh-queue');
-  go.disabled = !active;
-  if (!active) { go.textContent = done || Date.now() >= FN.end ? 'EVENT OVER' : 'SOON'; q.innerHTML = ''; return; }
-  if (fnState === 'idle') { go.textContent = 'PLAY'; q.innerHTML = `<span class="fh-sub">${friends.mq ? 'Matchmaking with everyone online · bots fill the rest' : 'Offline · you and 15 bots'}</span>`; }
+  // Fortnight is permanent: always playable (the prize round ran during the original 5-day event)
+  go.disabled = false;
+  if (fnState === 'idle') { go.textContent = 'PLAY'; q.innerHTML = `<span class="fh-sub">${friends.mq ? 'Matchmaking with everyone online · bots fill the rest' : 'Offline · you and 15 bots'}${active ? '' : ' · just for fun, no prize'}</span>`; }
   else if (fnState === 'search') { go.textContent = 'SEARCHING…'; q.innerHTML = '<span class="fh-sub">Looking for an open lobby…</span>'; }
   else if (fnState === 'lobby' && lobby) {
     const left = Math.max(0, (lobby.fn.at || 0) - Date.now()), n = lobby.players.length;
@@ -1886,26 +1891,67 @@ function showAwards(w, r) {
 friends.connect();
 
 // ---------- minigames: Nightcraft Bedwars ----------
-const bwCfg = { role: 'survivor', size: 2, diff: 'normal' };
-seg('bw-role', v => { bwCfg.role = v; }); seg('bw-size', v => { bwCfg.size = +v; }); seg('bw-diff', v => { bwCfg.diff = v; });
+const bwPrefs = (() => { try { return Object.assign({ bridge: 'java', low: settings.quality === 'low' }, JSON.parse(localStorage.getItem('nb_bw_prefs') || '{}')); } catch { return { bridge: 'java', low: false }; } })();
+const saveBwPrefs = () => { try { localStorage.setItem('nb_bw_prefs', JSON.stringify(bwPrefs)); } catch {} };
+const bwCfg = { role: 'survivor', size: 2, diff: 'normal', map: 'skies', pvp: '1.8' };
+$('bw-map').innerHTML = Object.entries(BW_MAPS).map(([id, m]) => `<option value="${id}">${m.name} (${m.teams} teams)</option>`).join('');
+$('lobby-bw-map').innerHTML = $('bw-map').innerHTML;
+const bwMapDesc = () => { $('bw-map-desc').textContent = BW_MAPS[bwCfg.map].desc; };
+$('bw-map').addEventListener('change', e => { bwCfg.map = e.target.value; bwMapDesc(); }); bwMapDesc();
+seg('bw-role', v => { bwCfg.role = v; }); seg('bw-size', v => { bwCfg.size = +v; }); seg('bw-diff', v => { bwCfg.diff = v; }); seg('bw-pvp', v => { bwCfg.pvp = v; });
+seg('bw-bridge', v => { bwPrefs.bridge = v; saveBwPrefs(); }); setSeg('bw-bridge', bwPrefs.bridge);
+$('bw-low').checked = !!bwPrefs.low; $('bw-low').addEventListener('change', e => { bwPrefs.low = e.target.checked; saveBwPrefs(); });
 $('mg-fn').onclick = () => { sound.play('click'); closePanel(); openFortnightHub(); };
 $('mg-bw').onclick = () => { sound.init(); sound.play('click'); startBedwars(); };
+$('mg-bw-host').onclick = async () => { sound.init(); sound.play('click'); if (lobby) leaveOnline(true); await hostLobby('bedwars'); };
+$('mg-bw-join').onclick = () => { sound.play('click'); openPanel('p-online', 'Online Match'); setTimeout(() => $('join-code').focus(), 50); };
+// lobby (host): the Bedwars settings
+const bwLobbyOpts = () => { if (lobby && lobby.isHost) { lobby.bw ||= { map: 'skies', size: 2, pvp: '1.8', together: false }; return lobby.bw; } return null; };
+$('lobby-bw-map').addEventListener('change', e => { const o = bwLobbyOpts(); if (o) { o.map = e.target.value; broadcastLobby(); } });
+seg('lobby-bw-size', v => { const o = bwLobbyOpts(); if (o) { o.size = +v; broadcastLobby(); } });
+seg('lobby-bw-pvp', v => { const o = bwLobbyOpts(); if (o) { o.pvp = v; broadcastLobby(); } });
+$('lobby-bw-together').addEventListener('change', e => { const o = bwLobbyOpts(); if (o) { o.together = e.target.checked; broadcastLobby(); } });
+function bwBot() {
+  const killers = Object.keys(KILLERS), survivors = Object.keys(SURVIVORS).filter(c => !SURVIVORS[c].fan || c === 'steve');
+  const names = ['Ash', 'Rook', 'Wren', 'Sable', 'Kit', 'Moss', 'Vale', 'Quill', 'Hollis', 'Briar', 'Fen', 'Lark', 'Pike', 'Rue', 'Thorn', 'Ivy', 'Cole', 'Juno'];
+  const k = Math.random() < 0.4;
+  return { name: names[Math.floor(Math.random() * names.length)], role: k ? 'killer' : 'survivor', char: k ? killers[Math.floor(Math.random() * killers.length)] : survivors[Math.floor(Math.random() * survivors.length)], skin: 'default' };
+}
 let bedwars = null;
-async function startBedwars() {
+function startBedwars() {
   if (session || bedwars) return;
   const role = bwCfg.role, char = ownsChar(profile[role].char) ? profile[role].char : role === 'killer' ? 'butcher' : 'mara';
+  const roster = bwRoster([{ id: 'me', name: settings.name, role, char, skin: skinId(char) }], { map: bwCfg.map, size: bwCfg.size, together: true }, bwBot);
+  launchBedwars({ roster, cfg: { map: bwCfg.map, pvp: bwCfg.pvp, diff: bwCfg.diff }, mode: 'offline', myId: 'me' });
+}
+// the host starts an online Bedwars match from the lobby
+function startBedwarsOnline() {
+  const o = bwLobbyOpts();
+  const humans = lobby.players.map(p => ({ id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default' }));
+  const roster = bwRoster(humans, o, bwBot), cfg = { map: o.map, pvp: o.pvp, diff: lobby.diff };
+  lobby.inGame = true;
+  lobby.net.broadcast({ t: 'bwstart', roster, cfg });
+  launchBedwars({ roster, cfg, net: lobby.net, mode: 'host', myId: lobby.myId });
+}
+async function launchBedwars(o) {
   loading(true, 'Building the islands…');
-  await waitForModels({ springtrap: char === 'springtrap', granny: char === 'granny' });
+  await waitForModels({ springtrap: o.roster.some(r => r.char === 'springtrap'), granny: o.roster.some(r => r.char === 'granny'), chucky: o.roster.some(r => r.char === 'chucky') });
   stopBG(); $('menu').classList.add('hidden'); $('panel').classList.add('hidden'); $('menu').classList.remove('panel-open');
+  closeFortnight && closeFortnight();
   try {
-    bedwars = new BedwarsGame({ renderer, settings, me: { name: settings.name, char, role, skin: skinId(char) }, difficulty: bwCfg.diff, teamSize: bwCfg.size, onExit: (res, again) => {
+    bedwars = new BedwarsGame({ renderer, settings, ...o, prefs: { ...bwPrefs }, onExit: (res, how = {}) => {
       bedwars = null;
       if (res) { profile.stats.embers += res.embers; (profile.bw ||= { w: 0, m: 0, beds: 0 }); profile.bw.m++; if (res.won) profile.bw.w++; profile.bw.beds += res.beds; saveProfile(); toast(`Bedwars: +${res.embers} Embers`); }
       $('menu').classList.remove('hidden'); startBG();
-      if (again) startBedwars(); else openPanel('p-minigames', 'Minigames', true);
+      if (o.mode === 'offline') { if (how.again) startBedwars(); else openPanel('p-minigames', 'Minigames', true); return; }
+      if (!lobby) return;
+      lobby.inGame = false;
+      if (o.mode === 'host') { lobby.net.broadcast({ t: 'tolobby' }); showLobby(); broadcastLobby(); }
+      else if (how.leave && !res) leaveOnline(true); else showLobby();
     } });
+    bedwars.onPrefs = p => { Object.assign(bwPrefs, p); saveBwPrefs(); };
     bedwars.start();
-  } catch (e) { console.error(e); toast('Bedwars failed to start: ' + e.message); bedwars = null; $('menu').classList.remove('hidden'); startBG(); }
+  } catch (e) { console.error(e); toast('Bedwars failed to start: ' + e.message); bedwars = null; $('menu').classList.remove('hidden'); startBG(); if (lobby) lobby.inGame = false; }
   loading(false);
 }
 
@@ -1954,6 +2000,14 @@ const AN_GRANNY = `<div class="an-bg granny"></div><div class="an-inner">
   <ul class="an-list"><li>New killer: <b>Granny</b> (Bat Rush, I Hear You, Creep, Body Swap)</li><li>Her helper: <b>Spider Mom</b></li><li>New map: <b>Granny's House</b> (free for everyone)</li><li>New execution: <b>Bedtime Trap</b></li></ul>
   <div class="an-actions"><button class="btn primary big" id="an-store">Get the Chapter</button><button class="btn big" id="an-play">Play Granny's House</button><button class="btn" id="an-trailer">Watch Trailer</button><button class="btn" id="an-close">Close</button></div>
   <p class="gb-note">Fan-made crossover. Granny and Spider Mom are characters by DVloper; not affiliated with or endorsed by them.</p></div>`;
+const AN_FNAF = `<div class="an-bg fnaf"></div><div class="an-inner">
+  <div class="an-kicker">Chapter IX · New chapter · Available now</div>
+  <div class="an-banner"><div class="an-img springtrap-art"></div><div class="an-scan"></div></div>
+  <div class="an-x">Five Nights at Freddy's <span>× Nightbound</span></div>
+  <p class="an-sub">The springlocks failed thirty years ago. He didn't. <b>Springtrap</b> limps out of the dark with a fire axe, steps through the <b>Security Doors</b> to any generator or hook he likes, and one <b>Phantom Scare</b> is all it takes before his next hit puts you down.</p>
+  <ul class="an-list"><li>New killer: <b>Springtrap</b> (Axe Throw, Phantom Scare, Security Doors)</li><li>New execution: <b>Springlock Failure</b></li><li>New outfit: <b>Yellow Rabbit</b>, plus Phantom and After the Fire</li></ul>
+  <div class="an-actions"><button class="btn primary big" id="an-store">Get the Chapter</button><button class="btn big" id="an-play">Face him (play as survivor)</button><button class="btn" id="an-close">Close</button></div>
+  <p class="gb-note">Fan-made crossover. Five Nights at Freddy's and Springtrap belong to Scott Cawthon; not affiliated with or endorsed by him.</p></div>`;
 const AN_FN = `<div class="an-bg fn-bg"></div><div class="an-inner"><div class="an-kicker">Limited event · 5 days · now live</div>
   <div class="msg-banner fn-art" style="height:min(34vh,300px);margin:10px auto 14px;max-width:780px;border:1px solid rgba(181,108,255,.5)"></div>
   <div class="an-x fn-x">FORT<span>NIGHT</span></div>
@@ -1967,6 +2021,13 @@ function showAnnounce(kind = 'offal') {
     $('an-play').onclick = () => { sound.play('click'); hideAnnounce(); openFortnightHub(); };
     $('an-close').onclick = () => { sound.play('click'); hideAnnounce(); };
     profile.seen.fn1 = true; saveProfile(); sound.init(); sound.play('brfog'); return;
+  }
+  if (kind === 'fnaf' || kind === 'springtrap') {
+    const A = $('announce'); A.innerHTML = AN_FNAF; A.classList.remove('hidden');
+    $('an-store').onclick = () => { sound.play('click'); hideAnnounce(); openStore('chapters'); };
+    $('an-play').onclick = () => { sound.play('click'); hideAnnounce(); botsCfg.killer = 'springtrap'; navActions['play-survivor'](); $('bots-killer').value = 'springtrap'; };
+    $('an-close').onclick = () => { sound.play('click'); hideAnnounce(); };
+    profile.seen.fnaf = true; saveProfile(); sound.init(); sound.play('roar'); return;
   }
   const A = $('announce'); A.innerHTML = kind === 'gb' ? AN_GB : kind === 'granny' ? AN_GRANNY : AN_OFFAL; A.classList.remove('hidden');
   if (kind === 'granny') {
@@ -1991,14 +2052,14 @@ function showAnnounce(kind = 'offal') {
   saveProfile(); sound.init(); sound.play('caged');
 }
 function hideAnnounce() { $('announce').classList.add('hidden'); }
-$('news-card').onclick = () => { sound.init(); sound.play('click'); if (fnActive()) { openFortnightHub(); return; } openStore('chapters'); };
+$('news-card').onclick = () => { sound.init(); sound.play('click'); if (fnActive()) { openFortnightHub(); return; } showAnnounce('fnaf'); };
 // the Fortnight event everywhere on the menu while it runs
 function fnPromo() {
   const on = fnActive(), shown = Date.now() < FN.end + 3 * 864e5;
   void shown; // (the Minigames button is always there: Fortnight is permanent now)
   const nc = $('news-card');
   if (on) { nc.classList.add('fn'); nc.innerHTML = `<div class="fn-art"></div><div class="nc-txt"><span>Limited event · ends in ${fmtLeft(fnLeft())}</span><b>Fortnight</b><em>Battle royale in the city. Most wins takes <strong>${FN.prize.toLocaleString()} Embers</strong>.</em><i class="nc-go">Play now ›</i></div>`; }
-  else if (nc.classList.contains('fn')) { nc.classList.remove('fn'); nc.innerHTML = '<div class="springtrap-art"></div><div class="nc-txt"><span>New chapter · Chapter IX</span><b>Springtrap <i>×</i> Nightbound</b></div>'; }
+  else if (nc.classList.contains('fn')) { nc.classList.remove('fn'); nc.innerHTML = `<div class="springtrap-art"></div><div class="nc-txt"><span>New chapter · Chapter IX</span><b>Five Nights at Freddy's <i>×</i> Nightbound</b></div>`; }
   let bar = document.querySelector('.fn-bar');
   if (false && on && !bar) { bar = document.createElement('div'); bar.className = 'fn-bar'; bar.onclick = () => { sound.init(); sound.play('click'); openFortnightHub(); }; $('menu').appendChild(bar); }
   if (bar) { bar.classList.toggle('hidden', !on); bar.innerHTML = `FORTNIGHT EVENT LIVE · <b>${FN.prize.toLocaleString()} EMBERS</b> FOR THE MOST WINS · ENDS IN ${fmtLeft(fnLeft()).toUpperCase()} · PLAY NOW ›`; }
@@ -2008,6 +2069,7 @@ fnPromo(); setInterval(fnPromo, 30000);
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('announce').classList.contains('hidden')) hideAnnounce(); });
 // new chapter: everyone is greeted with its trailer once, then the announcement
 if (fnActive() && !profile.seen.fn1) setTimeout(() => { if (!session && !lobby) showAnnounce('fn'); }, 900);
+else if (!profile.seen.fnaf) setTimeout(() => { if (!session && !lobby) showAnnounce('fnaf'); }, 900);
 else if (!profile.seen.grannyTrailer) setTimeout(() => { if (!session && !lobby) { profile.seen.grannyTrailer = true; saveProfile(); showTrailer(() => showAnnounce('granny')); } }, 900);
 
 startBG();

@@ -48,7 +48,7 @@
     </nav>
 
     <div class="showcase" id="showcase"></div>
-    <button class="news-card" id="news-card"><div class="springtrap-art"></div><div class="nc-txt"><span>New chapter · Chapter IX</span><b>Springtrap <i>×</i> Nightbound</b></div></button>
+    <button class="news-card" id="news-card"><div class="springtrap-art"></div><div class="nc-txt"><span>New chapter · Chapter IX</span><b>Five Nights at Freddy's <i>×</i> Nightbound</b></div></button>
     <div class="topright"><button class="inbox-btn friends-btn" id="friends-btn" title="Friends"><span class="fr-ico"></span><span class="badge hidden" id="friends-badge"></span></button><button class="inbox-btn" id="inbox-btn" title="Inbox"><span class="ib-ico"></span><span class="badge hidden" id="inbox-badge"></span></button><div class="profile" id="profile"></div></div>
     <div class="last-updated" id="last-updated" title=""></div>
     <div id="show-drag" class="hidden"><span>Drag to rotate · Scroll to zoom</span></div>
@@ -82,12 +82,17 @@
           <div class="mg-grid">
             <div class="mg-card mg-fn"><div class="fn-art"></div><div class="mg-txt"><b>Fortnight</b><span>Battle royale on Nightfall Isle. Wear any character you own, loot guns, stay inside the ring and be the last one standing. Solo against bots, or matchmaking with everyone online.</span><button class="btn primary" id="mg-fn">Play Fortnight</button></div></div>
             <div class="mg-card mg-bw"><div class="bw-art"><i></i><i></i><i></i><i></i></div><div class="mg-txt"><b>Nightcraft Bedwars <small class="newtag">New</small></b><span>Four teams on floating islands. Collect iron and gold, buy blocks, bridge across the void and break the other beds. Lose your bed and you don't come back. Played as your own Nightbound character.</span>
+              <div class="field"><label>Map</label><select id="bw-map"></select></div>
+              <p class="hint" id="bw-map-desc"></p>
               <div class="field"><label>Play as</label><div class="seg" id="bw-role"><button data-v="survivor" class="on">My survivor</button><button data-v="killer">My killer</button></div></div>
-              <div class="field"><label>Teams</label><div class="seg" id="bw-size"><button data-v="1">Solo (4 × 1)</button><button data-v="2" class="on">Duos (4 × 2)</button><button data-v="4">Squads (4 × 4)</button></div></div>
+              <div class="field"><label>Team size</label><div class="seg" id="bw-size"><button data-v="1">Solo</button><button data-v="2" class="on">Duos</button><button data-v="4">Squads</button></div></div>
+              <div class="field"><label>PvP</label><div class="seg" id="bw-pvp"><button data-v="1.8" class="on">1.8 (spam click)</button><button data-v="1.9">1.9 (cooldown)</button></div></div>
               <div class="field"><label>Bot difficulty</label><div class="seg" id="bw-diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
-              <button class="btn primary big" id="mg-bw">Play Bedwars</button></div></div>
+              <div class="field"><label>Bridging (just for you)</label><div class="seg" id="bw-bridge"><button data-v="java" class="on">Java</button><button data-v="bedrock">Bedrock</button></div></div>
+              <label class="check"><input type="checkbox" id="bw-low"> Performance mode (for low-end laptops: simpler lighting, lower resolution, shorter view)</label>
+              <div class="mg-btns"><button class="btn primary big" id="mg-bw">Play vs bots</button><button class="btn big" id="mg-bw-host">Host online lobby</button><button class="btn" id="mg-bw-join">Join with a code</button></div></div></div>
           </div>
-          <p class="hint">Bedwars controls: WASD move · Space jump · Shift sneak (you can't walk off an edge) · LMB hit / hold to break · RMB place block · 1-5 hotbar · B shop · V third person · Esc pause.</p>
+          <p class="hint">Bedwars controls: WASD move · Space jump · Left Ctrl (or double-tap W) sprint · Shift sneak (you can't walk off an edge) · LMB hit / hold to break · RMB place block / hold to eat · 1-9 or scroll hotbar · E inventory · B shop · V third person · Esc menu. Friends join an online lobby with its room code.</p>
         </section>
 
         <section id="p-test" class="hidden">
@@ -141,6 +146,12 @@
                 <div class="field"><label>Game mode</label><select id="lobby-gm"></select></div>
                 <label class="check"><input type="checkbox" id="lobby-fill" checked> Fill empty slots with bots</label>
                 <div class="field"><label>Map</label><select id="lobby-map"><option value="vote">Players vote</option><option value="random">Random</option><option value="granny">Granny's House (new)</option><option value="woods">Gravemoor Woods</option><option value="meatworks">Hollow Pines Meatworks</option><option value="marsh">Blackwater Marsh</option><option value="carnival">Hollowmere Carnival</option><option value="snow">Coldwater Pass</option><option value="quarantine">Quarantine Woods (Infection)</option><option value="outbreak">Outbreak Fairground (Infection)</option></select></div>
+                <div class="lobby-bw hidden" id="lobby-bw">
+                  <div class="field"><label>Bedwars map</label><select id="lobby-bw-map"></select></div>
+                  <div class="field"><label>Team size</label><div class="seg" id="lobby-bw-size"><button data-v="1">Solo</button><button data-v="2" class="on">Duos</button><button data-v="4">Squads</button></div></div>
+                  <div class="field"><label>PvP</label><div class="seg" id="lobby-bw-pvp"><button data-v="1.8" class="on">1.8</button><button data-v="1.9">1.9</button></div></div>
+                  <label class="check"><input type="checkbox" id="lobby-bw-together"> Put the players in this lobby on the same team(s)</label>
+                </div>
                 <div class="field"><label>Bot difficulty</label><div class="seg" id="lobby-diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
               </div>
               <div class="chat"><div id="chat-log"></div><input id="chat-in" maxlength="120" placeholder="Say something… (Enter)"></div>

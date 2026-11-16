@@ -61,6 +61,8 @@ export const MODES = {
   bloodmoon: { name: 'Blood Moon', short: 'Tasers', desc: 'A red moon over the map. Every 45 seconds the killer sees every survivor for 4 seconds, but every survivor starts with a 2-shot Taser instead of their item.' },
   // Fortnight: the 5-day battle royale event (not picked from the mode lists; played from the event screen)
   fortnight: { name: 'Fortnight', short: 'Event', br: true, event: true, desc: 'Battle royale on Nightfall Isle. Pick any killer or survivor (no powers), loot guns from chests and the ground, stay inside the fog ring, and be the last one standing.' },
+  // Nightcraft Bedwars: a minigame played from the Minigames panel or an online lobby (bedwars.js / bedview.js)
+  bedwars: { name: 'Nightcraft Bedwars', short: 'Minigame', bw: true, desc: 'Teams on floating islands: collect iron and gold, buy blocks, bridge across the void and break the other beds. Lose your bed and you do not respawn. Bots fill the teams.' },
   infection: { name: 'Infection', short: '2 vs 10', killers: 2, survivors: 10, bigMap: true, desc: 'No hooks. Two killers, ten survivors, on big maps built for it. Downed survivors rise as killers a few seconds later, and every 60s the infected sense every survivor. Escape through the gates, or be the last survivor standing and survive a 45-second last stand.' },
 };
 // killers an infected survivor can turn into
@@ -448,7 +450,7 @@ export const SKINS = {
 // ---------------- Store: chapters (DLC) ----------------
 // Bought with Embers. A chapter unlocks playing as its killer; its map is free for everyone.
 export const CHAPTERS = [
-  { id: 'springtrap', num: 'IX', name: "Fazbear's Fright", sub: '× Nightbound', price: 5000, killer: 'springtrap', banner: 'springtrap', isNew: true,
+  { id: 'springtrap', num: 'IX', name: "Five Nights at Freddy's", sub: '× Nightbound', price: 5000, killer: 'springtrap', banner: 'springtrap', isNew: true,
     tagline: 'He always comes back.',
     contents: ['Springtrap: Axe Throw, Phantom Scare and Security Doors (teleport)', 'Execution: Springlock Failure', 'The Yellow Rabbit outfit and 2 more in the Store'] },
   { id: 'granny', num: 'VIII', name: 'Granny', sub: '× Nightbound', price: 5000, killer: 'granny', map: 'granny', banner: 'granny',
@@ -475,14 +477,27 @@ export const NEWSLETTER = 'nightbound';
 export const POWERUPS = {
   phantomtraps: { name: 'Phantom Traps', price: 20000, role: 'survivor', desc: 'Your Ghost Traps are invisible to the killer. Your team still sees them; the killer only finds out when they step in one.' },
 };
-export const VERSION = '2.57.0';
+export const VERSION = '2.58.0';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
   {
-    id: 'v2.57.0', version: '2.57.0', date: 'Nov 2026', title: "Chapter IX: Springtrap, and Minigames", tag: 'New Chapter', banner: 'springtrap',
+    id: 'v2.58.0', version: '2.58.0', date: 'Nov 2026', title: 'Nightcraft Bedwars goes online, and Five Nights at Freddy\'s', tag: 'Update', banner: 'springtrap',
     body: [
-      "New killer: Springtrap (fan-made, Chapter IX: Fazbear's Fright, 5,000 Embers in the Store). Axe Throw (hold RMB, release to hurl his fire axe), Phantom Scare (R: a jumpscare that reveals, slows and Scares everyone who can see him; Scared survivors go down in one hit) and Security Doors (hold G: step into the dark and out by any generator, hook, window or pallet). His own execution: Springlock Failure.",
+      'Nightcraft Bedwars is multiplayer: Minigames > Host online lobby, share the room code, and friends join with it (bots fill every empty spot). The host picks the map, team size, PvP style, and whether the lobby plays on the same team.',
+      'Four maps: Nightfall Skies (4 teams), Eight Peaks (8 teams, snowy, big), Crimson Keep (4 teams, a walled castle in the middle) and Twin Spires (2 teams, up to 8 a side).',
+      'PvP: 1.8 (click as fast as you like, sprint hits knock harder) or 1.9 (wait for the swing to recharge, sweep attacks, an attack indicator under the crosshair).',
+      'Bridging: Java (place on the face you aim at, sneak to bridge safely) or Bedrock (also places in front of your feet when you look down past the edge). Your own choice, in Minigames or the in-game menu.',
+      'Every block has its own pixel-art texture (grass, dirt, stone, logs, leaves, planks, wool, end stone, stone bricks, sand, snow, metal blocks) with soft shadows in the corners, and the ingots and gems at the generators are proper 3D items with spawn timers.',
+      'New inventory: a 9-slot hotbar (1-9 or scroll) and an inventory screen (E) where you arrange your items. Swords, pickaxes, apples and blocks are 3D in your hand, with Minecraft-style swing, equip and eating animations.',
+      'Left Ctrl (or double-tap W) to sprint. Performance mode for low-end laptops: simpler lighting, lower resolution and a shorter view.',
+      'Chapter IX is now the Five Nights at Freddy\'s chapter. Fortnight is open to everyone again, just without a prize. The "Nightbound has moved" notice is gone.',
+    ],
+  },
+  {
+    id: 'v2.57.0', version: '2.57.0', date: 'Nov 2026', title: "Chapter IX: Five Nights at Freddy's, and Minigames", tag: 'New Chapter', banner: 'springtrap',
+    body: [
+      "New killer: Springtrap (fan-made, Chapter IX: Five Nights at Freddy's, 5,000 Embers in the Store). Axe Throw (hold RMB, release to hurl his fire axe), Phantom Scare (R: a jumpscare that reveals, slows and Scares everyone who can see him; Scared survivors go down in one hit) and Security Doors (hold G: step into the dark and out by any generator, hook, window or pallet). His own execution: Springlock Failure.",
       'New outfit: Yellow Rabbit (6,000 Embers), with its own body. Also Phantom and After the Fire.',
       'New Minigames menu: Fortnight is back for good (no end date; the prize round is over), and a brand new mode, Nightcraft Bedwars.',
       "Nightcraft Bedwars: four teams on floating islands, played as your own Nightbound survivor or killer. Collect iron and gold at your forge, buy wool, planks, end stone, swords, armour, pickaxes and golden apples, bridge across the void and break the other teams' beds. Lose your bed and you don't respawn. Solo, duos or squads, against bots that bridge, raid and defend.",

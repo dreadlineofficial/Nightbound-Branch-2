@@ -957,3 +957,6 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .bw-art i:nth-child(1) { left: 5%; bottom: 30%; } .bw-art i:nth-child(2) { left: 30%; bottom: 14%; } .bw-art i:nth-child(3) { left: 55%; bottom: 34%; } .bw-art i:nth-child(4) { left: 78%; bottom: 18%; }
 .bw-art i:before { content: ''; position: absolute; left: 30%; top: -18%; width: 40%; height: 18%; }
 .bw-art i:nth-child(1):before { background: #d8342a; } .bw-art i:nth-child(2):before { background: #2a5ad8; } .bw-art i:nth-child(3):before { background: #2aa83a; } .bw-art i:nth-child(4):before { background: #e0c020; }
+.an-bg.fnaf { background: radial-gradient(ellipse at 60% 30%, rgba(160,150,60,.22), transparent 60%), #040402; }
+.mg-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.mg-btns .btn { flex: 1 1 auto; }
