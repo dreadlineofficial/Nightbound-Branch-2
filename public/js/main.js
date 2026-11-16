@@ -33,7 +33,7 @@ import { FN, FnEvent, fnActive, fnLeft, fmtLeft } from './event.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , POWERUPS, POWER_LV, powerReach } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
 import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE } from './progress.js';
-import { Friends, fmtCode, GIFT_MAX } from './friends.js';
+import { Friends, fmtCode, GIFT_MAX, OWNER_GIFT_MAX, isOwnerName } from './friends.js';
 import { Awards, AWARD, revealOf } from './awards.js';
 
 window.__nbBooted = true;
@@ -1621,10 +1621,12 @@ friends.on('change', () => { renderFriendsBadge(); renderFriends(); });
 // gifting Embers to a friend: pick an amount, confirm, and they arrive even if the friend is offline
 function giftDialog(id) {
   const f = profile.friends.find(x => x.id === id); if (!f) return;
-  const have = profile.stats.embers, c = $('invite-card');
-  c.innerHTML = `<b>Gift Embers to ${esc(f.name)}</b><small class="gift-have">You have ${price(have)}</small>
-    <div class="gift-amts">${[100, 500, 1000, 2500, 5000].map(a => `<button class="btn" data-amt="${a}" ${a > have ? 'disabled' : ''}>${a.toLocaleString()}</button>`).join('')}</div>
-    <div class="gift-row"><input id="gift-amt" type="number" min="1" max="${Math.min(have, GIFT_MAX)}" placeholder="Other amount"><button class="btn primary" id="gift-send">Send</button><button class="btn" id="gift-no">Cancel</button></div>`;
+  const have = profile.stats.embers, c = $('invite-card'), owner = isOwnerName(settings.name);
+  // the Owner: any amount, free (nothing is taken from their own Embers)
+  const amts = owner ? [1000, 10000, 100000, 1000000] : [100, 500, 1000, 2500, 5000];
+  c.innerHTML = `<b>Gift Embers to ${esc(f.name)}</b><small class="gift-have">${owner ? 'Owner: gift any amount, free' : 'You have ' + price(have)}</small>
+    <div class="gift-amts">${amts.map(a => `<button class="btn" data-amt="${a}" ${!owner && a > have ? 'disabled' : ''}>${a.toLocaleString()}</button>`).join('')}</div>
+    <div class="gift-row"><input id="gift-amt" type="number" min="1" max="${owner ? OWNER_GIFT_MAX : Math.min(have, GIFT_MAX)}" placeholder="${owner ? 'Any amount' : 'Other amount'}"><button class="btn primary" id="gift-send">Send</button><button class="btn" id="gift-no">Cancel</button></div>`;
   c.classList.remove('hidden');
   const inp = $('gift-amt'); inp.onkeydown = e => e.stopPropagation();
   c.querySelectorAll('[data-amt]').forEach(b => b.onclick = () => { inp.value = b.dataset.amt; c.querySelectorAll('[data-amt]').forEach(x => x.classList.toggle('on', x === b)); });
@@ -1632,10 +1634,10 @@ function giftDialog(id) {
   $('gift-send').onclick = () => {
     const amt = Math.floor(+inp.value || 0);
     if (amt < 1) { toast('Pick how many Embers to send.'); return; }
-    if (amt > profile.stats.embers) { toast('You do not have that many Embers.'); return; }
+    if (!owner && amt > profile.stats.embers) { toast('You do not have that many Embers.'); return; }
     const err = friends.gift(id, amt);
     if (err) { toast(err); return; }
-    profile.stats.embers -= amt; saveProfile(); renderShowcase();
+    if (!owner) { profile.stats.embers -= amt; saveProfile(); renderShowcase(); }
     c.classList.add('hidden'); sound.play('escaped');
     toast(`Sent ${amt.toLocaleString()} Embers to ${f.name}${friends.online(id) ? '' : ' (they will get them next time they are online)'}`, 5000);
   };
@@ -1902,6 +1904,32 @@ seg('bw-role', v => { bwCfg.role = v; }); seg('bw-size', v => { bwCfg.size = +v;
 seg('bw-bridge', v => { bwPrefs.bridge = v; saveBwPrefs(); }); setSeg('bw-bridge', bwPrefs.bridge);
 $('bw-low').checked = !!bwPrefs.low; $('bw-low').addEventListener('change', e => { bwPrefs.low = e.target.checked; saveBwPrefs(); });
 $('mg-fn').onclick = () => { sound.play('click'); closePanel(); openFortnightHub(); };
+// Polygon Carnage: its own self-contained game, opened full screen over the menu
+$('mg-pc').onclick = () => { sound.init(); sound.play('click'); openPolygonCarnage(); };
+async function polygonCarnageURL() {
+  const el = document.getElementById('nb-pc-html');
+  if (el && el.textContent.trim()) { const s = atob(el.textContent.trim()), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return URL.createObjectURL(new Blob([b], { type: 'text/html' })); }
+  const dev = !!document.querySelector('script[type=importmap]');
+  for (const u of dev ? ['minigames/polygon-carnage.html', 'public/minigames/polygon-carnage.html'] : ['public/minigames/polygon-carnage.html', 'minigames/polygon-carnage.html']) { try { const r = await fetch(u, { method: 'HEAD' }); if (r.ok) return u; } catch {} }
+  return null;
+}
+async function openPolygonCarnage() {
+  if (session || bedwars || document.getElementById('pc-wrap')) return;
+  loading(true, 'Loading Polygon Carnage…');
+  const url = await polygonCarnageURL();
+  loading(false);
+  if (!url) { toast("Polygon Carnage couldn't load. Check your connection and try again."); return; }
+  closePanel(); stopBG(); $('menu').classList.add('hidden'); sound.ambience && sound.ambience(false);
+  const w = document.createElement('div'); w.id = 'pc-wrap';
+  w.innerHTML = `<iframe allow="fullscreen; pointer-lock; autoplay" title="Polygon Carnage"></iframe><button id="pc-back">✕ Back to Nightbound</button>`;
+  document.body.appendChild(w);
+  const f = w.querySelector('iframe'); f.src = url; f.onload = () => { try { f.contentWindow.focus(); } catch {} };
+  const back = w.querySelector('#pc-back');
+  // the back button hides while you're playing (the mouse is locked to the game)
+  const pl = () => { back.style.display = document.pointerLockElement === f ? 'none' : ''; };
+  document.addEventListener('pointerlockchange', pl);
+  back.onclick = () => { document.removeEventListener('pointerlockchange', pl); w.remove(); if (url.startsWith('blob:')) URL.revokeObjectURL(url); $('menu').classList.remove('hidden'); startBG(); openPanel('p-minigames', 'Minigames', true); };
+}
 $('mg-bw').onclick = () => { sound.init(); sound.play('click'); startBedwars(); };
 $('mg-bw-host').onclick = async () => { sound.init(); sound.play('click'); if (lobby) leaveOnline(true); await hostLobby('bedwars'); };
 $('mg-bw-join').onclick = () => { sound.play('click'); openPanel('p-online', 'Online Match'); setTimeout(() => $('join-code').focus(), 50); };

@@ -477,10 +477,17 @@ export const NEWSLETTER = 'nightbound';
 export const POWERUPS = {
   phantomtraps: { name: 'Phantom Traps', price: 20000, role: 'survivor', desc: 'Your Ghost Traps are invisible to the killer. Your team still sees them; the killer only finds out when they step in one.' },
 };
-export const VERSION = '2.58.0';
+export const VERSION = '2.59.0';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'v2.59.0', version: '2.59.0', date: 'Nov 2026', title: 'New minigame: Polygon Carnage', tag: 'Update',
+    body: [
+      'Polygon Carnage is in Minigames: a low-poly arena shooter against CPU bots, with Survival waves, Deathmatch, Rampage and War (tanks and helicopters). Earn credits and spend them in its Armory; your progress is saved on this device.',
+      'Owner gifts: a player named "Owner" can gift any amount of Embers to their friends, for free.',
+    ],
+  },
   {
     id: 'v2.58.0', version: '2.58.0', date: 'Nov 2026', title: 'Nightcraft Bedwars goes online, and Five Nights at Freddy\'s', tag: 'Update', banner: 'springtrap',
     body: [

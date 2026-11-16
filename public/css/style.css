@@ -960,3 +960,10 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .an-bg.fnaf { background: radial-gradient(ellipse at 60% 30%, rgba(160,150,60,.22), transparent 60%), #040402; }
 .mg-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .mg-btns .btn { flex: 1 1 auto; }
+/* Polygon Carnage */
+.pc-art { height: 140px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 40%, rgba(229,36,59,.55), transparent 45%), radial-gradient(circle at 75% 65%, rgba(255,197,61,.35), transparent 40%), conic-gradient(from 30deg at 60% 50%, #141829, #1c2238, #0b0d17, #2c3454, #141829); }
+.pc-art b { font-family: 'Impact', 'Arial Black', sans-serif; font-size: 34px; line-height: .95; letter-spacing: .04em; color: #ece8df; text-shadow: 3px 3px 0 #e5243b; text-align: center; }
+#pc-wrap { position: fixed; inset: 0; z-index: 80; background: #0b0d17; }
+#pc-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+#pc-back { position: absolute; left: 12px; bottom: 12px; z-index: 2; padding: 8px 14px; background: rgba(20,24,41,.92); color: #ece8df; border: 1px solid #2c3454; font: 600 13px sans-serif; cursor: pointer; }
+#pc-back:hover { background: #e5243b; }

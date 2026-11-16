@@ -17,6 +17,9 @@ export const fmtCode = c => (c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').re
 export const cleanCode = c => (c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const ONLINE_MS = 45000;
 export const GIFT_MAX = 50000;
+// a player named "Owner" can gift any amount, free (it is not taken from their own Embers)
+export const OWNER_GIFT_MAX = 1e9;
+export const isOwnerName = n => String(n || '').trim().toLowerCase() === 'owner';
 
 export class Friends {
   constructor(profile, save, getName) {
@@ -92,7 +95,7 @@ export class Friends {
       if (!m) return;
       this.publish(topic, '', true);
       if (this.p.giftsGot[gid] || !m.from || !this.p.friends.some(f => f.id === m.from)) return;
-      const amount = Math.max(1, Math.min(GIFT_MAX, Math.floor(+m.amount || 0)));
+      const amount = Math.max(1, Math.min(m.owner && isOwnerName(m.name) ? OWNER_GIFT_MAX : GIFT_MAX, Math.floor(+m.amount || 0)));
       this.p.giftsGot[gid] = Date.now(); this.save();
       this.log(m.from, { me: false, text: `🎁 sent you ${amount.toLocaleString()} Embers`, t: Date.now() });
       this.emit('gift', m.from, String(m.name || 'A friend').slice(0, 24), amount);
@@ -149,11 +152,12 @@ export class Friends {
   // send Embers: the caller takes them off this profile; the gift waits on the relay until they're online
   gift(id, amount) {
     amount = Math.floor(+amount || 0);
+    const owner = isOwnerName(this.getName()), max = owner ? OWNER_GIFT_MAX : GIFT_MAX;
     if (!this.mq) return 'Not connected to the online relay yet. Try again in a moment.';
     if (!this.p.friends.some(f => f.id === id)) return 'You can only gift Embers to friends.';
-    if (amount < 1 || amount > GIFT_MAX) return `Gifts are 1 to ${GIFT_MAX.toLocaleString()} Embers.`;
+    if (amount < 1 || amount > max) return `Gifts are 1 to ${max.toLocaleString()} Embers.`;
     const gid = this.id + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    this.publish(T(id) + '/gift/' + gid, JSON.stringify({ from: this.id, name: this.getName(), amount, t: Date.now() }), true);
+    this.publish(T(id) + '/gift/' + gid, JSON.stringify({ from: this.id, name: this.getName(), amount, t: Date.now(), ...(owner ? { owner: 1 } : {}) }), true);
     this.log(id, { me: true, text: `🎁 gifted ${amount.toLocaleString()} Embers`, t: Date.now() }); this.emit('change');
     return '';
   }
